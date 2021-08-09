@@ -1,3 +1,4 @@
+#pragma once
 #include <libint2.hpp>
 #include <Eigen/Dense>
 #include <vector>
@@ -13,14 +14,14 @@ Matrix Overlap(BasisSet obs,const int nbasis){
 	const auto& buf_vec=s_engine.results();
 	auto shell2bf=obs.shell2bf();
 	for (int s1=0;s1!=obs.size();s1++){
+		int bf1=shell2bf[s1];
+		int n1=obs[s1].size();
 		for (int s2=s1;s2!=obs.size();s2++){
 			s_engine.compute(obs[s1],obs[s2]);
 			auto ints_shellset=buf_vec[0];
 			if (ints_shellset==nullptr){
 				continue;
 			}
-			int bf1=shell2bf[s1];
-			int n1=obs[s1].size();
 			int bf2=shell2bf[s2];
 			int n2=obs[s2].size();
 			for (int f1=0;f1!=n1;f1++){
