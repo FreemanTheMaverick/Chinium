@@ -14,7 +14,11 @@ class HartreeFockJob{
 		vector<Atom> Atoms;
 		string BasisName;
 		string Guess;
+		Matrix CoefficientMatrix;
 		Matrix DensityMatrix;
+		Matrix JMatrix;
+		Matrix KMatrix;
+		Matrix OrbitalEnergies;
 		double Energy;
 		void setXYZ(std::string xyzfilename);
 		void setBasisSet(std::string basisname);
@@ -34,7 +38,6 @@ void HartreeFockJob::setBasisSet(std::string basisname){
 void HartreeFockJob::setGuess(std::string guess){
 	Guess=guess;
 }
-
 
 Matrix compute_soad(const std::vector<Atom>& atoms) {
 
@@ -102,18 +105,18 @@ void HartreeFockJob::Compute(){
 		Matrix g=G(obs,nbasis,densitymatrix);
 		Matrix F=Hcore+g;
 		Eigen::GeneralizedSelfAdjointEigenSolver<Matrix> gen_eig_solver(F,overlap);
-		auto eps=gen_eig_solver.eigenvalues();
-		Matrix C=gen_eig_solver.eigenvectors();
-		Matrix C_occ=C.leftCols(nocc);
+		OrbitalEnergies=gen_eig_solver.eigenvalues();
+		CoefficientMatrix=gen_eig_solver.eigenvectors();
+		Matrix C_occ=CoefficientMatrix.leftCols(nocc);
 		densitymatrix=C_occ*C_occ.transpose();
 		Matrix whatever=densitymatrix*(Hcore+F);
 		for (int i=0;i<nbasis;i++){
 			energy+=whatever(i,i);
 		}
-		std::cout<<energy<<std::endl;
 	}while (abs(lastenergy-energy)>0.00001);
 	Energy=energy;
 	DensityMatrix=densitymatrix;
+	MOJK(JMatrix,KMatrix,obs,nbasis,CoefficientMatrix);
 }
 			
 
