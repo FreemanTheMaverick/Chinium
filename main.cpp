@@ -8,7 +8,7 @@ int main(){
 	HartreeFockJob job;
 	job.setXYZ("f.xyz");
 	job.setBasisSet("sto-3g");
-	job.setGuess("hcore");
+	job.setGuess("123");
 	job.Compute();
 	finalize();
 }
