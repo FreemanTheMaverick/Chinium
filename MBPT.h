@@ -86,18 +86,22 @@ void MP2Job::Compute(){
 					for (int s1=0;s1!=obs.size();s1++){
 						int bf1_first=shell2bf[s1];
 						int n1=obs[s1].size();
-						for (int s2=0;s2<=s1;s2++){
+						for (int s2=0;s2!=obs.size();s2++){
+						//for (int s2=0;s2<=s1;s2++){
 							int bf2_first=shell2bf[s2];
 							int n2=obs[s2].size();
-							for (int s3=0;s3<=s1;s3++){
+							for (int s3=0;s3!=obs.size();s3++){
+							//for (int s3=0;s3<=s1;s3++){
 								int bf3_first=shell2bf[s3];
 								int n3=obs[s3].size();
-								for (int s4=0;s4<=((s1==s3)?s2:s3);s4++){
+								for (int s4=0;s4!=obs.size();s4++){
+								//for (int s4=0;s4<=((s1==s3)?s2:s3);s4++){
 									int bf4_first=shell2bf[s4];
 									int n4=obs[s4].size();
 									int s12_deg=(s1==s2)?1.0:2.0;
 									int s34_deg=(s3==s4)?1.0:2.0;
 									int s12_34_deg=(s1==s3)?(s2==s4?1.0:2.0):2.0;
+									int s1234_deg=s12_deg*s34_deg*s12_34_deg;
 									g_engine.compute(obs[s1],obs[s2],obs[s3],obs[s4]);
 									const auto buf_1234=buf_vec[0];
 									if (buf_1234==nullptr){
@@ -111,16 +115,22 @@ void MP2Job::Compute(){
 												const int bf3=f3+bf3_first;
 												for (int f4=0;f4!=n4;f4++,++f1234){
 													const int bf4=f4+bf4_first;
+													//if (f2>f1||f3>f1||f4>((f1==f3)?f2:f3)) continue;
 													const double value=buf_1234[f1234];
+													//std::cout<<bf1<<" "<<bf2<<" "<<bf3<<" "<<bf4<<" "<<value<<std::endl;
 													Matrix c=CoefficientMatrix;
-		sqrtnumerator+=c(bf1,p)*c(bf3,q)*(c(bf2,s)*c(bf4,r)*(p%2==s%2)*(q%2==r%2)-c(bf2,r)*c(bf4,s)*(p%2==r%2)*(q%2==s%2))*value
-			      +c(bf2,p)*c(bf3,q)*(c(bf1,s)*c(bf4,r)*(p%2==s%2)*(q%2==r%2)-c(bf1,r)*c(bf4,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2)
-			      +c(bf1,p)*c(bf4,q)*(c(bf2,s)*c(bf3,r)*(p%2==s%2)*(q%2==r%2)-c(bf2,r)*c(bf3,s)*(p%2==r%2)*(q%2==s%2))*value*(s34_deg==2)
-			      +c(bf2,p)*c(bf4,q)*(c(bf1,s)*c(bf3,r)*(p%2==s%2)*(q%2==r%2)-c(bf1,r)*c(bf3,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s34_deg==2)
-			      +c(bf3,p)*c(bf1,q)*(c(bf4,s)*c(bf2,r)*(p%2==s%2)*(q%2==r%2)-c(bf4,r)*c(bf2,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_34_deg==2)
-			      +c(bf4,p)*c(bf1,q)*(c(bf3,s)*c(bf2,r)*(p%2==s%2)*(q%2==r%2)-c(bf3,r)*c(bf2,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s12_34_deg==2)
-			      +c(bf3,p)*c(bf2,q)*(c(bf4,s)*c(bf1,r)*(p%2==s%2)*(q%2==r%2)-c(bf4,r)*c(bf1,s)*(p%2==r%2)*(q%2==s%2))*value*(s34_deg==2&&s12_34_deg==2)
-			      +c(bf4,p)*c(bf2,q)*(c(bf3,s)*c(bf1,r)*(p%2==s%2)*(q%2==r%2)-c(bf3,r)*c(bf1,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s34_deg==2&&s12_34_deg==2);
+													//int s12_deg=(f1==f2)?1.0:2.0;
+													//int s34_deg=(f3==f4)?1.0:2.0;
+													//int s12_34_deg=(f1==f3)?(f2==f4?1.0:2.0):2.0;
+													//int s1234_deg=s12_deg*s34_deg*s12_34_deg;
+		sqrtnumerator+=c(bf1,p)*c(bf3,q)*(c(bf2,s)*c(bf4,r)*(p%2==s%2)*(q%2==r%2)-c(bf2,r)*c(bf4,s)*(p%2==r%2)*(q%2==s%2))*value;
+			      //+c(bf2,p)*c(bf3,q)*(c(bf1,s)*c(bf4,r)*(p%2==s%2)*(q%2==r%2)-c(bf1,r)*c(bf4,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2)
+			      //+c(bf1,p)*c(bf4,q)*(c(bf2,s)*c(bf3,r)*(p%2==s%2)*(q%2==r%2)-c(bf2,r)*c(bf3,s)*(p%2==r%2)*(q%2==s%2))*value*(s34_deg==2)
+			      //+c(bf2,p)*c(bf4,q)*(c(bf1,s)*c(bf3,r)*(p%2==s%2)*(q%2==r%2)-c(bf1,r)*c(bf3,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s34_deg==2)
+			      //+c(bf3,p)*c(bf1,q)*(c(bf4,s)*c(bf2,r)*(p%2==s%2)*(q%2==r%2)-c(bf4,r)*c(bf2,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_34_deg==2)
+			      //+c(bf4,p)*c(bf1,q)*(c(bf3,s)*c(bf2,r)*(p%2==s%2)*(q%2==r%2)-c(bf3,r)*c(bf2,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s12_34_deg==2)
+			      //+c(bf3,p)*c(bf2,q)*(c(bf4,s)*c(bf1,r)*(p%2==s%2)*(q%2==r%2)-c(bf4,r)*c(bf1,s)*(p%2==r%2)*(q%2==s%2))*value*(s34_deg==2&&s12_34_deg==2)
+			      //+c(bf4,p)*c(bf2,q)*(c(bf3,s)*c(bf1,r)*(p%2==s%2)*(q%2==r%2)-c(bf3,r)*c(bf1,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s34_deg==2&&s12_34_deg==2);
 												}
 											}
 										}
