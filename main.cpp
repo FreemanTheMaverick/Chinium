@@ -9,6 +9,8 @@ int main(){
 	HartreeFockJob hfjob;
 	string filename,basisname;
 	std::cin>>filename>>basisname;
+	//filename="f.xyz";
+	//basisname="sto-3g";
 	hfjob.setXYZ(filename);
 	hfjob.setBasisSet(basisname);
 	hfjob.setGuess("hcore");
