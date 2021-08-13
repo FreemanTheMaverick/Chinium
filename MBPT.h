@@ -6,6 +6,7 @@
 
 using namespace libint2;
 
+typedef Eigen::Tensor<double,4,Eigen::RowMajor> Tensor;
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> Matrix;
 
 Matrix DuplicateRow(Matrix matrix){
@@ -50,7 +51,7 @@ class MP2Job{
 		void setBasisSet(std::string basisname);
 		void setCoefficientMatrix(Matrix coefficientmatrix);
 		void setOrbitalEnergies(Matrix orbitalenergies);
-		void Compute();
+		void Compute(Tensor two_e);
 };
 
 void MP2Job::setXYZ(std::string xyzfilename){
@@ -70,6 +71,46 @@ void MP2Job::setOrbitalEnergies(Matrix orbitalenergies){
 	OrbitalEnergies=orbitalenergies;
 }
 
+void MP2Job::Compute(Tensor two_e){
+	BasisSet obs(BasisName,Atoms);
+	int nbasis=nBasis(obs);
+	int nelectron=nElectron(Atoms);
+	CorrelationEnergy=0;
+	for (int p=0;p<nelectron-1;p++){
+		for (int q=p+1;q<nelectron;q++){
+			for (int r=nelectron;r<2*nbasis-1;r++){
+				for (int s=r+1;s<2*nbasis;s++){
+					double sqrtnumerator=0;
+					for (int a=0;a<nbasis;a++){
+						for (int b=0;b<=a;b++){
+							for (int c=0;c<=a;c++){
+								for (int d=0;d<=((a==c)?b:c);d++){
+									int s12_deg=(a==b)?1.0:2.0;
+									int s34_deg=(c==d)?1.0:2.0;
+									int s12_34_deg=(a==c)?(b==d?1.0:2.0):2.0;
+									int s1234_deg=s12_deg*s34_deg*s12_34_deg;
+									double value=two_e(a,b,c,d);
+									Matrix cm=CoefficientMatrix;
+		sqrtnumerator+=cm(a,p)*cm(c,q)*(cm(b,s)*cm(d,r)*(p%2==s%2)*(q%2==r%2)-cm(b,r)*cm(d,s)*(p%2==r%2)*(q%2==s%2))*value
+			      +cm(b,p)*cm(c,q)*(cm(a,s)*cm(d,r)*(p%2==s%2)*(q%2==r%2)-cm(a,r)*cm(d,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2)
+			      +cm(a,p)*cm(d,q)*(cm(b,s)*cm(c,r)*(p%2==s%2)*(q%2==r%2)-cm(b,r)*cm(c,s)*(p%2==r%2)*(q%2==s%2))*value*(s34_deg==2)
+			      +cm(b,p)*cm(d,q)*(cm(a,s)*cm(c,r)*(p%2==s%2)*(q%2==r%2)-cm(a,r)*cm(c,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s34_deg==2)
+			      +cm(c,p)*cm(a,q)*(cm(d,s)*cm(b,r)*(p%2==s%2)*(q%2==r%2)-cm(d,r)*cm(b,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_34_deg==2)
+			      +cm(d,p)*cm(a,q)*(cm(c,s)*cm(b,r)*(p%2==s%2)*(q%2==r%2)-cm(c,r)*cm(b,s)*(p%2==r%2)*(q%2==s%2))*value*(s34_deg==2&&s12_34_deg==2)
+			      +cm(c,p)*cm(b,q)*(cm(d,s)*cm(a,r)*(p%2==s%2)*(q%2==r%2)-cm(d,r)*cm(a,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s12_34_deg==2)
+			      +cm(d,p)*cm(b,q)*(cm(c,s)*cm(a,r)*(p%2==s%2)*(q%2==r%2)-cm(c,r)*cm(a,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s34_deg==2&&s12_34_deg==2);
+								}
+							}
+						}
+					}
+					CorrelationEnergy-=sqrtnumerator*sqrtnumerator/(OrbitalEnergies(r,0)+OrbitalEnergies(s,0)-OrbitalEnergies(p,0)-OrbitalEnergies(q,0));
+				}
+			}
+		}
+	}
+}
+
+/*
 void MP2Job::Compute(){
 	BasisSet obs(BasisName,Atoms);
 	int nbasis=nBasis(obs);
@@ -145,6 +186,6 @@ void MP2Job::Compute(){
 		}
 	}
 }
-
+*/
 
 
