@@ -91,14 +91,14 @@ void MP2Job::Compute(Tensor two_e){
 									int s1234_deg=s12_deg*s34_deg*s12_34_deg;
 									double value=two_e(a,b,c,d);
 									Matrix cm=CoefficientMatrix;
-		sqrtnumerator+=cm(a,p)*cm(c,q)*(cm(b,s)*cm(d,r)*(p%2==s%2)*(q%2==r%2)-cm(b,r)*cm(d,s)*(p%2==r%2)*(q%2==s%2))*value
-			      +cm(b,p)*cm(c,q)*(cm(a,s)*cm(d,r)*(p%2==s%2)*(q%2==r%2)-cm(a,r)*cm(d,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2)
-			      +cm(a,p)*cm(d,q)*(cm(b,s)*cm(c,r)*(p%2==s%2)*(q%2==r%2)-cm(b,r)*cm(c,s)*(p%2==r%2)*(q%2==s%2))*value*(s34_deg==2)
-			      +cm(b,p)*cm(d,q)*(cm(a,s)*cm(c,r)*(p%2==s%2)*(q%2==r%2)-cm(a,r)*cm(c,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s34_deg==2)
-			      +cm(c,p)*cm(a,q)*(cm(d,s)*cm(b,r)*(p%2==s%2)*(q%2==r%2)-cm(d,r)*cm(b,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_34_deg==2)
-			      +cm(d,p)*cm(a,q)*(cm(c,s)*cm(b,r)*(p%2==s%2)*(q%2==r%2)-cm(c,r)*cm(b,s)*(p%2==r%2)*(q%2==s%2))*value*(s34_deg==2&&s12_34_deg==2)
-			      +cm(c,p)*cm(b,q)*(cm(d,s)*cm(a,r)*(p%2==s%2)*(q%2==r%2)-cm(d,r)*cm(a,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s12_34_deg==2)
-			      +cm(d,p)*cm(b,q)*(cm(c,s)*cm(a,r)*(p%2==s%2)*(q%2==r%2)-cm(c,r)*cm(a,s)*(p%2==r%2)*(q%2==s%2))*value*(s12_deg==2&&s34_deg==2&&s12_34_deg==2);
+									sqrtnumerator+=cm(a,p)*cm(c,q)*(cm(b,s)*cm(d,r)*(p%2==s%2)*(q%2==r%2)-cm(b,r)*cm(d,s)*(p%2==r%2)*(q%2==s%2))*value;
+			      						if (s12_deg==2) sqrtnumerator+=cm(b,p)*cm(c,q)*(cm(a,s)*cm(d,r)*(p%2==s%2)*(q%2==r%2)-cm(a,r)*cm(d,s)*(p%2==r%2)*(q%2==s%2))*value;
+			      						if (s34_deg==2) sqrtnumerator+=cm(a,p)*cm(d,q)*(cm(b,s)*cm(c,r)*(p%2==s%2)*(q%2==r%2)-cm(b,r)*cm(c,s)*(p%2==r%2)*(q%2==s%2))*value;
+									if (s12_deg==2&&s34_deg==2) sqrtnumerator+=cm(b,p)*cm(d,q)*(cm(a,s)*cm(c,r)*(p%2==s%2)*(q%2==r%2)-cm(a,r)*cm(c,s)*(p%2==r%2)*(q%2==s%2))*value;
+									if (s12_34_deg==2) sqrtnumerator+=cm(c,p)*cm(a,q)*(cm(d,s)*cm(b,r)*(p%2==s%2)*(q%2==r%2)-cm(d,r)*cm(b,s)*(p%2==r%2)*(q%2==s%2))*value;
+									if (s34_deg==2&&s12_34_deg==2) sqrtnumerator+=cm(d,p)*cm(a,q)*(cm(c,s)*cm(b,r)*(p%2==s%2)*(q%2==r%2)-cm(c,r)*cm(b,s)*(p%2==r%2)*(q%2==s%2))*value;
+									if (s12_deg==2&&s12_34_deg==2) sqrtnumerator+=cm(c,p)*cm(b,q)*(cm(d,s)*cm(a,r)*(p%2==s%2)*(q%2==r%2)-cm(d,r)*cm(a,s)*(p%2==r%2)*(q%2==s%2))*value;
+									if (s12_deg==2&&s34_deg==2&&s12_34_deg==2) sqrtnumerator+=cm(d,p)*cm(b,q)*(cm(c,s)*cm(a,r)*(p%2==s%2)*(q%2==r%2)-cm(c,r)*cm(a,s)*(p%2==r%2)*(q%2==s%2))*value;
 								}
 							}
 						}
