@@ -42,18 +42,25 @@ Matrix DuplicateCol(Matrix matrix){
 
 class MP2Job{
 	public:
-		vector<Atom> Atoms;
-		string BasisName;
-		Matrix CoefficientMatrix;
+		//vector<Atom> Atoms;
+		//string BasisName;
+		//Matrix CoefficientMatrix;
 		Matrix OrbitalEnergies;
+		Tensor MO2e;
+		int nElectron;
 		double CorrelationEnergy;
-		void setXYZ(std::string xyzfilename);
-		void setBasisSet(std::string basisname);
-		void setCoefficientMatrix(Matrix coefficientmatrix);
+		string ShellType;
+		//void setBasisSet(std::string basisname);
+		//void setCoefficientMatrix(Matrix coefficientmatrix);
 		void setOrbitalEnergies(Matrix orbitalenergies);
-		void Compute(Tensor two_e);
+		void setMO2e(Tensor mo2e);
+		void setnElectron(int nelectron);
+		void setShellType(string shelltype);
+		//void Compute(Tensor two_e);
+		void Compute();
 };
 
+/*
 void MP2Job::setXYZ(std::string xyzfilename){
 	ifstream input_file(xyzfilename);
 	Atoms=read_dotxyz(input_file);
@@ -66,11 +73,58 @@ void MP2Job::setBasisSet(std::string basisname){
 void MP2Job::setCoefficientMatrix(Matrix coefficientmatrix){
 	CoefficientMatrix=coefficientmatrix;
 }
-
+*/
 void MP2Job::setOrbitalEnergies(Matrix orbitalenergies){
 	OrbitalEnergies=orbitalenergies;
 }
 
+void MP2Job::setMO2e(Tensor mo2e){
+	MO2e=mo2e;
+}
+
+void MP2Job::setnElectron(int nelectron){
+	nElectron=nelectron;
+}
+
+void MP2Job::setShellType(string shelltype){
+	ShellType=shelltype;
+}
+
+void MP2Job::Compute(){
+	if (ShellType=="Restricted"){
+		int nbasis=OrbitalEnergies.rows();
+		CorrelationEnergy=0;
+		for (int a=0;a<nElectron/2;a++){
+			for (int b=0;b<nElectron/2;b++){
+				for (int r=nElectron/2;r<nbasis;r++){
+					for (int s=nElectron/2;s<nbasis;s++){
+						double fuck=MO2e(a,r,b,s);
+						double shit=MO2e(a,s,b,r);
+						CorrelationEnergy=CorrelationEnergy+(fuck*(2*fuck-shit))/(OrbitalEnergies(a)+OrbitalEnergies(b)-OrbitalEnergies(r)-OrbitalEnergies(s));
+					}
+				}
+			}
+		}
+	}
+	else if (ShellType=="Unrestricted"){
+		int nbasis=OrbitalEnergies.rows();
+		CorrelationEnergy=0;
+		for (int a=0;a<nElectron;a++){
+			for (int b=0;b<nElectron;b++){
+				for (int r=nElectron;r<nbasis;r++){
+					for (int s=nElectron;s<nbasis;s++){
+						double fuck=MO2e(a,r,b,s);
+						double shit=MO2e(a,s,b,r);
+						CorrelationEnergy=CorrelationEnergy+(fuck-shit)*(fuck-shit)/(OrbitalEnergies(a)+OrbitalEnergies(b)-OrbitalEnergies(r)-OrbitalEnergies(s))/4;
+					}
+				}
+			}
+		}
+	}
+}
+
+
+/*
 void MP2Job::Compute(Tensor two_e){
 	BasisSet obs(BasisName,Atoms);
 	int nbasis=nBasis(obs);
@@ -109,7 +163,7 @@ void MP2Job::Compute(Tensor two_e){
 		}
 	}
 }
-
+*/
 /*
 void MP2Job::Compute(){
 	BasisSet obs(BasisName,Atoms);

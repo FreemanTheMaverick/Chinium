@@ -3,14 +3,14 @@
 #include <iostream>
 #include <libint2.hpp>
 
-
+typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> Matrix;
 int main(){
 	initialize();
 	HartreeFockJob hfjob;
 	string filename,basisname;
-	std::cin>>filename>>basisname;
-	//filename="f.xyz";
-	//basisname="sto-3g";
+	//std::cin>>filename>>basisname;
+	filename="he.xyz";
+	basisname="cc-pv5z";
 	hfjob.setXYZ(filename);
 	hfjob.setBasisSet(basisname);
 	hfjob.setGuess("hcore");
@@ -22,19 +22,19 @@ int main(){
 	std::cout<<hfjob.CoefficientMatrix<<std::endl;
 	std::cout<<"Density matrix:"<<std::endl;
 	std::cout<<hfjob.DensityMatrix<<std::endl;
-	std::cout<<"J matrix:"<<std::endl;
-	std::cout<<hfjob.JMatrix<<std::endl;
-	std::cout<<"K matrix:"<<std::endl;
-	std::cout<<hfjob.KMatrix<<std::endl;
+	std::cout<<"H matrix:"<<std::endl;
+	std::cout<<hfjob.HMatrix<<std::endl;
+
 	
 	MP2Job mp2job;
-	mp2job.setXYZ(filename);
-	mp2job.setBasisSet(basisname);
-	mp2job.setCoefficientMatrix(DuplicateCol(hfjob.CoefficientMatrix));
-	mp2job.setOrbitalEnergies(DuplicateRow(hfjob.OrbitalEnergies));
+	mp2job.setOrbitalEnergies(hfjob.OrbitalEnergies);
+	mp2job.setMO2e(hfjob.MO_2e);
+	mp2job.setnElectron(nElectron(hfjob.Atoms));
+	mp2job.setShellType("Restricted");
 	mp2job.Compute();
-	finalize();
 	std::cout<<"MP2 correlation energy: "<<mp2job.CorrelationEnergy<<std::endl;
+
+	finalize();
 }
 
 	

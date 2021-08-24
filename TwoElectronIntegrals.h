@@ -194,9 +194,94 @@ void MOJK(Matrix &j,Matrix &k,BasisSet obs,const int nbasis,Matrix coefficients)
 	}
 }
 
+Tensor MO2e(Tensor two_e,Matrix coefficientmatrix){
+	int nbasis=coefficientmatrix.rows();
+	Tensor intertensor1(nbasis,nbasis,nbasis,nbasis);intertensor1.setZero();//Initialization of the tensors are recommended, or some weird bug may arise and cause bad results.
+	Tensor intertensor2(nbasis,nbasis,nbasis,nbasis);intertensor2.setZero();
+	Tensor intertensor3(nbasis,nbasis,nbasis,nbasis);intertensor3.setZero();
+	Tensor mo2e(nbasis,nbasis,nbasis,nbasis);mo2e.setZero();
+	for (int a=0;a<nbasis;a++){
+		for (int i=0;i<nbasis;i++){
+			for (int j=0;j<nbasis;j++){
+				for (int k=0;k<nbasis;k++){
+					for (int l=0;l<=k;l++){
+						double fuck=intertensor1(a,j,k,l);
+						intertensor1(a,j,k,l)=fuck+coefficientmatrix(i,a)*two_e(i,j,k,l);
+						intertensor1(a,j,l,k)=intertensor1(a,j,k,l);
+					}
+				}
+			}
+		}
+	}
+	for (int a=0;a<nbasis;a++){
+		for (int b=0;b<nbasis;b++){
+			for (int j=0;j<nbasis;j++){
+				for (int k=0;k<nbasis;k++){
+					for (int l=0;l<=k;l++){
+						double fuck=intertensor2(a,b,k,l);
+						intertensor2(a,b,k,l)=fuck+coefficientmatrix(j,b)*intertensor1(a,j,k,l);
+						intertensor2(a,b,l,k)=intertensor2(a,b,k,l);
+					}
+				}
+			}
+		}
+	}
+	intertensor1.resize(1,1,1,1);
+	for (int a=0;a<nbasis;a++){
+		for (int b=0;b<=a;b++){
+			for (int c=0;c<nbasis;c++){
+				for (int k=0;k<nbasis;k++){
+					for (int l=0;l<nbasis;l++){
+						double fuck=intertensor3(a,b,c,l);
+						intertensor3(a,b,c,l)=fuck+coefficientmatrix(k,c)*intertensor2(a,b,k,l);
+						intertensor3(b,a,c,l)=intertensor3(a,b,c,l);
+					}
+				}
+			}
+		}
+	}
+	intertensor2.resize(1,1,1,1);
+	for (int a=0;a<nbasis;a++){
+		for (int b=0;b<=a;b++){
+			for (int c=0;c<nbasis;c++){
+				for (int d=0;d<nbasis;d++){
+					for (int l=0;l<nbasis;l++){
+						double fuck=mo2e(a,b,c,d);
+						mo2e(a,b,c,d)=fuck+coefficientmatrix(l,d)*intertensor3(a,b,c,l);
+						mo2e(b,a,c,d)=mo2e(a,b,c,d);
+					}
+				}
+			}
+		}
+	}
+	intertensor3.resize(1,1,1,1);
+	return mo2e;
+}
 
-
-
+Tensor MO2e_slow(Tensor two_e,Matrix coefficientmatrix){
+	int nbasis=coefficientmatrix.rows();
+	Tensor mo2e(nbasis,nbasis,nbasis,nbasis);
+	mo2e.setZero();
+	for (int a=0;a<nbasis;a++){
+		for (int b=0;b<nbasis;b++){
+			for (int c=0;c<nbasis;c++){
+				for (int d=0;d<nbasis;d++){
+					for (int i=0;i<nbasis;i++){
+						for (int j=0;j<nbasis;j++){
+							for (int k=0;k<nbasis;k++){
+								for (int l=0;l<nbasis;l++){
+									double fuck=mo2e(a,b,c,d);
+									mo2e(a,b,c,d)=fuck+coefficientmatrix(i,a)*coefficientmatrix(j,b)*coefficientmatrix(k,c)*coefficientmatrix(l,d)*two_e(i,j,k,l);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return mo2e;
+}
 
 
 

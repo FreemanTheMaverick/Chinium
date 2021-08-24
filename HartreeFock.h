@@ -88,8 +88,8 @@ class HartreeFockJob{
 		string Guess;
 		Matrix CoefficientMatrix;
 		Matrix DensityMatrix;
-		Matrix JMatrix;
-		Matrix KMatrix;
+		Matrix HMatrix;
+		Tensor MO_2e;
 		Matrix OrbitalEnergies;
 		Tensor Twoe;
 		double Energy;
@@ -189,7 +189,9 @@ void HartreeFockJob::Compute(){
 	}while (abs(lastenergy-energy)>0.00001);
 	Energy=energy;
 	DensityMatrix=densitymatrix;
-	MOJK(JMatrix,KMatrix,obs,nbasis,CoefficientMatrix);
+	Matrix CoefficientMatrixt=CoefficientMatrix.transpose();
+	HMatrix=CoefficientMatrixt*Hcore*CoefficientMatrix;
+	MO_2e=MO2e(Twoe,CoefficientMatrix);
 }
 			
 
