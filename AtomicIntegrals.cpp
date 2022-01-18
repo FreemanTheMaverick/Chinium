@@ -1,9 +1,8 @@
 #include <libint2.hpp>
 #include <Eigen/Dense> // Eigen::Matrix.
-#include <unsupported/Eigen/CXX11/Tensor> // Eigen::Tensor.
-#include <vector> // Atom vectors and shell pair list.
+#include <vector> // Atom vectors.
 #include <math.h> // Square root in integral screening.
-#include <algorithm> // Sorting shell pair list and max().
+#include <algorithm> // Sorting shell pair list.
 #include <iostream>
 #include <time.h>
 
@@ -195,9 +194,9 @@ void Repulsion(libint2::BasisSet obs,double **repulsion,short int **indices,int 
 	}
 	double *repulsionhead=new double[nintegrals]; // Head denotes the memory seat of the first repulsion integral. The memory it is in charge of is nintegrals in length.
 	double *repulsionranger=repulsionhead; // Ranger will be used to iterate over and write all the repulsion integrals' seats.
-	short int *indiceshead=new short int[nintegrals*5]; // The indices of the integrals, denoted as (bf1,bf2,bf3,bf4). The memory it is in charge of is nintegrals*4 in length.
+	short int *indiceshead=new short int[nintegrals*5]; // The indices and degrees of degeneracy of the integrals, denoted as [bf1_1,bf2_1,bf3_1,bf4_1,deg_1,bf1_2,bf2_2,bf3_2,bf4_2,deg_2,...]. The memory it is in charge of is nintegrals*5 in length.
 	short int *integralindicesranger=indiceshead;
-	short int *shellindiceshead=new short int[nshellquartets*4]; // The indices of the shell quartets, denoted as (s1,s2,s3,s4). The memory it is in charge of is nshellquartets*4 in length.
+	short int *shellindiceshead=new short int[nshellquartets*4]; // The indices of the shell quartets, denoted as [s1_1,s2_1,s3_1,s4_1,s1_2,s2_2,s3_2,s4_2,...]. The memory it is in charge of is nshellquartets*4 in length.
 	short int *shellindicesranger=shellindiceshead;
 	for (short int s1=0;s1<obs.size();s1++){ // In this loop, the indices of non-negligible shell quartets are collected.
 		short int bf1_first=shell2bf[s1];
@@ -239,7 +238,7 @@ void Repulsion(libint2::BasisSet obs,double **repulsion,short int **indices,int 
 		}
 	}
 	shellindicesranger=shellindiceshead; // Reinitiating ranger pointer to the first memory seat.
-	for (int ishellquartet=0;ishellquartet<nshellquartets;ishellquartet++){ // In this loop, all non-negligible shell quartets are iterated over, and the indices, degree of degeneray and value of each inetgral are saved.
+	for (int ishellquartet=0;ishellquartet<nshellquartets;ishellquartet++){ // In this loop, all non-negligible shell quartets are iterated over, and the indices, degree of degenercy and value of each integral are saved.
 		short int s1=*shellindicesranger;shellindicesranger++;
 		short int s2=*shellindicesranger;shellindicesranger++;
 		short int s3=*shellindicesranger;shellindicesranger++;
@@ -288,7 +287,7 @@ void Repulsion(libint2::BasisSet obs,double **repulsion,short int **indices,int 
 	std::cout<<" ... Repulsion integrals done ..."<<std::endl;
 }
 
-
+/*
 EigenTensor3  Densityfitting3(libint2::BasisSet obs,libint2::BasisSet dfobs){ // Repulsion integrals between basis functions and auiliary functions.
 	const int nauxiliary=nBasis(dfobs); // Size of auxiliary basis set.
 	const int nbasis=nBasis(obs);
@@ -324,5 +323,5 @@ EigenTensor3  Densityfitting3(libint2::BasisSet obs,libint2::BasisSet dfobs){ //
 	}
 	return eri3tensor;
 }
-
+*/
 

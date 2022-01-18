@@ -1,12 +1,9 @@
 #include <Eigen/Dense>
-#include <unsupported/Eigen/CXX11/Tensor>
 #include <math.h>
 #include <iostream>
 #include <time.h>
 
 typedef Eigen::Matrix<double, Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
-typedef Eigen::Tensor<double,2> EigenTensor2;
-typedef Eigen::Tensor<double,3> EigenTensor3;
 
 EigenMatrix GMatrix(double *repulsion,short int *indices,int nintegrals,EigenMatrix densitymatrix,EigenMatrix &jmatrix,EigenMatrix &kmatrix){ // Memory seats for J matrix and K matrix should be provided.
 	double *repulsionranger=repulsion;
