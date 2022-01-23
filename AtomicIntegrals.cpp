@@ -7,8 +7,6 @@
 #include <time.h>
 
 typedef Eigen::Matrix<double, Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
-typedef Eigen::Tensor<double,2> EigenTensor2;
-typedef Eigen::Tensor<double,3> EigenTensor3;
 
 int nBasis(libint2::BasisSet obs){ // Size of basis set.
 	int n=0;
