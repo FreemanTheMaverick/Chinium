@@ -280,7 +280,7 @@ void Repulsion(libint2::BasisSet obs,double **repulsion,short int **indices,int 
 	shellindiceshead=NULL;
 	integralindicesranger=NULL;
 	repulsionranger=NULL;
-	*repulsion=repulsionhead;;
+	*repulsion=repulsionhead;
 	*indices=indiceshead;
 	end=clock();
 	std::cout<<" Repulsion integrals elapsed time = "<<double(end-start)/CLOCKS_PER_SEC<<" s"<<std::endl;
