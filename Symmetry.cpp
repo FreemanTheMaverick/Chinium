@@ -199,11 +199,75 @@ bool ProperAxis(std::vector<libint2::Atom> atoms,EigenVector axis,int manifold,d
 				}
 			}
 			double distancesquared=(xi-nearestxj)*(xi-nearestxj)+(yi-nearestyj)*(yi-nearestyj)+(zi-nearestzj)*(zi-nearestzj);
-			properaxis=nearestdeviationsquared/(distancesquared+1e-10)<tolerance*tolerance; // Deviation is scaled by the distance between atom i and atom j. More deviation is tolerated considering the large interatomic distance. The 1e-10 is for preventing the denominator from dropping to zero in the case of an atom lying at the centre of mass.
+			properaxis=nearestdeviationsquared/distancesquared<tolerance*tolerance; // Deviation is scaled by the distance between atom i and atom j. More deviation is tolerated considering the large interatomic distance.
 		}
 	}
 	return properaxis;
 }
+
+bool ImproperAxis(std::vector<libint2::Atom> atoms,EigenVector axis,int manifold,double tolerance){ // Determining if the given axis is one of the molecule's proper rotation axes.
+	bool improperaxis=true;
+	tolerance=tolerance*tolerance;
+	int natoms=atoms.size();
+	double angle=360/(double)manifold/180*3.1415926536; // Converting degrees to radii.
+	EigenMatrix coordinates=Vector2Matrix(atoms);
+	double axisx=axis(0); // Three components of axial vector. The vector must be a unit vector.
+	double axisy=axis(1);
+	double axisz=axis(2);
+	for (int i=1;i<manifold && improperaxis;i++){ // Looping over all possible rotation angles. For example, for a C_3 axis, the possible possible angles are 2pi/3, 4pi/3 and 2pi.
+		EigenMatrix rotation(3,3);
+		rotation<<axisx*axisx*(1-cos(i*angle))+cos(i*angle),axisx*axisy*(1-cos(i*angle))-axisz*sin(i*angle),axisx*axisz*(1-cos(i*angle))+axisy*sin(i*angle),
+		          axisx*axisy*(1-cos(i*angle))+axisz*sin(i*angle),axisy*axisy*(1-cos(i*angle))+cos(i*angle),axisy*axisz*(1-cos(i*angle))-axisx*sin(i*angle),
+		          axisx*axisz*(1-cos(i*angle))-axisy*sin(i*angle),axisy*axisz*(1-cos(i*angle))+axisx*sin(i*angle),axisz*axisz*(1-cos(i*angle))+cos(i*angle); // Rotation matrix.
+		EigenMatrix atomprojection=rotation*coordinates; // Projection of molecule with respective to rotation.
+		for (int iatom=0;iatom<natoms && improperaxis;iatom++){
+			double xiprojection=atomprojection(0,iatom);
+			double yiprojection=atomprojection(1,iatom);
+			double ziprojection=atomprojection(2,iatom);
+			libint2::Atom atomi=atoms[iatom];
+			int Zi=atomi.atomic_number;
+			double xi=atomi.x;
+			double yi=atomi.y;
+			double zi=atomi.z;
+			EigenVector coordinatesi(xi,yi,zi); // EigenMatrix is not suitable for vector multiplication. EigenVector must be used.
+			double pointplanedistance=coordinatesi.dot(axis);
+			EigenVector coordinatesiprojection(xiprojection,yiprojection,ziprojection);
+			if (i%2==1){ // An atom's mirror image of the rotation image is its true improper image if the index is odd. Otherwise, its proper image and improper image are identical.
+				coordinatesiprojection=coordinatesiprojection-2*pointplanedistance*axis;
+			}
+			double pointorigindistancesquared=coordinatesi.dot(coordinatesi);
+			if (pointorigindistancesquared<tolerance){
+				continue;
+			}
+			double nearestxj=114514;
+			double nearestyj=1919810;
+			double nearestzj=889464;
+			double nearestdeviationsquared=364364;
+			for (int jatom=0;jatom<natoms;jatom++){ // Finding the closest atom to the projection of atom i.
+				libint2::Atom atomj=atoms[jatom];
+                		int Zj=atomj.atomic_number;
+				if (Zi==Zj&&iatom!=jatom){
+					double xj=atomj.x;
+					double yj=atomj.y;
+					double zj=atomj.z;
+					EigenVector coordinatesj(xj,yj,zj);
+					EigenVector deviationvector=coordinatesiprojection-coordinatesj;
+					double deviationsquared=deviationvector.dot(deviationvector);
+					if (deviationsquared<nearestdeviationsquared){
+						nearestxj=xj;
+						nearestyj=yj;
+						nearestzj=zj;
+						nearestdeviationsquared=deviationsquared;
+					}
+				}
+			}
+			double distancesquared=(xi-nearestxj)*(xi-nearestxj)+(yi-nearestyj)*(yi-nearestyj)+(zi-nearestzj)*(zi-nearestzj);
+			improperaxis=nearestdeviationsquared/distancesquared<tolerance; // Deviation is scaled by the distance between atom i and atom j. More deviation is tolerated considering the large interatomic distance.
+		}
+	}
+	return improperaxis;
+}
+
 
 MolecularSymmetry PointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ // Moving the molecule to the standard orientation.
 	int natoms=atoms.size();
@@ -289,7 +353,6 @@ int main(){
 	std::cin>>xyz;
 	std::ifstream input(xyz);
 	std::vector<libint2::Atom> atoms=libint2::read_dotxyz(input);
-	//std::vector<libint2::Atom> newatoms=PreStandardOrientation(atoms);
 	for (int i=0;i<atoms.size();i++){
 		libint2::Atom atom=atoms[i];
 		std::cout<<atom.atomic_number<<" "<<atom.x<<" "<<atom.y<<" "<<atom.z<<std::endl;
@@ -297,8 +360,9 @@ int main(){
 	//MolecularSymmetry a=PointGroup(atoms);
 	EigenVector axis(0,0,1);
 //	axis<<0,0.707106781,0.707106781;
-	bool proper=ProperAxis(atoms,axis,3,0.01);
+	bool proper=ProperAxis(atoms,axis,4,0.01);
+	bool improper=ImproperAxis(atoms,axis,4,0.01);
 	bool mirror=Mirror(atoms,axis,0.01);
-	std::cout<<proper<<" "<<mirror;
+	std::cout<<proper<<" "<<mirror<<" "<<improper<<std::endl;
 	libint2::finalize();
 }
