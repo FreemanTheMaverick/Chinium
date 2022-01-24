@@ -267,7 +267,6 @@ bool ImproperAxis(std::vector<libint2::Atom> atoms,EigenVector axis,int manifold
                         EigenVector interatomicdistancevector=coordinatesi-nearestcoordinatesj; // Displacement vector between atom i and the closest atom j.
                         double interatomicdistancesquared=interatomicdistancevector.dot(interatomicdistancevector); // Square of distance between atom i and the closest atom j.
                         improperaxis=nearestdeviationsquared/interatomicdistancesquared<tolerance*tolerance; // Deviation is scaled by the distance between atom i and atom j. More deviation is tolerated considering the large interatomic distance.
-
 		}
 	}
 	return improperaxis;
