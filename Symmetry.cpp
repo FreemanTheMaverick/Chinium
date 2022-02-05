@@ -61,10 +61,20 @@ struct MolecularSymmetry{ // A structure to represent the symmetry information o
 	bool inversion_centre; // Whether the origin is the inversion centre.
 	EigenMatrix mirrors; // Normalized normal vector of mirrors, stored as [[nx1,ny1,nz1],[[nx2,ny2,nz2],...].
 	EigenMatrix proper_axes; // Normalized vector of proper axes, stored as [[lx1,ly1,lz1],[[lx2,ly2,lz2],...].
-	EigenMatrix proper_manifords; // Manifolds of proper axes, stored as [m1,m2,...].
+	EigenMatrix proper_manifolds; // Manifolds of proper axes, stored as [m1,m2,...].
 	EigenMatrix improper_axes; // Similar to proper_axes.
-	EigenMatrix improper_manifords; // Similar to proper_manifords.
+	EigenMatrix improper_manifolds; // Similar to proper_manifolds.
 };
+
+void PrintMolecularSymmetry(MolecularSymmetry molecularsymmetry){
+	std::cout<<"Point group: "<<molecularsymmetry.point_group_name<<std::endl;
+	std::cout<<"Inversion Centre: "<<molecularsymmetry.inversion_centre<<std::endl;
+	std::cout<<"Mirrors: "<<molecularsymmetry.mirrors<<std::endl;
+	std::cout<<"Proper axes: "<<molecularsymmetry.proper_axes<<std::endl;
+	std::cout<<"Proper manifolds: "<<molecularsymmetry.proper_manifolds<<std::endl;
+	std::cout<<"Improper axes: "<<molecularsymmetry.improper_axes<<std::endl;
+	std::cout<<"Improper manifolds: "<<molecularsymmetry.improper_manifolds<<std::endl;
+}
 
 bool InversionCentre(std::vector<libint2::Atom> atoms,double tolerance){ // Testing whether the origin is the inversion centre. For a molecule on its standard orientation, the origin is the only point that may be its inversion centre.
 	int natoms=atoms.size();
@@ -260,7 +270,6 @@ bool ImproperAxis(std::vector<libint2::Atom> atoms,EigenVector axis,int manifold
 					if (deviationsquared<nearestdeviationsquared){ // Whether this atom j is closer than last atom j to atom i.
                                                 nearestcoordinatesj=coordinatesj; // If so, update the closest atom j and the corresponding deviation.
                                                 nearestdeviationsquared=deviationsquared;
-
 					}
 				}
 			}
@@ -272,10 +281,8 @@ bool ImproperAxis(std::vector<libint2::Atom> atoms,EigenVector axis,int manifold
 	return improperaxis;
 }
 
-
 MolecularSymmetry PointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ // Moving the molecule to the standard orientation.
 	int natoms=atoms.size();
-	tolerance=tolerance*tolerance;
 	double mtotal,mxtotal,mytotal,mztotal; // Determining the centre of mass.
 	for (int iatom=0;iatom<natoms;iatom++){
 		libint2::Atom atom=atoms[iatom];
@@ -332,21 +339,132 @@ MolecularSymmetry PointGroup(std::vector<libint2::Atom>& atoms,double tolerance)
 	std::vector<libint2::Atom> newatoms=Matrix2Vector(atoms,standardcoordinates);
 	atoms=newatoms;
 
-	tolerance=tolerance*tolerance;
 	ixx=I(0,0);
-	iyy=I(0,1);
-	izz=I(0,2);
+	iyy=I(1,0);
+	izz=I(2,0);
 	MolecularSymmetry molecularsymmetry;
-	if (ixx*ixx<tolerance||iyy*iyy<tolerance||izz*izz<tolerance){ // Molecules of point groups Cv and Dh have one zero inertial moment.
+	if (ixx*ixx<tolerance*tolerance || iyy*iyy<tolerance*tolerance || izz*izz<tolerance*tolerance){ // Molecules of point groups Cv and Dh have one zero inertial moment.
 		bool inversioncentre=InversionCentre(atoms,tolerance);
-		if (inversioncentre){
+		molecularsymmetry.inversion_centre=inversioncentre;
+		if (inversioncentre){ // Dh has an inversion centre while Cv does not.
 			molecularsymmetry.point_group_name="Dh";
-		}else{
+		}else{ // Dh has an inversion centre while Cv does not.
 			molecularsymmetry.point_group_name="Cv";
 		}
-		molecularsymmetry.inversion_centre=inversioncentre;
+	}else if ((ixx-iyy)*(ixx-iyy)>tolerance*tolerance && (ixx-izz)*(ixx-izz)>tolerance*tolerance && (iyy-izz)*(iyy-izz)>tolerance*tolerance){ // Molecules of point groups C1, Cs, Ci, C2, C2v, C2h, D2h, D2d have three unequivalent eigen inertial moments.
+		EigenVector xaxis(1,0,0);
+		EigenVector yaxis(0,1,0);
+		EigenVector zaxis(0,0,1); // The standard orientation procedure will align the molecule in the way that its main mirror (on which the most atoms lie among all mirrors, if any) lies on xy plane (except for D2d), so (0,0,1) is the normal vector of its main mirror.
+		if (Mirror(atoms,xaxis,tolerance) || Mirror(atoms,yaxis,tolerance) || Mirror(atoms,zaxis,tolerance)){ // Cs, C2v, C2h and D2h have one mirror respectively on xy plane, while  C1, Ci, C2 and D2 do not.
+			if (InversionCentre(atoms,tolerance)){ // C2h and D2h have an inversion centre, while Cs and C2v do not.
+				if (Mirror(atoms,xaxis,tolerance) && Mirror(atoms,yaxis,tolerance) && Mirror(atoms,zaxis,tolerance)){ // D2h has another two mirrors on yz and zx plane, while C2h does not.
+					molecularsymmetry.point_group_name="D2h";
+std::cout<<"fuck1"<<std::endl;
+					molecularsymmetry.inversion_centre=true;
+					EigenMatrix mirrorsandpropers(3,3);mirrorsandpropers<<1,0,0,
+					                                                      0,1,0,
+					                                                      0,0,1;
+					molecularsymmetry.mirrors=mirrorsandpropers;
+					molecularsymmetry.proper_axes=mirrorsandpropers;
+					EigenMatrix propermanifolds(1,3);propermanifolds<<2,2,2;molecularsymmetry.proper_manifolds=propermanifolds;
+				}else{ // D2h has another two mirrors on yz and zx planes, while C2h does not.
+					molecularsymmetry.point_group_name="C2h";
+std::cout<<"fuck2"<<std::endl;
+					molecularsymmetry.inversion_centre=true;
+					EigenMatrix mirrorandproper(1,3);
+					if (Mirror(atoms,xaxis,tolerance)){
+						mirrorandproper<<1,0,0;
+					}else if (Mirror(atoms,yaxis,tolerance)){
+						mirrorandproper<<0,1,0;
+					}else if (Mirror(atoms,zaxis,tolerance)){
+						mirrorandproper<<0,0,1;
+					}
+					molecularsymmetry.mirrors=mirrorandproper;
+					molecularsymmetry.proper_axes=mirrorandproper;
+					EigenMatrix propermanifold(1,1);propermanifold<<2;molecularsymmetry.proper_manifolds=propermanifold;
+				}
+			}else{ // C2h and D2h have an inversion centre, while Cs and C2v do not.
+				if (ProperAxis(atoms,xaxis,2,tolerance) || ProperAxis(atoms,yaxis,2,tolerance) || ProperAxis(atoms,zaxis,2,tolerance)){ // C2v has a proper axis, while Cs does not.
+					molecularsymmetry.point_group_name="C2v";
+std::cout<<"fuck3"<<std::endl;
+					molecularsymmetry.inversion_centre=false;
+					EigenMatrix mirrors(2,3);
+					EigenMatrix proper(1,3);
+					if (ProperAxis(atoms,xaxis,2,tolerance)){
+						mirrors<<0,1,0,
+						         0,0,1;
+						proper<<1,0,0;
+					}else if (ProperAxis(atoms,yaxis,2,tolerance)){
+						mirrors<<0,0,1,
+                                                         1,0,0;
+                                                proper<<0,1,0;
+                                        }else if (ProperAxis(atoms,zaxis,2,tolerance)){
+                                                mirrors<<1,0,0,
+                                                         0,1,0;
+                                                proper<<0,0,1;
+					}
+					molecularsymmetry.mirrors=mirrors;
+                                        molecularsymmetry.proper_axes=proper;
+					EigenMatrix propermanifold(1,1);propermanifold<<2;molecularsymmetry.proper_manifolds=propermanifold;
+				}else{ //  C2v has a proper axis, while Cs does not.
+					molecularsymmetry.point_group_name="Cs";
+std::cout<<"fuck4"<<std::endl;
+					molecularsymmetry.inversion_centre=false;
+					EigenMatrix mirror(1,3);
+					if (Mirror(atoms,xaxis,tolerance)){
+						mirror<<1,0,0;
+					}else if (Mirror(atoms,yaxis,tolerance)){
+						mirror<<0,1,0;
+					}else if (Mirror(atoms,zaxis,tolerance)){
+						mirror<<0,0,1;
+					}
+					molecularsymmetry.mirrors=mirror;
+				}
+			}
+		}else{ // Cs, C2v, C2h and D2h have one mirror respectively on the xy plane, while  C1, Ci, C2 and D2 do not.
+			if (InversionCentre(atoms,tolerance)){ // Ci has an inversion centre, while others do not.
+				molecularsymmetry.point_group_name="Ci";
+std::cout<<"fuck5"<<std::endl;
+				molecularsymmetry.inversion_centre=true;
+			}else if (ProperAxis(atoms,xaxis,2,tolerance) || ProperAxis(atoms,yaxis,2,tolerance) || ProperAxis(atoms,zaxis,2,tolerance)){ // C2 and D2 has at least one C2 axis, while C1 does not.
+				if (ProperAxis(atoms,xaxis,2,tolerance) && ProperAxis(atoms,yaxis,2,tolerance) && ProperAxis(atoms,zaxis,2,tolerance)){ // D2 has three C2 axes along three principal axes, while C2 does not.
+					molecularsymmetry.point_group_name="D2";
+std::cout<<"fuck6"<<std::endl;
+					molecularsymmetry.inversion_centre=false;
+					EigenMatrix propers(3,3);propers<<1,0,0,
+					                                  0,1,0,
+					                                  0,0,1;
+                                        molecularsymmetry.proper_axes=propers;
+					EigenMatrix propermanifolds(1,3);propermanifolds<<2,2,2;molecularsymmetry.proper_manifolds=propermanifolds;
+				}else{ // D2 has three C2 axes along three principal axes, while C2 does not.
+					molecularsymmetry.point_group_name="C2";
+std::cout<<"fuck7"<<std::endl;
+					molecularsymmetry.inversion_centre=false;
+					EigenMatrix proper(1,3);
+					if (ProperAxis(atoms,xaxis,2,tolerance)){
+						proper<<1,0,0;
+					}else if (ProperAxis(atoms,yaxis,2,tolerance)){
+						proper<<0,1,0;
+					}else if (ProperAxis(atoms,zaxis,2,tolerance)){
+						proper<<0,0,1;
+					}
+					molecularsymmetry.proper_axes=proper;
+					EigenMatrix propermanifold(1,1);propermanifold<<2;molecularsymmetry.proper_manifolds=propermanifold;
+				}
+			}else{ // C1 has no inversion centres, mirrors or proper axes.
+				molecularsymmetry.point_group_name="C1";
+std::cout<<"fuck8"<<std::endl;
+				molecularsymmetry.inversion_centre=false;
+			}
+		}
 	}else if ((ixx-iyy)*(ixx-iyy)<tolerance&&(ixx-izz)*(ixx-izz)<tolerance&&(iyy-izz)*(iyy-izz)<tolerance){ // Molecules of point groups Td, Oh and Ih have three equivalent eigen inertial moments.
 		bool inversioncentre=InversionCentre(atoms,tolerance);
+		if (inversioncentre){ // Among Td, Oh and Ih, Oh and Ih have an inversion centre respectively while Td does not.
+			
+		}else{
+			molecularsymmetry.point_group_name="Td";
+		}
+	}else{ // Cn, Cnv, Cnh, Dn, Dnh and Sn with n>2 and Dnd with n>=2.
 	}
 	return molecularsymmetry;
 }
@@ -357,17 +475,11 @@ int main(){
 	std::cin>>xyz;
 	std::ifstream input(xyz);
 	std::vector<libint2::Atom> atoms=libint2::read_dotxyz(input);
+	MolecularSymmetry a=PointGroup(atoms,0.01);
 	for (int i=0;i<atoms.size();i++){
 		libint2::Atom atom=atoms[i];
 		std::cout<<atom.atomic_number<<" "<<atom.x<<" "<<atom.y<<" "<<atom.z<<std::endl;
 	}
-	//MolecularSymmetry a=PointGroup(atoms);
-	EigenVector axis(0,0,1);
-//	axis<<0,0.707106781,0.707106781;
-	bool inversioncentre=InversionCentre(atoms,0.01);
-	bool mirror=Mirror(atoms,axis,0.01);
-	bool proper=ProperAxis(atoms,axis,4,0.01);
-	bool improper=ImproperAxis(atoms,axis,4,0.01);
-	std::cout<<inversioncentre<<" "<<mirror<<" "<<proper<<" "<<improper<<std::endl;
+	PrintMolecularSymmetry(a);
 	libint2::finalize();
 }
