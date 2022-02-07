@@ -78,6 +78,51 @@ PointGroup D2h{
 	proper_manifolds:d2hpropermanifolds
 };
 
+PointGroup D3{
+	name:"D3",
+	inversion_centre:false
+};
+
+PointGroup C3{
+	name:"C3",
+	inversion_centre:false
+};
+
+PointGroup C3h{
+	name:"C3h",
+	inversion_centre:false
+};
+
+PointGroup C3v{
+	name:"C3v",
+	inversion_centre:false
+};
+
+PointGroup C4v{
+	name:"C4v",
+	inversion_centre:false
+};
+
+PointGroup D4h{
+	name:"D4h",
+	inversion_centre:true
+};
+
+PointGroup D2d{
+	name:"D2d",
+	inversion_centre:false
+};
+
+PointGroup D3d{
+	name:"D3d",
+	inversion_centre:true
+};
+
+PointGroup S4{
+	name:"S4",
+	inversion_centre:false
+};
+
 void PrintPointGroup(PointGroup pointgroup){ // Printing molecular symmetry information.
 	std::cout<<"Point group: "<<pointgroup.name<<std::endl;
 	std::cout<<"Inversion Centre: "<<pointgroup.inversion_centre<<std::endl;

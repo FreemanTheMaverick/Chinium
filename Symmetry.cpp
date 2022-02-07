@@ -229,7 +229,7 @@ bool ImproperAxis(std::vector<libint2::Atom> atoms,EigenVector axis,int manifold
 			double yiprojection=atomprojection(1,iatom);
 			double ziprojection=atomprojection(2,iatom);
 			EigenVector coordinatesiprojection(xiprojection,yiprojection,ziprojection); // The projection of atom i, which is rendered by rotating atom i around axis by i*angle.
-			if (i%2==1){ // An atom's mirror image of the rotation image is its true improper image if the index is odd. Otherwise, its proper image and improper image are identical.
+			if (i%2==1){ // The mirror image of an atom's rotation image is the atom's true improper image if the index is odd. Otherwise, its proper image and improper image are identical.
 		                double pointplanedistance=coordinatesi.dot(axis); // Distance between atom i and plane.
 				coordinatesiprojection=coordinatesiprojection-2*pointplanedistance*axis;
 			}
@@ -241,7 +241,7 @@ bool ImproperAxis(std::vector<libint2::Atom> atoms,EigenVector axis,int manifold
 			for (int jatom=0;jatom<natoms;jatom++){ // Finding the closest atom to the projection of atom i.
 				libint2::Atom atomj=atoms[jatom];
                 		int Zj=atomj.atomic_number;
-				if (Zi==Zj&&iatom!=jatom){
+				if (Zi==Zj){
 					double xj=atomj.x;
 					double yj=atomj.y;
 					double zj=atomj.z;
@@ -254,12 +254,96 @@ bool ImproperAxis(std::vector<libint2::Atom> atoms,EigenVector axis,int manifold
 					}
 				}
 			}
-                        EigenVector interatomicdistancevector=coordinatesi-nearestcoordinatesj; // Displacement vector between atom i and the closest atom j.
-                        double interatomicdistancesquared=interatomicdistancevector.dot(interatomicdistancevector); // Square of distance between atom i and the closest atom j.
-                        improperaxis=nearestdeviationsquared/interatomicdistancesquared<tolerance*tolerance; // Deviation is scaled by the distance between atom i and atom j. More deviation is tolerated considering the large interatomic distance.
+			EigenVector interatomicdistancevector=coordinatesi-nearestcoordinatesj; // Displacement vector between atom i and the closest atom j.
+			double interatomicdistancesquared=interatomicdistancevector.dot(interatomicdistancevector); // Square of distance between atom i and the closest atom j.
+			improperaxis=nearestdeviationsquared/(interatomicdistancesquared+tolerance*tolerance)<tolerance*tolerance; // Deviation is scaled by the distance between atom i and atom j. More deviation is tolerated considering the large interatomic distance. The "+tolerance*tolerance" is for cases where the atom i and the closest atom j are identical, and thus the denominator drops to zero. Those cases do not exist in inversion centre checking, mirror checking and proper axis checking, because (1) in inversion centre checking, the atom at the origin is skipped; (2) in mirror checking, atoms in the plane are skipped; and (3) in proper checking, atoms on the proper axis are skipped. Things are more complicated for improper axis checking than for the other three.
 		}
 	}
 	return improperaxis;
+}
+
+EigenMatrix HorizontalC2Axis(std::vector<libint2::Atom>& atoms,double tolerance){ // Finding one of the molecule's horizontal C2 axes, if any.
+	EigenVector horizontalc2axis(0,0,0);
+	int natoms=atoms.size();
+	for (int iatom=0;iatom<natoms;iatom++){
+                libint2::Atom atomi=atoms[iatom];
+                int Zi=atomi.atomic_number;
+                double xi=atomi.x;
+                double yi=atomi.y;
+                double zi=atomi.z;
+		if (xi*xi+yi*yi<tolerance*tolerance){
+			continue;
+		}
+		for (int jatom=iatom;jatom<natoms;jatom++){
+	                libint2::Atom atomj=atoms[jatom];
+			int Zj=atomj.atomic_number;
+			double xj=atomj.x;
+			double yj=atomj.y;
+			double zj=atomj.z;
+			if (xj*xj+yj*yj<tolerance*tolerance || (xi+xj)*(xi+xj)/4+(yi+yj)*(yi+yj)/4<tolerance*tolerance){
+				continue;
+			}
+			if (Zi==Zj && (zi+zj)*(zi+zj)<tolerance*tolerance){ // The horizontal C2 axis must pass the origin and an atom in xy plane, or the origin and the midpoint of two like atoms seperated by xy plane.
+				EigenVector potentialc2axis((xi+xj),(yi+yj),0);
+				potentialc2axis=potentialc2axis/sqrt(potentialc2axis.dot(potentialc2axis));
+				if (ProperAxis(atoms,potentialc2axis,2,tolerance)){ // Whether the axis is a C2 axis of the molecule.
+					horizontalc2axis=potentialc2axis;
+					return horizontalc2axis;
+				}
+			}
+		}
+	}
+	return horizontalc2axis;
+}
+
+EigenMatrix HorizontalMirror(std::vector<libint2::Atom>& atoms,double tolerance){ // Finding one of the molecule's horizontal mirror, if any.
+	EigenVector horizontalmirror(0,0,0);
+	int natoms=atoms.size();
+	for (int iatom=0;iatom<natoms;iatom++){ // First checking planes that bisect atoms.
+                libint2::Atom atomi=atoms[iatom];
+                int Zi=atomi.atomic_number;
+                double xi=atomi.x;
+                double yi=atomi.y;
+                double zi=atomi.z;
+		if (xi*xi+yi*yi<tolerance*tolerance){
+			continue;
+		}
+		EigenVector potentialmirror(yi,-xi,0);
+		potentialmirror=potentialmirror/sqrt(potentialmirror.dot(potentialmirror));
+		if (Mirror(atoms,potentialmirror,tolerance)){ // Whether the plane is a mirror of the molecule.
+			horizontalmirror=potentialmirror;
+			return horizontalmirror;
+		}
+	}
+	for (int iatom=0;iatom<natoms;iatom++){ // Then checking planes that lie between like atoms.
+		libint2::Atom atomi=atoms[iatom];
+		int Zi=atomi.atomic_number;
+		double xi=atomi.x;
+		double yi=atomi.y;
+		double zi=atomi.z;
+		if (xi*xi+yi*yi<tolerance*tolerance){
+			continue;
+		}
+		for (int jatom=iatom+1;jatom<natoms;jatom++){
+	                libint2::Atom atomj=atoms[jatom];
+			int Zj=atomj.atomic_number;
+			double xj=atomj.x;
+			double yj=atomj.y;
+			double zj=atomj.z;
+			if (xj*xj+yj*yj<tolerance*tolerance || (xi+xj)*(xi+xj)/4+(yi+yj)*(yi+yj)/4<tolerance*tolerance){
+				continue;
+			}
+			if (Zi==Zj && (zi-zj)*(zi-zj)<tolerance*tolerance){
+				EigenVector potentialmirror((yi+yj),-(xi+xj),0);
+				potentialmirror=potentialmirror/sqrt(potentialmirror.dot(potentialmirror));
+				if (Mirror(atoms,potentialmirror,tolerance)){
+					horizontalmirror=potentialmirror;
+					return horizontalmirror;
+				}
+			}
+		}
+	}
+	return horizontalmirror;
 }
 
 PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ // Moving the molecule to the standard orientation.
@@ -407,21 +491,162 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 			atoms=Matrix2Vector(atoms,mainy2mainz.transpose()*Vector2Matrix(atoms));
 		}
 		int manifolds[15]={2,3,4,5,6,8,9,10,12,15,18,20,24,30,36};
-		int maxpropermanifold;
-		int maximpropermanifold;
+		int maxpropermanifold=0;
+		int maximpropermanifold=0;
 		for (int imanifold=0;imanifold<15;imanifold++){
 			int manifold=manifolds[imanifold];
 			if (ProperAxis(atoms,zaxis,manifold,tolerance)){
 				maxpropermanifold=manifold;
-			}else if (ImproperAxis(atoms,zaxis,manifold,tolerance)){
+			}
+			if (ImproperAxis(atoms,zaxis,manifold,tolerance)){
 				maximpropermanifold=manifold;
 			}
 		}
-
+std::cout<<maxpropermanifold<<" "<<maximpropermanifold<<std::endl;
 		if (maximpropermanifold==0){ // Cn, Cnv and Dn have no main improper axes.
+			EigenVector horizontalc2axis=HorizontalC2Axis(atoms,tolerance);
+			if (horizontalc2axis(0)!=0 || horizontalc2axis(1)!=0){ // Dn has horizontal C2 axes, while Cn and Cnv do not.
+				switch(maxpropermanifold){
+					case 3:pointgroup=D3;break;
+//					case 4:pointgroup=D4;break;
+//					case 5:pointgroup=D5;break;
+//					case 6:pointgroup=D6;break;
+//					case 8:pointgroup=D8;break;
+//					case 9:pointgroup=D9;break;
+//					case 10:pointgroup=D10;break;
+//					case 12:pointgroup=D12;break;
+//					case 15:pointgroup=D15;break;
+//					case 18:pointgroup=D18;break;
+//					case 20:pointgroup=D20;break;
+//					case 24:pointgroup=D24;break;
+//					case 30:pointgroup=D30;break;
+//					case 36:pointgroup=D36;break;
+				}
+				EigenMatrix rotation{{horizontalc2axis(0),horizontalc2axis(1),0},
+				                     {-horizontalc2axis(1),horizontalc2axis(0),0},
+				                     {0,0,1}};
+				atoms=Matrix2Vector(atoms,rotation*Vector2Matrix(atoms));
+			}else{  // Dn has horizontal C2 axes, while Cn and Cnv do not.
+				EigenVector horizontalmirror=HorizontalMirror(atoms,tolerance);
+				if (horizontalmirror(0)!=0 || horizontalmirror(1)!=0){ // Cnv has horizontal mirrors, while Cn does not.
+					switch(maxpropermanifold){
+						case 3:pointgroup=C3v;break;
+						case 4:pointgroup=C4v;break;
+//						case 5:pointgroup=C5v;break;
+//						case 6:pointgroup=C6v;break;
+//						case 8:pointgroup=C8v;break;
+//						case 9:pointgroup=C9v;break;
+//						case 10:pointgroup=C10v;break;
+//						case 12:pointgroup=C12v;break;
+//						case 15:pointgroup=C15v;break;
+//						case 18:pointgroup=C18v;break;
+//						case 20:pointgroup=C20v;break;
+//						case 24:pointgroup=C24v;break;
+//						case 30:pointgroup=C30v;break;
+//						case 36:pointgroup=C36v;break;
+					}
+					EigenMatrix rotation{{-horizontalmirror(1),horizontalmirror(0),0},
+				                             {-horizontalmirror(0),-horizontalmirror(1),0},
+				                             {0,0,1}};
+					atoms=Matrix2Vector(atoms,rotation*Vector2Matrix(atoms));
+				}else{ // Cnv has horizontal mirrors, while Cn does not.
+					switch(maxpropermanifold){
+						case 3:pointgroup=C3;break;
+//						case 4:pointgroup=C4;break;
+//						case 5:pointgroup=C5;break;
+//						case 6:pointgroup=C6;break;
+//						case 8:pointgroup=C8;break;
+//						case 9:pointgroup=C9;break;
+//						case 10:pointgroup=C10;break;
+//						case 12:pointgroup=C12;break;
+//						case 15:pointgroup=C15;break;
+//						case 18:pointgroup=C18;break;
+//						case 20:pointgroup=C20;break;
+//						case 24:pointgroup=C24;break;
+//						case 30:pointgroup=C30;break;
+//						case 36:pointgroup=C36;break;
+					}
+				}
+			}
 		}else if (maxpropermanifold==maximpropermanifold){ // Max proper manifold and max improper manifold are the same for the main axis of Cnh and Dnh.
-		}else if (maxpropermanifold<maximpropermanifold){ // Max proper manifold is smaller that max improper manifold for the maxin axis of Dnd.
-		}else if (maxpropermanifold>maximpropermanifold){ // Max proper manifold is larger that max improper manifold for the maxin axis of Sn.
+			EigenVector horizontalc2axis=HorizontalC2Axis(atoms,tolerance);
+			if (horizontalc2axis(0)!=0 || horizontalc2axis(1)!=0){ // Dnh has horizontal C2 axes, while Cnh does not.
+				switch(maxpropermanifold){
+//					case 3:pointgroup=D3h;break;
+					case 4:pointgroup=D4h;break;
+//					case 5:pointgroup=D5h;break;
+//					case 6:pointgroup=D6h;break;
+//					case 8:pointgroup=D8h;break;
+//					case 9:pointgroup=D9h;break;
+//					case 10:pointgroup=D10h;break;
+//					case 12:pointgroup=D12h;break;
+//					case 15:pointgroup=D15h;break;
+//					case 18:pointgroup=D18h;break;
+//					case 20:pointgroup=D20h;break;
+//					case 24:pointgroup=D24h;break;
+//					case 30:pointgroup=D30h;break;
+//					case 36:pointgroup=D36h;break;
+				}
+				EigenMatrix rotation{{horizontalc2axis(0),horizontalc2axis(1),0},
+				                     {-horizontalc2axis(1),horizontalc2axis(0),0},
+				                     {0,0,1}};
+				atoms=Matrix2Vector(atoms,rotation*Vector2Matrix(atoms));
+			}else{ // Dnh has horizontal C2 axes, while Cnh does not.
+				switch(maxpropermanifold){
+					case 3:pointgroup=C3h;break;
+//					case 4:pointgroup=C4h;break;
+//					case 5:pointgroup=C5h;break;
+//					case 6:pointgroup=C6h;break;
+//					case 8:pointgroup=C8h;break;
+//					case 9:pointgroup=C9h;break;
+//					case 10:pointgroup=C10h;break;
+//					case 12:pointgroup=C12h;break;
+//					case 15:pointgroup=C15h;break;
+//					case 18:pointgroup=C18h;break;
+//					case 20:pointgroup=C20h;break;
+//					case 24:pointgroup=C24h;break;
+//					case 30:pointgroup=C30h;break;
+//					case 36:pointgroup=C36h;break;
+				}
+			}
+		}else if (maxpropermanifold<maximpropermanifold){ // Max proper manifold is smaller that max improper manifold for the maxin axis of Dnd and Sn.
+			EigenVector horizontalc2axis=HorizontalC2Axis(atoms,tolerance);
+			if (horizontalc2axis(0)!=0 || horizontalc2axis(1)!=0){
+				switch(maxpropermanifold){
+					case 2:pointgroup=D2d;break;
+					case 3:pointgroup=D3d;break;
+//					case 4:pointgroup=D4d;break;
+//					case 5:pointgroup=D5d;break;
+//					case 6:pointgroup=D6d;break;
+//					case 8:pointgroup=D8d;break;
+//					case 9:pointgroup=D9d;break;
+//					case 10:pointgroup=D10d;break;
+//					case 12:pointgroup=D12d;break;
+//					case 15:pointgroup=D15d;break;
+//					case 18:pointgroup=D18d;break;
+//					case 20:pointgroup=D20d;break;
+//					case 24:pointgroup=D24d;break;
+//					case 30:pointgroup=D30d;break;
+//					case 36:pointgroup=D36d;break;
+				}
+				EigenMatrix rotation{{horizontalc2axis(0),horizontalc2axis(1),0},
+				                     {-horizontalc2axis(1),horizontalc2axis(0),0},
+				                     {0,0,1}};
+				atoms=Matrix2Vector(atoms,rotation*Vector2Matrix(atoms));
+			}else{
+				switch(maximpropermanifold){
+					case 4:pointgroup=S4;break;
+//					case 6:pointgroup=S6;break;
+//					case 8:pointgroup=S8;break;
+//					case 10:pointgroup=S10;break;
+//					case 12:pointgroup=S12;break;
+//					case 18:pointgroup=S18;break;
+//					case 20:pointgroup=S20;break;
+//					case 24:pointgroup=S24;break;
+//					case 30:pointgroup=S30;break;
+//					case 36:pointgroup=S36;break;
+				}
+			}
 		}
 	}
 	return pointgroup;
@@ -433,7 +658,7 @@ int main(){
 	std::cin>>xyz;
 	std::ifstream input(xyz);
 	std::vector<libint2::Atom> atoms=libint2::read_dotxyz(input);
-	PointGroup pointgroup=GetPointGroup(atoms,0.01);
+	PointGroup pointgroup=GetPointGroup(atoms,0.001);
 	for (int i=0;i<atoms.size();i++){
 		libint2::Atom atom=atoms[i];
 		std::cout<<atom.atomic_number<<" "<<atom.x<<" "<<atom.y<<" "<<atom.z<<std::endl;
