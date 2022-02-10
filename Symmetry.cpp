@@ -424,7 +424,7 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 //			pointgroup.point_group_name="Cv";
 			atoms=Matrix2Vector(atoms,mainx2mainz.transpose()*Vector2Matrix(atoms)); // Reorienting the molecule so that the main axis lies on z axis.
 		}
-	}else if ((ixx-iyy)*(ixx-iyy)>tolerance*tolerance && (ixx-izz)*(ixx-izz)>tolerance*tolerance && (iyy-izz)*(iyy-izz)>tolerance*tolerance){ // Molecules of point groups C1, Cs, Ci, C2, C2v, C2h, D2h, D2d have three unequivalent eigen inertial moments.
+	}else if ((ixx-iyy)*(ixx-iyy)>tolerance*tolerance && (ixx-izz)*(ixx-izz)>tolerance*tolerance && (iyy-izz)*(iyy-izz)>tolerance*tolerance){ // Molecules of point groups C1, Cs, Ci, C2, C2v, C2h, D2 and D2h have three unequivalent eigen inertial moments.
 		EigenVector xaxis(1,0,0);
 		EigenVector yaxis(0,1,0);
 		EigenVector zaxis(0,0,1);
@@ -502,7 +502,6 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 				maximpropermanifold=manifold;
 			}
 		}
-std::cout<<maxpropermanifold<<" "<<maximpropermanifold<<std::endl;
 		if (maximpropermanifold==0){ // Cn, Cnv and Dn have no main improper axes.
 			EigenVector horizontalc2axis=HorizontalC2Axis(atoms,tolerance);
 			if (horizontalc2axis(0)!=0 || horizontalc2axis(1)!=0){ // Dn has horizontal C2 axes, while Cn and Cnv do not.
@@ -572,7 +571,7 @@ std::cout<<maxpropermanifold<<" "<<maximpropermanifold<<std::endl;
 			EigenVector horizontalc2axis=HorizontalC2Axis(atoms,tolerance);
 			if (horizontalc2axis(0)!=0 || horizontalc2axis(1)!=0){ // Dnh has horizontal C2 axes, while Cnh does not.
 				switch(maxpropermanifold){
-//					case 3:pointgroup=D3h;break;
+					case 3:pointgroup=D3h;break;
 					case 4:pointgroup=D4h;break;
 //					case 5:pointgroup=D5h;break;
 //					case 6:pointgroup=D6h;break;
@@ -611,11 +610,11 @@ std::cout<<maxpropermanifold<<" "<<maximpropermanifold<<std::endl;
 			}
 		}else if (maxpropermanifold<maximpropermanifold){ // Max proper manifold is smaller that max improper manifold for the maxin axis of Dnd and Sn.
 			EigenVector horizontalc2axis=HorizontalC2Axis(atoms,tolerance);
-			if (horizontalc2axis(0)!=0 || horizontalc2axis(1)!=0){
+			if (horizontalc2axis(0)!=0 || horizontalc2axis(1)!=0){ // Dnd has horizontal C2 axes, while Sn does not.
 				switch(maxpropermanifold){
 					case 2:pointgroup=D2d;break;
 					case 3:pointgroup=D3d;break;
-//					case 4:pointgroup=D4d;break;
+					case 4:pointgroup=D4d;break;
 //					case 5:pointgroup=D5d;break;
 //					case 6:pointgroup=D6d;break;
 //					case 8:pointgroup=D8d;break;
@@ -633,7 +632,7 @@ std::cout<<maxpropermanifold<<" "<<maximpropermanifold<<std::endl;
 				                     {-horizontalc2axis(1),horizontalc2axis(0),0},
 				                     {0,0,1}};
 				atoms=Matrix2Vector(atoms,rotation*Vector2Matrix(atoms));
-			}else{
+			}else{ // Dnd has horizontal C2 axes, while Sn does not.
 				switch(maximpropermanifold){
 					case 4:pointgroup=S4;break;
 //					case 6:pointgroup=S6;break;

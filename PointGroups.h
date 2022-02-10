@@ -103,6 +103,11 @@ PointGroup C4v{
 	inversion_centre:false
 };
 
+PointGroup D3h{
+	name:"D3h",
+	inversion_centre:false
+};
+
 PointGroup D4h{
 	name:"D4h",
 	inversion_centre:true
@@ -116,6 +121,11 @@ PointGroup D2d{
 PointGroup D3d{
 	name:"D3d",
 	inversion_centre:true
+};
+
+PointGroup D4d{
+	name:"D4d",
+	inversion_centre:false
 };
 
 PointGroup S4{
