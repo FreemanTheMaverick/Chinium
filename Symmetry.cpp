@@ -651,17 +651,213 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 	return pointgroup;
 }
 
+EigenMatrix Images(std::vector<libint2::Atom> atoms,PointGroup pointgroup){ // Image of each symmetry operation applied to each atom. For example, the image matrix of a three-atom molecule belonging to a point group with three symmetry operation may write as [[0,1,2],[1,2,0,],[2,0,1]]. The first row means that atom 0 is moved to itself by identity operator, to atom 1 by the second operator and to atom 2 by the third operator. Order of symmetry operations: identity, inversion, reflection, proper rotation, improper rotation; main axis first, then secondary ones.
+	int natoms=atoms.size();
+	int ninversioncentres=pointgroup.inversion_centre;
+	int nmirrors=pointgroup.mirrors.rows();
+	int npropers=pointgroup.proper_axes.rows();
+	int nimpropers=pointgroup.improper_axes.rows();
+	int noperations=1+ninversioncentres+nmirrors+npropers+nimpropers; // The total number of symmetry operations, include identity.
+	EigenMatrix coordinates=Vector2Matrix(atoms);
+	EigenMatrix images(natoms,noperations);
+	for (int iatom=0;iatom<natoms;iatom++){
+		images(iatom,0)=iatom; // Identity.
+		if (!ninversioncentres){ // Inversion.
+			continue;
+		}
+		libint2::Atom atomi=atoms[iatom];
+		int Zi=atomi.atomic_number;
+		double xi=atomi.x;
+		double yi=atomi.y;
+		double zi=atomi.z;
+		EigenVector coordinatesi(xi,yi,zi);
+		EigenVector coordinatesiprojection=-coordinatesi; // The projection of atom i, which is on its opposite with respect to the origin.
+		int nearestjatom;
+		double nearestxj=114514; // The closest atom j to atom i's projection. Any arbitarily large numbers as initial values.
+		double nearestyj=1919810;
+		double nearestzj=889464;
+		double nearestdeviationsquared=364364; // Deviation between the closest atom j and atom i's projection.
+		EigenVector nearestcoordinatesj;
+		for (int jatom=0;jatom<natoms;jatom++){ // Finding the closest atom j to atom i's projection.
+			libint2::Atom atomj=atoms[jatom];
+                	int Zj=atomj.atomic_number;
+			if (Zi==Zj){ // Atom i and atom j must share the same atomic number if their locations are to be compared.
+				double xj=atomj.x;
+				double yj=atomj.y;
+				double zj=atomj.z;
+				EigenVector coordinatesj(xj,yj,zj); // Location of atom j.
+				EigenVector deviationvector=coordinatesiprojection-coordinatesj; // Displacement vector between atom i's projection and the closest atom j.
+				double deviationsquared=deviationvector.dot(deviationvector); // Square of distance between atom i's projection and the closest atom j.
+				if (nearestdeviationsquared>deviationsquared){ // Whether this atom j is closer than last atom j to atom i.
+					nearestjatom=jatom;
+					nearestcoordinatesj=coordinatesj; // If so, update the closest atom j and the corresponding deviation.
+					nearestdeviationsquared=deviationsquared;
+				}
+			}
+		}
+		images(iatom,1)=nearestjatom;
+	}
+
+	int ioperation=ninversioncentres?2:1; // The index of operation is two if the point group has an inversion operator, one otherwise.
+	for (int imirror=0;imirror<nmirrors;imirror++,ioperation++){ // Reflection.
+		EigenVector normal(pointgroup.mirrors(imirror,0),pointgroup.mirrors(imirror,1),pointgroup.mirrors(imirror,2));
+		for (int iatom=0;iatom<natoms;iatom++){
+			libint2::Atom atomi=atoms[iatom];
+			int Zi=atomi.atomic_number;
+			double xi=atomi.x;
+			double yi=atomi.y;
+			double zi=atomi.z;
+			EigenVector coordinatesi(xi,yi,zi);
+			double pointplanedistance=coordinatesi.dot(normal); // Distance between atom i and plane.
+			EigenVector coordinatesiprojection=coordinatesi-2*pointplanedistance*normal; // The projection of atom i, which is on its opposite with respect to the plane.
+			int nearestjatom;
+			double nearestxj=114514; // The closest atom j to atom i's projection. Any arbitarily large numbers as initial values.
+			double nearestyj=1919810;
+			double nearestzj=889464;
+			double nearestdeviationsquared=364364; // Deviation between the closest atom j and atom i's projection.
+			EigenVector nearestcoordinatesj;
+			for (int jatom=0;jatom<natoms;jatom++){ // Finding the closest atom j to atom i's projection.
+				libint2::Atom atomj=atoms[jatom];
+			 	int Zj=atomj.atomic_number;
+				if (Zi==Zj){ // Atom i and atom j must share the same atomic number if their locations are to be compared.
+					double xj=atomj.x;
+					double yj=atomj.y;
+					double zj=atomj.z;
+					EigenVector coordinatesj(xj,yj,zj); // Location of atom j.
+					EigenVector deviationvector=coordinatesiprojection-coordinatesj; // Displacement vector between atom i's projection and the closest atom j.
+					double deviationsquared=deviationvector.dot(deviationvector); // Square of distance between atom i's projection and the closest atom j.
+					if (nearestdeviationsquared>deviationsquared){ // Whether this atom j is closer than last atom j to atom i.
+						nearestjatom=jatom;
+						nearestcoordinatesj=coordinatesj; // If so, update the closest atom j and the corresponding deviation.
+						nearestdeviationsquared=deviationsquared;
+					}
+				}
+			}
+			images(iatom,ioperation)=nearestjatom;		
+		}
+	}
+
+	for (int iproper=0;iproper<npropers;iproper++,ioperation++){ // Proper rotation.
+		int manifold=pointgroup.proper_manifolds(iproper);
+		double angle=360/(double)manifold/180*3.1415926536; // Converting degrees to radii.
+		double axisx=pointgroup.proper_axes(iproper,0); // Three components of axial vector. The vector must be a unit vector.
+		double axisy=pointgroup.proper_axes(iproper,1);
+		double axisz=pointgroup.proper_axes(iproper,2);
+		EigenVector axis(axisx,axisy,axisz);
+		EigenMatrix rotation(3,3);
+		rotation<<axisx*axisx*(1-cos(angle))+cos(angle),axisx*axisy*(1-cos(angle))-axisz*sin(angle),axisx*axisz*(1-cos(angle))+axisy*sin(angle),
+		          axisx*axisy*(1-cos(angle))+axisz*sin(angle),axisy*axisy*(1-cos(angle))+cos(angle),axisy*axisz*(1-cos(angle))-axisx*sin(angle),
+		          axisx*axisz*(1-cos(angle))-axisy*sin(angle),axisy*axisz*(1-cos(angle))+axisx*sin(angle),axisz*axisz*(1-cos(angle))+cos(angle); // Rotation matrix.
+		EigenMatrix atomprojection=rotation*coordinates; // Projection of molecule with respective to rotation.
+		for (int iatom=0;iatom<natoms;iatom++){
+			libint2::Atom atomi=atoms[iatom];
+			int Zi=atomi.atomic_number;
+			double xi=atomi.x;
+			double yi=atomi.y;
+			double zi=atomi.z;
+			EigenVector coordinatesi(xi,yi,zi);
+			double xiprojection=atomprojection(0,iatom);
+			double yiprojection=atomprojection(1,iatom);
+			double ziprojection=atomprojection(2,iatom);
+			EigenVector coordinatesiprojection(xiprojection,yiprojection,ziprojection); // The projection of atom i, which is rendered by rotating atom i around axis by angle.
+			int nearestjatom;
+			double nearestxj=114514; // The closest atom j to atom i's projection. Any arbitarily large numbers as initial values.
+			double nearestyj=1919810;
+			double nearestzj=889464;
+			double nearestdeviationsquared=364364; // Deviation between the closest atom j and atom i's projection.
+			EigenVector nearestcoordinatesj;
+			for (int jatom=0;jatom<natoms;jatom++){ // Finding the closest atom j to atom i's projection.
+				libint2::Atom atomj=atoms[jatom];
+			 	int Zj=atomj.atomic_number;
+				if (Zi==Zj){ // Atom i and atom j must share the same atomic number if their locations are to be compared.
+					double xj=atomj.x;
+					double yj=atomj.y;
+					double zj=atomj.z;
+					EigenVector coordinatesj(xj,yj,zj); // Location of atom j.
+					EigenVector deviationvector=coordinatesiprojection-coordinatesj; // Displacement vector between atom i's projection and the closest atom j.
+					double deviationsquared=deviationvector.dot(deviationvector); // Square of distance between atom i's projection and the closest atom j.
+					if (nearestdeviationsquared>deviationsquared){ // Whether this atom j is closer than last atom j to atom i.
+						nearestjatom=jatom;
+						nearestcoordinatesj=coordinatesj; // If so, update the closest atom j and the corresponding deviation.
+						nearestdeviationsquared=deviationsquared;
+					}
+				}
+			}
+			images(iatom,ioperation)=nearestjatom;		
+		}
+	}
+
+	for (int iimproper=0;iimproper<nimpropers;iimproper++,ioperation++){ // Improper rotation.
+		int manifold=pointgroup.improper_manifolds(iimproper);
+		double angle=360/(double)manifold/180*3.1415926536; // Converting degrees to radii.
+		double axisx=pointgroup.improper_axes(iimproper,0); // Three components of axial vector. The vector must be a unit vector.
+		double axisy=pointgroup.improper_axes(iimproper,1);
+		double axisz=pointgroup.improper_axes(iimproper,2);
+		EigenVector axis(axisx,axisy,axisz);
+		EigenMatrix rotation(3,3);
+		rotation<<axisx*axisx*(1-cos(angle))+cos(angle),axisx*axisy*(1-cos(angle))-axisz*sin(angle),axisx*axisz*(1-cos(angle))+axisy*sin(angle),
+		          axisx*axisy*(1-cos(angle))+axisz*sin(angle),axisy*axisy*(1-cos(angle))+cos(angle),axisy*axisz*(1-cos(angle))-axisx*sin(angle),
+		          axisx*axisz*(1-cos(angle))-axisy*sin(angle),axisy*axisz*(1-cos(angle))+axisx*sin(angle),axisz*axisz*(1-cos(angle))+cos(angle); // Rotation matrix.
+		EigenMatrix atomprojection=rotation*coordinates; // Projection of molecule with respective to rotation.
+		for (int iatom=0;iatom<natoms;iatom++){
+			libint2::Atom atomi=atoms[iatom];
+			int Zi=atomi.atomic_number;
+			double xi=atomi.x;
+			double yi=atomi.y;
+			double zi=atomi.z;
+			EigenVector coordinatesi(xi,yi,zi);
+			double xiprojection=atomprojection(0,iatom);
+			double yiprojection=atomprojection(1,iatom);
+			double ziprojection=atomprojection(2,iatom);
+			EigenVector coordinatesiprojection(xiprojection,yiprojection,ziprojection); // The projection of atom i, which is rendered by rotating atom i around axis by angle.
+			if (manifold%2==1){ // The mirror image of an atom's rotation image is the atom's true improper image if the index is odd. Otherwise, its proper image and improper image are identical.
+		                double pointplanedistance=coordinatesi.dot(axis); // Distance between atom i and plane.
+				coordinatesiprojection=coordinatesiprojection-2*pointplanedistance*axis;
+			}
+			int nearestjatom;
+			double nearestxj=114514; // The closest atom j to atom i's projection. Any arbitarily large numbers as initial values.
+			double nearestyj=1919810;
+			double nearestzj=889464;
+			double nearestdeviationsquared=364364; // Deviation between the closest atom j and atom i's projection.
+			EigenVector nearestcoordinatesj;
+			for (int jatom=0;jatom<natoms;jatom++){ // Finding the closest atom j to atom i's projection.
+				libint2::Atom atomj=atoms[jatom];
+			 	int Zj=atomj.atomic_number;
+				if (Zi==Zj){ // Atom i and atom j must share the same atomic number if their locations are to be compared.
+					double xj=atomj.x;
+					double yj=atomj.y;
+					double zj=atomj.z;
+					EigenVector coordinatesj(xj,yj,zj); // Location of atom j.
+					EigenVector deviationvector=coordinatesiprojection-coordinatesj; // Displacement vector between atom i's projection and the closest atom j.
+					double deviationsquared=deviationvector.dot(deviationvector); // Square of distance between atom i's projection and the closest atom j.
+					if (nearestdeviationsquared>deviationsquared){ // Whether this atom j is closer than last atom j to atom i.
+						nearestjatom=jatom;
+						nearestcoordinatesj=coordinatesj; // If so, update the closest atom j and the corresponding deviation.
+						nearestdeviationsquared=deviationsquared;
+					}
+				}
+			}
+			images(iatom,ioperation)=nearestjatom;		
+		}
+	}
+	return images;
+}
+
+
 int main(){
 	libint2::initialize();
 	std::string xyz;
 	std::cin>>xyz;
 	std::ifstream input(xyz);
 	std::vector<libint2::Atom> atoms=libint2::read_dotxyz(input);
-	PointGroup pointgroup=GetPointGroup(atoms,0.001);
+	PointGroup pointgroup=GetPointGroup(atoms,0.01);
 	for (int i=0;i<atoms.size();i++){
 		libint2::Atom atom=atoms[i];
 		std::cout<<atom.atomic_number<<" "<<atom.x<<" "<<atom.y<<" "<<atom.z<<std::endl;
 	}
 	PrintPointGroup(pointgroup);
+	EigenMatrix images=Images(atoms,pointgroup);
+	std::cout<<"Symmetry operation image list:"<<std::endl;
+	std::cout<<images<<std::endl;
 	libint2::finalize();
 }
