@@ -8,8 +8,10 @@ struct PointGroup{ // A structure to represent the symmetry information of a poi
 	EigenMatrix mirrors; // Normalized normal vector of mirrors, stored as [[nx1,ny1,nz1],[[nx2,ny2,nz2],...].
 	EigenMatrix proper_axes; // Normalized vector of proper axes, stored as [[lx1,ly1,lz1],[[lx2,ly2,lz2],...].
 	EigenMatrix proper_manifolds; // Manifolds of proper axes, stored as [m1,m2,...].
+	EigenMatrix proper_exponents; // Exponents of proper axes, stored as [e1,e2,...].
 	EigenMatrix improper_axes; // Similar to proper_axes.
 	EigenMatrix improper_manifolds; // Similar to proper_manifolds.
+	EigenMatrix improper_exponents; // Similar to proper_exponents.
 };
 
 PointGroup C1{
@@ -139,7 +141,9 @@ void PrintPointGroup(PointGroup pointgroup){ // Printing molecular symmetry info
 	std::cout<<"Mirrors: "<<pointgroup.mirrors<<std::endl;
 	std::cout<<"Proper axes: "<<pointgroup.proper_axes<<std::endl;
 	std::cout<<"Proper manifolds: "<<pointgroup.proper_manifolds<<std::endl;
+	std::cout<<"Proper exponents: "<<pointgroup.proper_exponents<<std::endl;
 	std::cout<<"Improper axes: "<<pointgroup.improper_axes<<std::endl;
 	std::cout<<"Improper manifolds: "<<pointgroup.improper_manifolds<<std::endl;
+	std::cout<<"Improper exponents: "<<pointgroup.improper_exponents<<std::endl;
 }
 
