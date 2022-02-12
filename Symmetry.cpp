@@ -134,7 +134,7 @@ bool ProperAxis(std::vector<libint2::Atom> atoms,EigenVector axis,int manifold,d
 	double axisx=axis(0); // Three components of axial vector. The vector must be a unit vector.
 	double axisy=axis(1);
 	double axisz=axis(2);
-	for (int exponent=1;exponent<manifold && properaxis;exponent++){ // Looping over all possible exponents of proper rotation. For example, for a C_3 axis, the possible exponents are 1 and 2, standing for 2pi/3 and 4pi/3.
+	for (int exponent=1;exponent<manifold && properaxis;exponent++){ // Looping over all possible rotation angles. For example, for a C_3 axis, the possible possible angles are 2pi/3, 4pi/3 and 2pi.
 		EigenMatrix properrotation{{axisx*axisx*(1-cos(exponent*angle))+cos(exponent*angle),axisx*axisy*(1-cos(exponent*angle))-axisz*sin(exponent*angle),axisx*axisz*(1-cos(exponent*angle))+axisy*sin(exponent*angle)},
 		                           {axisx*axisy*(1-cos(exponent*angle))+axisz*sin(exponent*angle),axisy*axisy*(1-cos(exponent*angle))+cos(exponent*angle),axisy*axisz*(1-cos(exponent*angle))-axisx*sin(exponent*angle)},
 		                           {axisx*axisz*(1-cos(exponent*angle))-axisy*sin(exponent*angle),axisy*axisz*(1-cos(exponent*angle))+axisx*sin(exponent*angle),axisz*axisz*(1-cos(exponent*angle))+cos(exponent*angle)}}; // Proper rotation matrix.
@@ -155,14 +155,14 @@ bool ImproperAxis(std::vector<libint2::Atom> atoms,EigenVector axis,int manifold
 	double axisx=axis(0); // Three components of axial vector. The vector must be a unit vector.
 	double axisy=axis(1);
 	double axisz=axis(2);
-	for (int exponent=1;exponent<manifold && improperaxis;exponent++){ // Looping over all possible exponents of improper rotation. For example, for an S_3 axis, the possible exponents are 1 and 2, standing for 2pi/3 and 4pi/3.
+	for (int exponent=1;exponent<manifold && improperaxis;exponent=exponent+2){ // Looping over all possible rotation angles. For example, for a C_3 axis, the possible possible angles are 2pi/3, 4pi/3 and 2pi.
 		EigenMatrix properrotation{{axisx*axisx*(1-cos(exponent*angle))+cos(exponent*angle),axisx*axisy*(1-cos(exponent*angle))-axisz*sin(exponent*angle),axisx*axisz*(1-cos(exponent*angle))+axisy*sin(exponent*angle)},
 		                           {axisx*axisy*(1-cos(exponent*angle))+axisz*sin(exponent*angle),axisy*axisy*(1-cos(exponent*angle))+cos(exponent*angle),axisy*axisz*(1-cos(exponent*angle))-axisx*sin(exponent*angle)},
 		                           {axisx*axisz*(1-cos(exponent*angle))-axisy*sin(exponent*angle),axisy*axisz*(1-cos(exponent*angle))+axisx*sin(exponent*angle),axisz*axisz*(1-cos(exponent*angle))+cos(exponent*angle)}}; // Proper rotation matrix.
 		EigenMatrix reflection{{1-2*axisx*axisx,-2*axisx*axisy,-2*axisx*axisz},
 		                       {-2*axisx*axisy,1-2*axisy*axisy,-2*axisy*axisz},
 		                       {-2*axisx*axisz,-2*axisy*axisz,1-2*axisz*axisz}};
-		EigenMatrix improperrotation=exponent%2==1?properrotation*reflection:properrotation; // (Sn)^m rotations are equivalent to (Cn)^m rotations for even m's.
+		EigenMatrix improperrotation=properrotation*reflection;
 		std::vector<libint2::Atom> projections=Matrix2Vector(atoms,improperrotation*coordinates); // Projection of molecule with respective to proper rotation.
 		for (int iatom=0;iatom<natoms && improperaxis;iatom++){
 			libint2::Atom atomi=atoms[iatom];
@@ -274,7 +274,6 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 	masscentre(0,0)=mxtotal/mtotal;
 	masscentre(1,0)=mytotal/mtotal;
 	masscentre(2,0)=mztotal/mtotal;
-
 	double ixx=0; // Calculating the inertial tensor.
 	double ixy=0;
 	double ixz=0;
@@ -294,10 +293,10 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 		iyz=iyz-yprime*zprime*AtomicMass(Z);
 		izz=izz+(xprime*xprime+yprime*yprime)*AtomicMass(Z);
 	}
-	EigenMatrix inertialtensor{{ixx,ixy,ixz},
-	                           {ixy,iyy,iyz},
-	                           {ixz,iyz,izz}};
-
+	EigenMatrix inertialtensor(3,3);
+	inertialtensor(0,0)=ixx;inertialtensor(0,1)=ixy;inertialtensor(0,2)=ixz;
+	inertialtensor(1,0)=ixy;inertialtensor(1,1)=iyy;inertialtensor(1,2)=iyz;
+	inertialtensor(2,0)=ixz;inertialtensor(2,1)=iyz;inertialtensor(2,2)=izz;
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver; // Diagonalizing the inertial tensor.
 	eigensolver.compute(inertialtensor); // Diagonalizing the inertial tensor. The eigenvector matrix is the rotation matrix that rotates the molecule to the standard orientation.
 	EigenMatrix I=eigensolver.eigenvalues();
@@ -312,16 +311,15 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 	EigenMatrix standardcoordinates=U.transpose()*newcoordinates; // Rotating the molecule, so that the principal axes coincide with cartesian coordinates.
 	std::vector<libint2::Atom> newatoms=Matrix2Vector(atoms,standardcoordinates);
 	atoms=newatoms;
-
 	ixx=I(0,0);
 	iyy=I(1,0);
 	izz=I(2,0);
-	EigenMatrix mainx2mainz{{0,0,1}, // Matrix that reorients a molecule so that its main axis is moved from x axis to z axis.
-	                        {1,0,0},
-	                        {0,1,0}};
-	EigenMatrix mainy2mainz{{0,1,0}, // Matrix that reorients a molecule so that its main axis is moved from y axis to z axis.
-	                        {0,0,1},
-	                        {1,0,0}};
+	EigenMatrix mainx2mainz(3,3);mainx2mainz<<0,0,1, // Matrix that reorients a molecule so that its main axis is moved from x axis to z axis.
+	                                          1,0,0,
+	                                          0,1,0;
+	EigenMatrix mainy2mainz(3,3);mainy2mainz<<0,1,0, // Matrix that reorients a molecule so that its main axis is moved from y axis to z axis.
+	                                          0,0,1,
+	                                          1,0,0;
 	PointGroup pointgroup;
 	if (ixx*ixx<tolerance*tolerance || iyy*iyy<tolerance*tolerance || izz*izz<tolerance*tolerance){ // Molecules of point groups Cv and Dh have one zero inertial moment.
 		bool inversioncentre=InversionCentre(atoms,tolerance);
@@ -483,7 +481,7 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 					case 3:pointgroup=D3h;break;
 					case 4:pointgroup=D4h;break;
 //					case 5:pointgroup=D5h;break;
-//					case 6:pointgroup=D6h;break;
+					case 6:pointgroup=D6h;break;
 //					case 8:pointgroup=D8h;break;
 //					case 9:pointgroup=D9h;break;
 //					case 10:pointgroup=D10h;break;
@@ -560,7 +558,7 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 	return pointgroup;
 }
 
-EigenMatrix Images(std::vector<libint2::Atom> atoms,PointGroup pointgroup,double tolerance){ // Image of each symmetry operation applied to each atom. For example, the image matrix of a three-atom molecule belonging to a point group with three symmetry operation may write as [[0,1,2],[1,2,0,],[2,0,1]]. The first row means that atom 0 is moved to itself by identity operator, to atom 1 by the second operator and to atom 2 by the third operator. Order of symmetry operations: identity, inversion, reflection, proper rotation, improper rotation; main axis first, then secondary ones; main axis exponent 1 first, then increasing by one (for proper rotations) or two (for improper rotations) at a time.
+EigenMatrix Images(std::vector<libint2::Atom> atoms,PointGroup pointgroup,double tolerance){ // Image of each symmetry operation applied to each atom. For example, the image matrix of a three-atom molecule belonging to a point group with three symmetry operation may write as [[0,1,2],[1,2,0,],[2,0,1]]. The first row means that atom 0 is moved to itself by identity operator, to atom 1 by the second operator and to atom 2 by the third operator. Order of symmetry operations: identity, inversion, reflection, proper rotation, improper rotation; main axis first, then secondary ones.
 	int natoms=atoms.size();
 	int ninversioncentres=pointgroup.inversion_centre;
 	int nmirrors=pointgroup.mirrors.rows();
@@ -640,12 +638,9 @@ EigenMatrix Images(std::vector<libint2::Atom> atoms,PointGroup pointgroup,double
 	return images;
 }
 
-
-int main(){
+int main(int argc,char *argv[]){
 	libint2::initialize();
-	std::string xyz;
-	std::cin>>xyz;
-	std::ifstream input(xyz);
+	std::ifstream input(argv[1]);
 	std::vector<libint2::Atom> atoms=libint2::read_dotxyz(input);
 	double tolerance=0.1;
 	PointGroup pointgroup=GetPointGroup(atoms,tolerance);

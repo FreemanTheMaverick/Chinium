@@ -14,136 +14,26 @@ struct PointGroup{ // A structure to represent the symmetry information of a poi
 	EigenMatrix improper_exponents; // Similar to proper_exponents.
 };
 
-PointGroup C1{
-	name:"C1",
-	inversion_centre:false
-};
+extern PointGroup C1;
+extern PointGroup Cs;
+extern PointGroup Ci;
+extern PointGroup C2;
+extern PointGroup C2v;
+extern PointGroup C2h;
+extern PointGroup D2;
+extern PointGroup D2h;
+extern PointGroup D3;
+extern PointGroup C3;
+extern PointGroup C3h;
+extern PointGroup C3v;
+extern PointGroup C4v;
+extern PointGroup D3h;
+extern PointGroup D4h;
+extern PointGroup D6h;
+extern PointGroup D2d;
+extern PointGroup D3d;
+extern PointGroup D4d;
+extern PointGroup S4;
 
-EigenMatrix csmirror{{0,0,1}};
-PointGroup Cs{
-	name:"Cs",
-	inversion_centre:false,
-	mirrors:csmirror
-};
-
-PointGroup Ci{
-	name:"Ci",
-	inversion_centre:true
-};
-
-EigenMatrix c2proper{{0,0,1}};
-EigenMatrix c2propermanifold{{2}};
-PointGroup C2{
-	name:"C2",
-	inversion_centre:false,
-	proper_axes:c2proper, // Intel compiler reports a bug in this line, but GNU compiler does not. Maybe it is one of Intel compiler's bugs.
-	proper_manifolds:c2propermanifold // Intel compiler reports a bug in this line, but GNU compiler does not. Maybe it is one of Intel compiler's bugs.
-};
-
-EigenMatrix c2vmirrors{{1,0,0},{0,1,0}};
-EigenMatrix c2vproper{{0,0,1}};
-EigenMatrix c2vpropermanifold{{2}};
-PointGroup C2v{
-	name:"C2v",
-	inversion_centre:false,
-	mirrors:c2vmirrors,
-	proper_axes:c2vproper,
-	proper_manifolds:c2vpropermanifold
-};
-
-EigenMatrix c2hmirrorandproper{{0,0,1}};
-EigenMatrix c2hpropermanifold{{2}};
-PointGroup C2h{
-	name:"C2h",
-	inversion_centre:true,
-	mirrors:c2hmirrorandproper,
-	proper_axes:c2hmirrorandproper,
-	proper_manifolds:c2hpropermanifold
-};
-
-EigenMatrix d2propers{{0,0,1},{1,0,0},{0,1,0}};
-EigenMatrix d2propermanifolds{{2,2,2}};
-PointGroup D2{
-	name:"D2",
-	inversion_centre:false,
-	proper_axes:d2propers, // Intel compiler reports a bug in this line, but GNU compiler does not. Maybe it is one of Intel compiler's bugs.
-	proper_manifolds:d2propermanifolds // Intel compiler reports a bug in this line, but GNU compiler does not. Maybe it is one of Intel compiler's bugs.
-};
-
-EigenMatrix d2hmirrorsandpropers{{0,0,1},{1,0,0},{0,1,0}};
-EigenMatrix d2hpropermanifolds{{2,2,2}};
-PointGroup D2h{
-	name:"D2h",
-	inversion_centre:true,
-	mirrors:d2hmirrorsandpropers,
-	proper_axes:d2hmirrorsandpropers,
-	proper_manifolds:d2hpropermanifolds
-};
-
-PointGroup D3{
-	name:"D3",
-	inversion_centre:false
-};
-
-PointGroup C3{
-	name:"C3",
-	inversion_centre:false
-};
-
-PointGroup C3h{
-	name:"C3h",
-	inversion_centre:false
-};
-
-PointGroup C3v{
-	name:"C3v",
-	inversion_centre:false
-};
-
-PointGroup C4v{
-	name:"C4v",
-	inversion_centre:false
-};
-
-PointGroup D3h{
-	name:"D3h",
-	inversion_centre:false
-};
-
-PointGroup D4h{
-	name:"D4h",
-	inversion_centre:true
-};
-
-PointGroup D2d{
-	name:"D2d",
-	inversion_centre:false
-};
-
-PointGroup D3d{
-	name:"D3d",
-	inversion_centre:true
-};
-
-PointGroup D4d{
-	name:"D4d",
-	inversion_centre:false
-};
-
-PointGroup S4{
-	name:"S4",
-	inversion_centre:false
-};
-
-void PrintPointGroup(PointGroup pointgroup){ // Printing molecular symmetry information.
-	std::cout<<"Point group: "<<pointgroup.name<<std::endl;
-	std::cout<<"Inversion Centre: "<<pointgroup.inversion_centre<<std::endl;
-	std::cout<<"Mirrors: "<<pointgroup.mirrors<<std::endl;
-	std::cout<<"Proper axes: "<<pointgroup.proper_axes<<std::endl;
-	std::cout<<"Proper manifolds: "<<pointgroup.proper_manifolds<<std::endl;
-	std::cout<<"Proper exponents: "<<pointgroup.proper_exponents<<std::endl;
-	std::cout<<"Improper axes: "<<pointgroup.improper_axes<<std::endl;
-	std::cout<<"Improper manifolds: "<<pointgroup.improper_manifolds<<std::endl;
-	std::cout<<"Improper exponents: "<<pointgroup.improper_exponents<<std::endl;
-}
+void PrintPointGroup(PointGroup pointgroup); // Printing molecular symmetry information.
 
