@@ -7,6 +7,7 @@
 #include <time.h>
 
 typedef Eigen::Matrix<double, Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
+typedef Eigen::Matrix<double,3,1> EigenVector;
 
 int nBasis(libint2::BasisSet obs){ // Size of basis set.
 	int n=0;
@@ -283,6 +284,23 @@ void Repulsion(libint2::BasisSet obs,double **repulsion,short int **indices,int 
 	end=clock();
 	std::cout<<" Repulsion integrals elapsed time = "<<double(end-start)/CLOCKS_PER_SEC<<" s"<<std::endl;
 	std::cout<<" ... Repulsion integrals done ..."<<std::endl;
+}
+
+int main(int argc,char *argv[]){
+	libint2::initialize();
+	std::ifstream input(argv[1]);
+	std::vector<libint2::Atom> atoms=libint2::read_dotxyz(input);
+	libint2::BasisSet obs(argv[2],atoms);
+
+	EigenMatrix overlap=Overlap(obs);
+	EigenMatrix kinetic=Kinetic(obs);
+	EigenMatrix nuclear=Nuclear(obs,atoms);
+	double *repulsion;
+	short int *indices;
+	int nintegrals;
+	Repulsion(obs,&repulsion,&indices,nintegrals);
+	libint2::finalize();
+	return 0;
 }
 
 /*
