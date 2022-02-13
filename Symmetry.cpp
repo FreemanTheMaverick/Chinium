@@ -483,7 +483,7 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 //					case 5:pointgroup=D5h;break;
 					case 6:pointgroup=D6h;break;
 //					case 8:pointgroup=D8h;break;
-//					case 9:pointgroup=D9h;break;
+					case 9:pointgroup=D9h;break;
 //					case 10:pointgroup=D10h;break;
 //					case 12:pointgroup=D12h;break;
 //					case 15:pointgroup=D15h;break;
@@ -558,7 +558,7 @@ PointGroup GetPointGroup(std::vector<libint2::Atom>& atoms,double tolerance){ //
 	return pointgroup;
 }
 
-EigenMatrix Images(std::vector<libint2::Atom> atoms,PointGroup pointgroup,double tolerance){ // Image of each symmetry operation applied to each atom. For example, the image matrix of a three-atom molecule belonging to a point group with three symmetry operation may write as [[0,1,2],[1,2,0,],[2,0,1]]. The first row means that atom 0 is moved to itself by identity operator, to atom 1 by the second operator and to atom 2 by the third operator. Order of symmetry operations: identity, inversion, reflection, proper rotation, improper rotation; main axis first, then secondary ones.
+EigenMatrix EquivalentAtoms(std::vector<libint2::Atom> atoms,PointGroup pointgroup,double tolerance){ // Image of each symmetry operation applied to each atom. For example, the image matrix of a three-atom molecule belonging to a point group with three symmetry operation may write as [[0,1,2],[1,2,0,],[2,0,1]]. The first row means that atom 0 is moved to itself by identity operator, to atom 1 by the second operator and to atom 2 by the third operator. Order of symmetry operations: identity, inversion, reflection, proper rotation, improper rotation; main axis first, then secondary ones.
 	int natoms=atoms.size();
 	int ninversioncentres=pointgroup.inversion_centre;
 	int nmirrors=pointgroup.mirrors.rows();
@@ -566,10 +566,10 @@ EigenMatrix Images(std::vector<libint2::Atom> atoms,PointGroup pointgroup,double
 	int nimpropers=pointgroup.improper_axes.rows();
 	int noperations=1+ninversioncentres+nmirrors+npropers+nimpropers; // The total number of symmetry operations, include identity.
 	EigenMatrix coordinates=Vector2Matrix(atoms);
-	EigenMatrix images(natoms,noperations);
+	EigenMatrix equivalentatoms(natoms,noperations);
 
 	for (int iatom=0;iatom<natoms;iatom++){ // Idensity.
-		images(iatom,0)=iatom;
+		equivalentatoms(iatom,0)=iatom;
 	}
 
 	std::vector<libint2::Atom> projections=Matrix2Vector(atoms,-coordinates);
@@ -578,7 +578,7 @@ EigenMatrix Images(std::vector<libint2::Atom> atoms,PointGroup pointgroup,double
 			continue;
 		}
 		libint2::Atom atomi=atoms[iatom];
-		images(iatom,1)=FindImage(atomi,projections,tolerance);
+		equivalentatoms(iatom,1)=FindImage(atomi,projections,tolerance);
 	}
 
 	int ioperation=ninversioncentres?2:1; // The index of operation is two if the point group has an inversion operator, one otherwise.
@@ -593,7 +593,7 @@ EigenMatrix Images(std::vector<libint2::Atom> atoms,PointGroup pointgroup,double
 		std::vector<libint2::Atom> projections=Matrix2Vector(atoms,reflection*coordinates);
 		for (int iatom=0;iatom<natoms;iatom++){
 			libint2::Atom atomi=atoms[iatom];
-			images(iatom,ioperation)=FindImage(atomi,projections,tolerance);
+			equivalentatoms(iatom,ioperation)=FindImage(atomi,projections,tolerance);
 		}
 	}
 
@@ -610,7 +610,7 @@ EigenMatrix Images(std::vector<libint2::Atom> atoms,PointGroup pointgroup,double
 		std::vector<libint2::Atom> projections=Matrix2Vector(atoms,properrotation*coordinates);
 		for (int iatom=0;iatom<natoms;iatom++){
 			libint2::Atom atomi=atoms[iatom];
-			images(iatom,ioperation)=FindImage(atomi,projections,tolerance);		
+			equivalentatoms(iatom,ioperation)=FindImage(atomi,projections,tolerance);		
 		}
 	}
 
@@ -631,26 +631,94 @@ EigenMatrix Images(std::vector<libint2::Atom> atoms,PointGroup pointgroup,double
 		std::vector<libint2::Atom> projections=Matrix2Vector(atoms,improperrotation*coordinates); // Projection of molecule with respective to proper rotation.
 		for (int iatom=0;iatom<natoms;iatom++){
 			libint2::Atom atomi=atoms[iatom];
-			images(iatom,ioperation)=FindImage(atomi,projections,tolerance);
+			equivalentatoms(iatom,ioperation)=FindImage(atomi,projections,tolerance);
 		}
 	}
 
-	return images;
+	return equivalentatoms;
 }
+
+EigenMatrix ShellCentres(libint2::BasisSet obs, std::vector<libint2::Atom> atoms){ // Getting the centre of each shell. For example, [5,3,1,1,...] means that the first shell is centred at atom 5, the second atom 3 and the third and the fourth atom 1, etc.
+	int nshells=obs.size();
+	int natoms=atoms.size();
+	EigenMatrix shellcentres(1,nshells);
+	for (int ishell=0;ishell<nshells;ishell++){
+		libint2::Shell shelli=obs[ishell];
+		EigenVector centre(shelli.O[0],shelli.O[1],shelli.O[2]);
+		bool found=false;
+		for (int jatom=0;jatom<natoms && !found;jatom++){
+			libint2::Atom atomj=atoms[jatom];
+			EigenVector atomcoord(atomj.x,atomj.y,atomj.z);
+			EigenVector deviationvector=centre-atomcoord;
+			double distancesquared=deviationvector.dot(deviationvector);
+			if (distancesquared<0.00001){
+				found=true;
+				shellcentres(ishell)=(double)jatom;
+			}
+		}
+	}
+	return shellcentres;
+}
+
+EigenMatrix ShellAngulars(libint2::BasisSet obs){ // Getting the angular momentum of each shell.
+	int nshells=obs.size();
+	EigenMatrix shellangulars(1,nshells);
+	for (int ishell=0;ishell<nshells;ishell++){
+		libint2::Shell shelli=obs[ishell];
+		shellangulars(ishell)=(double)shelli.contr[0].l;
+	}
+	return shellangulars;
+}
+
+EigenMatrix EquivalentShells(libint2::BasisSet obs,std::vector<libint2::Atom> atoms,PointGroup pointgroup,double tolerance){ // Finding equivalent shells of the molecule. A set of shells are equivalent if their centres can be projected to each other by symmetry operations and their angular momenta are equal.
+	EigenMatrix equivalentatoms=EquivalentAtoms(atoms,pointgroup,tolerance);
+	EigenMatrix shellcentres=ShellCentres(obs,atoms);
+	EigenMatrix shellangulars=ShellAngulars(obs);
+	int nshells=obs.size();
+	int noperations=equivalentatoms.cols();
+	EigenMatrix equivalentshells(nshells,noperations);
+	for (int ishell=0;ishell<nshells;ishell++){
+		double shellicentre=shellcentres(ishell);
+		double shelliangular=shellangulars(ishell);
+		for (int joperation=0;joperation<noperations;joperation++){
+			bool found=false;
+			int ijatom=(int)equivalentatoms((int)shellicentre,joperation);
+			libint2::Atom atomij=atoms[ijatom];
+			int Zij=atomij.atomic_number;
+			for (int kshell=0;kshell<nshells && !found;kshell++){
+				double shellkcentre=shellcentres(kshell);
+				double shellkangular=shellangulars(kshell);
+				libint2::Atom atomk=atoms[shellkcentre];
+				int Zij=atomk.atomic_number;
+				if (ijatom==shellkcentre && shelliangular==shellkangular){
+					found=true;
+					equivalentshells(ishell,joperation)=kshell;
+				}
+			}
+		}
+	}
+	return equivalentshells;
+}
+
 
 int main(int argc,char *argv[]){
 	libint2::initialize();
 	std::ifstream input(argv[1]);
 	std::vector<libint2::Atom> atoms=libint2::read_dotxyz(input);
-	double tolerance=0.1;
+	double tolerance=0.01;
 	PointGroup pointgroup=GetPointGroup(atoms,tolerance);
 	for (int i=0;i<atoms.size();i++){
 		libint2::Atom atom=atoms[i];
 		std::cout<<atom.atomic_number<<" "<<atom.x<<" "<<atom.y<<" "<<atom.z<<std::endl;
 	}
 	PrintPointGroup(pointgroup);
-	EigenMatrix images=Images(atoms,pointgroup,tolerance);
-	std::cout<<"Symmetry operation image list:"<<std::endl;
-	std::cout<<images<<std::endl;
+	libint2::BasisSet obs(argv[2],atoms);
+	EigenMatrix equivalentatoms=EquivalentAtoms(atoms,pointgroup,tolerance);
+	std::cout<<"Equivalent atom list:"<<std::endl;
+	std::cout<<equivalentatoms<<std::endl;
+	EigenMatrix equivalentshells=EquivalentShells(obs,atoms,pointgroup,tolerance);
+	std::cout<<"Equivalent shell list:"<<std::endl;
+	std::cout<<equivalentshells<<std::endl;
 	libint2::finalize();
 }
+
