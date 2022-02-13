@@ -30,6 +30,7 @@ extern PointGroup C4v;
 extern PointGroup D3h;
 extern PointGroup D4h;
 extern PointGroup D6h;
+extern PointGroup D9h;
 extern PointGroup D2d;
 extern PointGroup D3d;
 extern PointGroup D4d;

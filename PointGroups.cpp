@@ -130,6 +130,12 @@ PointGroup D6h{
 	name:"D6h",
 	inversion_centre:true
 };
+
+PointGroup D9h{
+	name:"D9h",
+	inversion_centre:false
+};
+
 PointGroup D2d{
 	name:"D2d",
 	inversion_centre:false
