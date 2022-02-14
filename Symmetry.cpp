@@ -660,26 +660,16 @@ EigenMatrix ShellCentres(libint2::BasisSet obs, std::vector<libint2::Atom> atoms
 	return shellcentres;
 }
 
-EigenMatrix ShellAngulars(libint2::BasisSet obs){ // Getting the angular momentum of each shell.
-	int nshells=obs.size();
-	EigenMatrix shellangulars(1,nshells);
-	for (int ishell=0;ishell<nshells;ishell++){
-		libint2::Shell shelli=obs[ishell];
-		shellangulars(ishell)=(double)shelli.contr[0].l;
-	}
-	return shellangulars;
-}
-
-EigenMatrix EquivalentShells(libint2::BasisSet obs,std::vector<libint2::Atom> atoms,PointGroup pointgroup,double tolerance){ // Finding equivalent shells of the molecule. A set of shells are equivalent if their centres can be projected to each other by symmetry operations and their angular momenta are equal.
+EigenMatrix EquivalentShells(libint2::BasisSet obs,std::vector<libint2::Atom> atoms,PointGroup pointgroup,double tolerance){ // Finding equivalent shells of the molecule. A set of shells are equivalent if their centres can be projected to each other by symmetry operations and their basis features except the centres are identical.
 	EigenMatrix equivalentatoms=EquivalentAtoms(atoms,pointgroup,tolerance);
 	EigenMatrix shellcentres=ShellCentres(obs,atoms);
-	EigenMatrix shellangulars=ShellAngulars(obs);
 	int nshells=obs.size();
 	int noperations=equivalentatoms.cols();
 	EigenMatrix equivalentshells(nshells,noperations);
 	for (int ishell=0;ishell<nshells;ishell++){
 		double shellicentre=shellcentres(ishell);
-		double shelliangular=shellangulars(ishell);
+		libint2::Shell shelli=obs[ishell];
+		shelli.O={0.,0.,0.};
 		for (int joperation=0;joperation<noperations;joperation++){
 			bool found=false;
 			int ijatom=(int)equivalentatoms((int)shellicentre,joperation);
@@ -687,10 +677,11 @@ EigenMatrix EquivalentShells(libint2::BasisSet obs,std::vector<libint2::Atom> at
 			int Zij=atomij.atomic_number;
 			for (int kshell=0;kshell<nshells && !found;kshell++){
 				double shellkcentre=shellcentres(kshell);
-				double shellkangular=shellangulars(kshell);
+				libint2::Shell shellk=obs[kshell];
+				shellk.O={0.,0.,0.};
 				libint2::Atom atomk=atoms[shellkcentre];
 				int Zij=atomk.atomic_number;
-				if (ijatom==shellkcentre && shelliangular==shellkangular){
+				if (ijatom==shellkcentre && shelli==shellk){
 					found=true;
 					equivalentshells(ishell,joperation)=kshell;
 				}
