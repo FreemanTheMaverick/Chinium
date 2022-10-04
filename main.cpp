@@ -1,32 +1,48 @@
-#define EIGEN_USE_MKL_ALL
-#define EIGEN_VECTORIZE_SSE4_2
+#include <string>
 #include <iostream>
+#include "Gateway.h"
 #include "AtomicIntegrals.h"
 #include "HartreeFock.h"
-#include <string>
-#include <vector>
-#include <libint2.hpp>
 
 int main(int argc,char *argv[]){
-	libint2::initialize();
-	std::string xyz="f.xyz";
-	std::ifstream input(xyz);
-	std::vector<libint2::Atom> atoms=libint2::read_dotxyz(input);
-	libint2::BasisSet obs("cc-pvdz",atoms);
-	EigenMatrix overlap=Overlap(obs);
-	EigenMatrix kinetic=Kinetic(obs);
-	EigenMatrix nuclear=Nuclear(obs,atoms);
-	double *repulsion;
-	short int *indices;
-	int nintegrals;
-	Repulsion(obs,&repulsion,&indices,nintegrals);
-	libint2::finalize();
-	double hfenergy;
-	EigenMatrix coefficients;
-	EigenMatrix guesscoefficients=Eigen::MatrixXd::Zero(kinetic.rows(),kinetic.rows());
-	RHF(6*18,overlap,kinetic+nuclear,repulsion,indices,nintegrals,guesscoefficients,coefficients,hfenergy);
+
+	std::cout<<"*** Chinium started ***"<<std::endl;
+	double * atoms=new double[10000];
+	const int natoms=ReadXYZ(argv[1],atoms,1);
+	const std::string basisset_=ReadBasisSet(argv[1]);
+	const char * basisset=basisset_.data();
+	const int ne=ReadNElectrons(argv[1]);
+	const int nbasis=nBasis(natoms,atoms,basisset);
+	const int n1integrals=nOneElectronIntegrals(natoms,atoms,basisset);
+	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms);
+
+	double * overlap=new double[n1integrals];
+	Overlap(natoms,atoms,basisset,overlap);
+
+	double * kinetic=new double[n1integrals];
+	Kinetic(natoms,atoms,basisset,kinetic);
+
+	double * nuclear=new double[n1integrals];
+	Nuclear(natoms,atoms,basisset,nuclear);
+
+	double * repulsiondiag=new double[n1integrals];
+	RepulsionDiag(natoms,atoms,basisset,repulsiondiag);
+
+	int nshellquartets;
+	const int n2integrals=nTwoElectronIntegrals(natoms,atoms,basisset,repulsiondiag,nshellquartets);
+	double * repulsion=new double[n2integrals];
+	short int * indices=new short int[n2integrals*4];
+	Repulsion(natoms,atoms,basisset,nshellquartets,repulsiondiag,repulsion,indices);
+
+	double * orbitalenergies=new double[nbasis];
+	for (int i=0;i<nbasis;i++) orbitalenergies[i]=0;
+	double * coefficients=new double[nbasis*nbasis];
+	for (int i=0;i<nbasis*nbasis;i++) coefficients[i]=0;
+	double * densitymatrix=new double[n1integrals];
+	for (int i=0;i<n1integrals;i++) densitymatrix[i]=0;
+	double energy=RHF(ne,overlap,kinetic,nuclear,n1integrals,repulsion,indices,n2integrals,orbitalenergies,coefficients,densitymatrix);
+	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
+
 	return 0;
 }
-	
-
 

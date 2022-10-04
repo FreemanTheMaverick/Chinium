@@ -1,13 +1,19 @@
-#include <libint2.hpp>
-#include <Eigen/Dense> // Eigen::Matrix.
-#include <vector> // Atom vectors.
+double NuclearRepulsion(const int natoms,double * atoms);
 
-typedef Eigen::Matrix<double, Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
+int nBasis(const int natoms,double * atoms,const char * basisset); // Size of basis set.
 
-EigenMatrix Overlap(libint2::BasisSet obs);
-EigenMatrix Kinetic(libint2::BasisSet obs);
-EigenMatrix Nuclear(libint2::BasisSet obs,std::vector<libint2::Atom> atoms);
-void Repulsion(libint2::BasisSet obs,double **repulsion,short int **indices,int& nintegrals);
+int nOneElectronIntegrals(const int natoms,double * atoms,const char * basisset); // Number of one-electron integrals.
 
+void Overlap(const int natoms,double * atoms,const char * basisset,double * overlap);
+
+void Kinetic(const int natoms,double * atoms,const char * basisset,double * kinetic);
+
+void Nuclear(const int natoms,double * atoms,const char * basisset,double * nuclear);
+
+void RepulsionDiag(const int natoms,double * atoms,const char * basisset,double * repulsiondiag); // Computing the diagonal elements of electron repulsion tensor. Used for Cauchy-Schwarz screening.
+
+long int nTwoElectronIntegrals(const int natoms,double * atoms,const char * basisset,double * repulsiondiag,int & nshellquartets); // Numbers of two-electron integrals and nonequivalent shell quartets after Cauchy-Schwarz screening.
+
+void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellquartets,double * repulsiondiag,double * repulsion,short int * indices);
 
 
