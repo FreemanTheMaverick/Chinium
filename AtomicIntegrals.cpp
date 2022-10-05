@@ -126,7 +126,7 @@ void Nuclear(const int natoms,double * atoms,const char * basisset,double * nucl
 	OneElectronIntegrals(natoms,atoms,basisset,'n',nuclear);
 }
 
-void RepulsionDiag(const int natoms,double * atoms,const char * basisset,double * repulsiondiag){ // Computing the diagonal elements of electron repulsion tensor. Used for Cauchy-Schwarz screening.
+void RepulsionDiag(const int natoms,double * atoms,const char * basisset,double * repulsiondiag){ // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
 	std::cout<<"Calculating diagonal elements of repulsion integrals ... ";
 	time_t start=time(0);
 	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
@@ -141,7 +141,7 @@ void RepulsionDiag(const int natoms,double * atoms,const char * basisset,double 
 		for (short int s2=0;s2<=s1;s2++){
 			const short int bf2_first=shell2bf[s2];
 			const short int n2=obs[s2].size();
-			engine.compute(obs[s1],obs[s2],obs[s1],obs[s2]); // Computing the integral (12|12).
+			engine.compute(obs[s1],obs[s2],obs[s1],obs[s2]); // Computing the integrals in the shell quartet (12|12).
 			const auto * buf_1234=buf_vec[0];
 			if (buf_1234==nullptr){
 				continue;
@@ -155,7 +155,7 @@ void RepulsionDiag(const int natoms,double * atoms,const char * basisset,double 
 						for (short int f4=0;f4!=n2;f4++,f1234++){
 							const short int bf4=f4+bf2_first;
 							if (bf1==bf3 && bf2==bf4 && bf1>=bf2){ // Considering only the unique diagonal elements with (bf1==bf3 && bf2==bf4).
-								repulsiondiag[bf1*(bf1+1)/2+bf2]=buf_1234[f1234];
+								repulsiondiag[bf1*(bf1+1)/2+bf2]=buf_1234[f1234]; // Repulsion diagonal integral matrix is symmetric, stored in lower triangular format.
 							}
 						}
 					}
@@ -186,8 +186,7 @@ long int nTwoElectronIntegrals(const int natoms,double * atoms,const char * basi
 			for (short int s3=0;s3<=s1;s3++){
 				const short int bf3_first=shell2bf[s3];
 				const short int n3=obs[s3].size();
-				//for (short int s4=0;s4<=((s1==s3)?s2:s3);s4++){
-				//for (short int s4=0;s4<=s1;s4++){
+				//for (short int s4=0;s4<=((s1==s3)?s2:s3);s4++){ // ((s1==s3)?s2:s3) is not a valid upper bound of s4, because some nonequivalent integrals may be neglected.
 				for (short int s4=0;s4<=std::max(s2,s3);s4++){
 					const short int bf4_first=shell2bf[s4];
 					const short int n4=obs[s4].size();
@@ -234,7 +233,7 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 	const auto shell2bf=obs.shell2bf();
 	short int * shellquartets=new short int[nshellquartets*4];
 	short int * shellquartetsranger=shellquartets;
-	for (short int s1=0;s1<(short int)obs.size();s1++){
+	for (short int s1=0;s1<(short int)obs.size();s1++){ // In this loop, indices of shell quartets to be computed are obtained.
 		const short int bf1_first=shell2bf[s1];
 		const short int n1=obs[s1].size();
 		for (short int s2=0;s2<=s1;s2++){
@@ -243,8 +242,7 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 			for (short int s3=0;s3<=s1;s3++){
 				const short int bf3_first=shell2bf[s3];
 				const short int n3=obs[s3].size();
-				//for (short int s4=0;s4<=((s1==s3)?s2:s3);s4++){
-				//for (short int s4=0;s4<=s1;s4++){
+				//for (short int s4=0;s4<=((s1==s3)?s2:s3);s4++){ // ((s1==s3)?s2:s3) is not a valid upper bound of s4, because some nonequivalent integrals may be neglected.
 				for (short int s4=0;s4<=std::max(s2,s3);s4++){
 					const short int bf4_first=shell2bf[s4];
 					const short int n4=obs[s4].size();
@@ -280,12 +278,12 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 	int nprocs=atoi(getenv("OMP_NUM_THREADS"));
 	std::cout<<"Spawning "<<nprocs<<" threads; ";
 	omp_set_num_threads(nprocs);
-	long int nsqperthread_fewer=nshellquartets/nprocs;
+	long int nsqperthread_fewer=nshellquartets/nprocs; // How many shell quartes a thread will compute. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to compute a quartets, x, and that to compute (a+1) quartets, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of quartes and threads respectively.
 	int ntimes_fewer=nprocs-nshellquartets+nsqperthread_fewer*nprocs;
-	long int nsqperthread[nprocs];
-	long int isqfirstperthread[nprocs];
-	long int nbfperthread[nprocs];
-	long int ibffirstperthread[nprocs];
+	long int nsqperthread[nprocs]; // The number of shell quartets each thread is to compute.
+	long int isqfirstperthread[nprocs]; // The index of the first shell quartet each thread is to compute.
+	long int nbfperthread[nprocs]; // The number of basis function quartet each thread is to compute.
+	long int ibffirstperthread[nprocs]; // The index of the first basis function quartet each thread is to compute.
 	for (int iproc=0;iproc<nprocs;iproc++){
 		nsqperthread[iproc]=iproc<ntimes_fewer?nsqperthread_fewer:(nsqperthread_fewer+1);
 		isqfirstperthread[iproc]=iproc==0?0:(isqfirstperthread[iproc-1]+nsqperthread[iproc-1]);
@@ -322,7 +320,7 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 		long int isqfirst=isqfirstperthread[iproc];
 		long int ibffirst=ibffirstperthread[iproc];
 		double * repulsionranger=repulsion+ibffirst;
-		short int * indicesranger=indices+ibffirst*4;
+		short int * indicesranger=indices+ibffirst*5; // Four indices and one degenerate degree.
 		short int * sqranger=shellquartets+isqfirst*4;
 		libint2::Engine engine(libint2::Operator::coulomb,obs.max_nprim(),obs.max_l());
 		const auto & buf_vec=engine.results();
@@ -340,16 +338,21 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 				const short int bf1=bf1_first+f1;
 				for (short int f2=0;f2<n2;f2++){
 					const short int bf2=bf2_first+f2;
+					const short int ab_deg=(bf1==bf2)?1:2;
 					for (short int f3=0;f3<n3;f3++){
 						const short int bf3=bf3_first+f3;
 						for (short int f4=0;f4<n4;f4++,f1234++){
 							const short int bf4=bf4_first+f4;
+							const short int cd_deg=(bf3==bf4)?1:2;
+							const short int ab_cd_deg=(bf1==bf3)?(bf2==bf4?1:2):2;
+							const short int abcd_deg=ab_deg*cd_deg*ab_cd_deg;
 							if (bf2<=bf1 && bf3<=bf1 && bf4<=((bf1==bf3)?bf2:bf3)){
 								*(repulsionranger++)=ints_shellset[f1234];
 								*(indicesranger++)=bf1;
 								*(indicesranger++)=bf2;
 								*(indicesranger++)=bf3;
 								*(indicesranger++)=bf4;
+								*(indicesranger++)=abcd_deg;
 							}
 						}
 					}

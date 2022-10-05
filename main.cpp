@@ -31,7 +31,7 @@ int main(int argc,char *argv[]){
 	int nshellquartets;
 	const int n2integrals=nTwoElectronIntegrals(natoms,atoms,basisset,repulsiondiag,nshellquartets);
 	double * repulsion=new double[n2integrals];
-	short int * indices=new short int[n2integrals*4];
+	short int * indices=new short int[n2integrals*5];
 	Repulsion(natoms,atoms,basisset,nshellquartets,repulsiondiag,repulsion,indices);
 
 	double * orbitalenergies=new double[nbasis];
