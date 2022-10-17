@@ -55,7 +55,7 @@ std::string ReadBasisSet(char * inp){
 }
 
 int ReadNElectrons(char * inp){
-	double * atoms=new double[10000];
+	double atoms[10000];
 	const int natoms=ReadXYZ(inp,atoms,0);
 	int ne=0;
 	for (int iatom=0;iatom<natoms;iatom++)
