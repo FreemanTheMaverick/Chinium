@@ -2,7 +2,7 @@
 #include <vector> // Atom vectors.
 #include <ctime>
 #include <iostream>
-#include <stdlib.h>
+#include <stdlib.h> // atoi.
 #include <omp.h>
 
 #define __integral_threshold__ 10e-10
@@ -278,7 +278,7 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 	int nprocs=atoi(getenv("OMP_NUM_THREADS"));
 	std::cout<<"Spawning "<<nprocs<<" threads; ";
 	omp_set_num_threads(nprocs);
-	long int nsqperthread_fewer=nshellquartets/nprocs; // How many shell quartes a thread will compute. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to compute a quartets, x, and that to compute (a+1) quartets, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of quartes and threads respectively.
+	long int nsqperthread_fewer=nshellquartets/nprocs; // How many shell quartets a thread will compute. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to compute a quartets, x, and that to compute (a+1) quartets, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of quartes and threads respectively.
 	int ntimes_fewer=nprocs-nshellquartets+nsqperthread_fewer*nprocs;
 	long int nsqperthread[nprocs]; // The number of shell quartets each thread is to compute.
 	long int isqfirstperthread[nprocs]; // The index of the first shell quartet each thread is to compute.

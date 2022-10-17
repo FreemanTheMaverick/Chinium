@@ -43,6 +43,8 @@ int main(int argc,char *argv[]){
 	double energy=RHF(ne,overlap,kinetic,nuclear,n1integrals,repulsion,indices,n2integrals,orbitalenergies,coefficients,densitymatrix);
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
+	std::cout<<"*** Chinium ended normally ***"<<std::endl;
+
 	return 0;
 }
 
