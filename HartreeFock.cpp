@@ -2,6 +2,7 @@
 #include <ctime>
 #include <iostream>
 #include <iomanip>
+#include <omp.h>
 #include "LinearAlgebra.h"
 
 #define __convergence_threshold__ 1.e-8
@@ -9,34 +10,64 @@
 
 void GMatrix(int n1integrals,double * repulsion,short int * indices,int n2integrals,double * densitymatrix,double * jmatrix,double * kmatrix,double * gmatrix){
 	int nbasis=(int)(sqrt(8*n1integrals+1)-1)/2;
-	double *repulsionranger=repulsion;
-	short int *indicesranger=indices;
 	double fulldensitymatrix[nbasis*nbasis]; // The density matrix stored as full must be provided, or the G matrix formation loop will contain a lot of logic judgment, which will reduce GPU performance.
 	double rawjmatrix[nbasis*nbasis];
 	double rawkmatrix[nbasis*nbasis];
 	double meaninglessmatrix[nbasis*nbasis];
+	int nprocs=atoi(getenv("OMP_NUM_THREADS"));
+	double bigrawjmatrix[nprocs*nbasis*nbasis]; // To contain private J/K matrices from all threads.
+	double bigrawkmatrix[nprocs*nbasis*nbasis];
+	std::cout<<"Spawning "<<nprocs<<" threads in G matrix formation  ";
 	for (int i=0;i<nbasis;i++){
 		for (int j=0;j<nbasis;j++){
 			fulldensitymatrix[i*nbasis+j]=i>j?densitymatrix[i*(i+1)/2+j]:densitymatrix[j*(j+1)/2+i];
 			rawjmatrix[i*nbasis+j]=0;
 			rawkmatrix[i*nbasis+j]=0;
 			meaninglessmatrix[i*nbasis+j]=(i==j);
+			for (int iproc=0;iproc<nprocs;iproc++){
+				bigrawjmatrix[iproc*nbasis*nbasis+i*nbasis+j]=0;
+				bigrawkmatrix[iproc*nbasis*nbasis+i*nbasis+j]=0;
+			}
 		}
 	}
-	for (int i=0;i<n2integrals;i++){
-		const short int a=*(indicesranger++); // Moving the ranger pointer to the right, where the next index is located.
-		const short int b=*(indicesranger++);
-		const short int c=*(indicesranger++);
-		const short int d=*(indicesranger++); // Moving the ranger pointer to the right, where the degeneracy factor is located
-		const short int deg=*(indicesranger++);
-		const double value=*(repulsionranger++); // Moving the ranger pointer to the right, where the next integral is located.
-		const double deg_value=deg*value;
-		rawjmatrix[a*nbasis+b]+=fulldensitymatrix[c*nbasis+d]*deg_value;
-		rawjmatrix[c*nbasis+d]+=fulldensitymatrix[a*nbasis+b]*deg_value;
-		rawkmatrix[a*nbasis+c]+=0.5*fulldensitymatrix[b*nbasis+d]*deg_value;
-		rawkmatrix[b*nbasis+d]+=0.5*fulldensitymatrix[a*nbasis+c]*deg_value;
-		rawkmatrix[a*nbasis+d]+=0.5*fulldensitymatrix[b*nbasis+c]*deg_value;
-		rawkmatrix[b*nbasis+c]+=0.5*fulldensitymatrix[a*nbasis+d]*deg_value;
+	omp_set_num_threads(nprocs);
+	long int nintsperthread_fewer=n2integrals/nprocs;
+	int ntimes_fewer=nprocs-n2integrals+nintsperthread_fewer*nprocs; // How many integrals a thread will handle. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to handle (a) integrals, x, and that to compute (a+1) integrals, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of integrals and threads respectively.
+	long int iintfirstperthread[nprocs];
+	long int nintsperthread[nprocs];
+	for (int iproc=0;iproc<nprocs;iproc++){
+		iintfirstperthread[iproc]=iproc==0?0:(iintfirstperthread[iproc-1]+nintsperthread[iproc-1]);
+		nintsperthread[iproc]=iproc<ntimes_fewer?nintsperthread_fewer:(nintsperthread_fewer+1);
+	}
+	#pragma omp parallel for
+	for (int iproc=0;iproc<nprocs;iproc++){
+		long int nints=nintsperthread[iproc];
+		long int iintfirst=iintfirstperthread[iproc];
+		double * repulsionranger=repulsion+iintfirst;
+		short int * indicesranger=indices+iintfirst*5;
+		for (int i=0;i<nints;i++){
+			const short int a=*(indicesranger++); // Moving the ranger pointer to the right, where the next index is located.
+			const short int b=*(indicesranger++);
+			const short int c=*(indicesranger++);
+			const short int d=*(indicesranger++); // Moving the ranger pointer to the right, where the degeneracy factor is located
+			const short int deg=*(indicesranger++);
+			const double value=*(repulsionranger++); // Moving the ranger pointer to the right, where the next integral is located.
+			const double deg_value=deg*value;
+			bigrawjmatrix[iproc*nbasis*nbasis+a*nbasis+b]+=fulldensitymatrix[c*nbasis+d]*deg_value;
+			bigrawjmatrix[iproc*nbasis*nbasis+c*nbasis+d]+=fulldensitymatrix[a*nbasis+b]*deg_value;
+			bigrawkmatrix[iproc*nbasis*nbasis+a*nbasis+c]+=0.5*fulldensitymatrix[b*nbasis+d]*deg_value;
+			bigrawkmatrix[iproc*nbasis*nbasis+b*nbasis+d]+=0.5*fulldensitymatrix[a*nbasis+c]*deg_value;
+			bigrawkmatrix[iproc*nbasis*nbasis+a*nbasis+d]+=0.5*fulldensitymatrix[b*nbasis+c]*deg_value;
+			bigrawkmatrix[iproc*nbasis*nbasis+b*nbasis+c]+=0.5*fulldensitymatrix[a*nbasis+d]*deg_value;
+		}
+	}
+	for (int i=0;i<nbasis;i++){
+		for (int j=0;j<nbasis;j++){
+			for (int iproc=0;iproc<nprocs;iproc++){
+				rawjmatrix[i*nbasis+j]+=bigrawjmatrix[iproc*nbasis*nbasis+i*nbasis+j];
+				rawkmatrix[i*nbasis+j]+=bigrawkmatrix[iproc*nbasis*nbasis+i*nbasis+j];
+			}
+		}
 	}
 	MultiplyMatrix(0.5,rawjmatrix,'f',0,meaninglessmatrix,'f',0,0.5,rawjmatrix,'f',1,nbasis,nbasis,nbasis,nbasis,nbasis,nbasis,nbasis,nbasis,'l',jmatrix);
 	MultiplyMatrix(0.5,rawkmatrix,'f',0,meaninglessmatrix,'f',0,0.5,rawkmatrix,'f',1,nbasis,nbasis,nbasis,nbasis,nbasis,nbasis,nbasis,nbasis,'l',kmatrix);
@@ -63,6 +94,7 @@ double RHF(int nele,double * overlap,double * kinetic,double * nuclear,int n1int
 	double intermediate[n1integrals];
 	int iiteration=0;
 	while (abs(lastenergy-energy)>__convergence_threshold__){ // Normal HF SCF procedure.
+		std::cout<<" Iteration "<<iiteration<<"  ";
 		clock_t iterstart=clock();
 		lastenergy=energy;
 		for (int i=0;i<n1integrals;i++){
@@ -78,7 +110,7 @@ double RHF(int nele,double * overlap,double * kinetic,double * nuclear,int n1int
 		MultiplyMatrix(1,densitymatrix,'l',0,intermediate,'l',0,0,meaninglessmatrix,'f',0,nbasis,nbasis,nbasis,nbasis,nbasis,nbasis,nbasis,nbasis,'l',intermediate);
 		energy=Trace(intermediate,nbasis,'l');
 		clock_t iterend=clock();
-		std::cout<<" Iteration "<<iiteration<<"  energy = "<<std::setprecision(12)<<energy<<" a.u."<<"  elapsed time = "<<std::setprecision(3)<<double(iterend-iterstart)/CLOCKS_PER_SEC<<" s"<<std::endl;
+		std::cout<<"energy = "<<std::setprecision(12)<<energy<<" a.u."<<"  elapsed time = "<<std::setprecision(3)<<double(iterend-iterstart)/CLOCKS_PER_SEC<<" s"<<std::endl;
 		iiteration++;
 	}
 	std::cout<<"Done; Final RHF energy = "<<std::setprecision(12)<<energy<<" a.u."<<std::endl;

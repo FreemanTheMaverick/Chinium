@@ -11,7 +11,7 @@ LinearAlgebra:LinearAlgebra.cpp
 	g++ LinearAlgebra.cpp -c -Wall -O2
 
 HartreeFock:HartreeFock.cpp
-	g++ HartreeFock.cpp -c -Wall -O2
+	g++ HartreeFock.cpp -c -fopenmp -Wall -O2
 
 LD:main.o Gateway.o AtomicIntegrals.o LinearAlgebra.o HartreeFock.o
 	g++ main.o Gateway.o AtomicIntegrals.o LinearAlgebra.o HartreeFock.o -lint2 -fopenmp
