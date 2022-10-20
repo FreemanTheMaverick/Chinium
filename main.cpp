@@ -3,7 +3,7 @@
 #include "Gateway.h"
 #include "AtomicIntegrals.h"
 #include "HartreeFock.h"
-//#include "InitialGuess.h"
+#include "InitialGuess.h"
 //#include "LinearAlgebra.h"
 
 int main(int argc,char *argv[]){
@@ -20,8 +20,7 @@ int main(int argc,char *argv[]){
 	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms,1);
 
 	double densitymatrix[n1integrals];
-	for (int i=0;i<n1integrals;i++) densitymatrix[i]=0;
-	//SuperpositionAtomicDensity(ne,natoms,atoms,basisset,densitymatrix);
+	SuperpositionAtomicDensity(ne,natoms,atoms,basisset,densitymatrix,1);
 //PrintMatrix_eigen(densitymatrix,nbasis,nbasis,'l');
 
 	double * overlap=new double[n1integrals];
@@ -48,6 +47,7 @@ int main(int argc,char *argv[]){
 	for (int i=0;i<nbasis*nbasis;i++) coefficients[i]=0;
 
 	double energy=RHF(ne,overlap,kinetic,nuclear,n1integrals,repulsion,indices,n2integrals,orbitalenergies,coefficients,densitymatrix,nprocs,1);
+//PrintMatrix_eigen(densitymatrix,nbasis,nbasis,'l');
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
 	delete [] overlap;

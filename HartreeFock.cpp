@@ -6,7 +6,7 @@
 #include "LinearAlgebra.h"
 
 #define __convergence_threshold__ 1.e-8
-#define __damping_factor__ 0.2
+#define __damping_factor__ 0.
 
 void GMatrix(int n1integrals,double * repulsion,short int * indices,int n2integrals,double * densitymatrix,double * jmatrix,double * kmatrix,double * gmatrix,const int nprocs,const bool output){
 	int nbasis=(int)(sqrt(8*n1integrals+1)-1)/2;
