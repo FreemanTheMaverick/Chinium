@@ -4,6 +4,9 @@ main:main.cpp
 Gateway:Gateway.cpp
 	g++ Gateway.cpp -c -Wall -O2
 
+InitialGuess:InitialGuess.cpp
+	g++ InitialGuess.cpp -c -lint2 -Wall
+
 AtomicIntegrals:AtomicIntegrals.cpp
 	g++ AtomicIntegrals.cpp -c -lint2 -fopenmp -Wall -O2
 
@@ -13,8 +16,8 @@ LinearAlgebra:LinearAlgebra.cpp
 HartreeFock:HartreeFock.cpp
 	g++ HartreeFock.cpp -c -fopenmp -Wall -O2
 
-LD:main.o Gateway.o AtomicIntegrals.o LinearAlgebra.o HartreeFock.o
-	g++ main.o Gateway.o AtomicIntegrals.o LinearAlgebra.o HartreeFock.o -lint2 -fopenmp
+LD:main.o Gateway.o InitialGuess.o AtomicIntegrals.o LinearAlgebra.o HartreeFock.o
+	g++ main.o Gateway.o InitialGuess.o AtomicIntegrals.o LinearAlgebra.o HartreeFock.o -lint2 -fopenmp
 
 
 
