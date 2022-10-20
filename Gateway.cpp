@@ -6,7 +6,7 @@
 
 #define __angstrom2bohr__ 1.8897259886
 
-int ReadXYZ(char * inp,double * atoms,bool output){
+int ReadXYZ(char * inp,double * atoms,const bool output){
 	std::map<std::string,double> ElementName2Z={
 		{"H",1},{"He",2},{"Li",3},{"Be",4},{"B",5},
 		{"C",6},{"N",7},{"O",8},{"F",9},{"Ne",10}
@@ -37,7 +37,7 @@ int ReadXYZ(char * inp,double * atoms,bool output){
 	return natoms;
 }
 
-std::string ReadBasisSet(char * inp){
+std::string ReadBasisSet(char * inp,const bool output){
 	std::string basis;
 	std::ifstream file(inp);
 	std::string thisline;
@@ -50,11 +50,11 @@ std::string ReadBasisSet(char * inp){
 			ss>>basis;
 		}
 	}
-	std::cout<<"Basis set ... "<<basis<<std::endl;
+	if (output) std::cout<<"Basis set ... "<<basis<<std::endl;
 	return basis;
 }
 
-int ReadNElectrons(char * inp){
+int ReadNElectrons(char * inp,const bool output){
 	double atoms[10000];
 	const int natoms=ReadXYZ(inp,atoms,0);
 	int ne=0;
@@ -73,11 +73,27 @@ int ReadNElectrons(char * inp){
 		}
 	}
 	ne=ne+charge;
-	std::cout<<"Charge ... "<<charge<<std::endl;
-	std::cout<<"Number of electrons ... "<<ne<<std::endl;
+	if (output) std::cout<<"Charge ... "<<charge<<std::endl;
+	if (output) std::cout<<"Number of electrons ... "<<ne<<std::endl;
 	return ne;
 }
 
+int ReadNProcs(char * inp,const bool output){
+	std::ifstream file(inp);
+	std::string thisline;
+	bool found=0;
+	int nprocs=1;
+	while (getline(file,thisline) && ! found){
+		if (thisline.compare("nprocs")==0){
+			found=1;
+			getline(file,thisline);
+			std::stringstream ss(thisline);
+			ss>>nprocs;
+		}
+	}
+	if (output) std::cout<<"Number of threads ... "<<nprocs<<std::endl;
+	return nprocs;
+}
 
 /*
 int main(int argc,char *argv[]){

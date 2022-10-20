@@ -1,1 +1,1 @@
-double RHF(int nele,double * overlap,double * kinetic,double * nuclear,int n1integrals,double * repulsion,short int * indices,long int n2integrals,double * orbitalenergies,double * coefficients,double * densitymatrix);
+double RHF(int nele,double * overlap,double * kinetic,double * nuclear,int n1integrals,double * repulsion,short int * indices,long int n2integrals,double * orbitalenergies,double * coefficients,double * densitymatrix,const int nprocs,const bool output);

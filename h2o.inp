@@ -1,3 +1,6 @@
+nprocs
+8
+
 xyz
 3
  O                 -0.74707706    0.93714369    0.12934308
@@ -14,7 +17,7 @@ method
 rhf
 
 basis
-6-31g
+cc-pvdz
 
 derivative
 0

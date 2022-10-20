@@ -20,7 +20,7 @@ std::vector<libint2::Atom> Libint2Atoms(const int natoms,double * atoms){ // Con
 	return libint2atoms;
 }
 
-double NuclearRepulsion(const int natoms,double * atoms){
+double NuclearRepulsion(const int natoms,double * atoms,const bool output){
 	double nuclearrepulsion=0;
 	for (int iatom=0;iatom<natoms;iatom++){
 		const double Zi=atoms[iatom*4];
@@ -36,7 +36,7 @@ double NuclearRepulsion(const int natoms,double * atoms){
 			nuclearrepulsion=nuclearrepulsion+Zi*Zj/dij;
 		}
 	}
-	std::cout<<"Nuclear repulsion energy ... "<<nuclearrepulsion<<" a.u."<<std::endl;
+	if (output) std::cout<<"Nuclear repulsion energy ... "<<nuclearrepulsion<<" a.u."<<std::endl;
 	return nuclearrepulsion;
 }
 
@@ -48,33 +48,33 @@ int nBasis_from_obs(libint2::BasisSet obs){ // Size of basis set directly derive
 	return n;
 }
 
-int nBasis(const int natoms,double * atoms,const char * basisset){ // Size of basis set.
+int nBasis(const int natoms,double * atoms,const char * basisset,const bool output){ // Size of basis set.
 	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
 	libint2::BasisSet obs(basisset,libint2atoms);
 	int n=nBasis_from_obs(obs);
-	std::cout<<"Number of atomic bases ... "<<n<<std::endl;
+	if (output) std::cout<<"Number of atomic bases ... "<<n<<std::endl;
 	return n;
 }
 
-int nOneElectronIntegrals(const int natoms,double * atoms,const char * basisset){ // Number of one-electron integrals.
+int nOneElectronIntegrals(const int natoms,double * atoms,const char * basisset,const bool output){ // Number of one-electron integrals.
 	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
 	libint2::BasisSet obs(basisset,libint2atoms);
 	int nbasis=nBasis_from_obs(obs);
 	int n1integrals=(1+nbasis)*nbasis/2;
-	std::cout<<"Number of one-electron integrals in total ... "<<n1integrals<<std::endl;
+	if (output) std::cout<<"Number of one-electron integrals in total ... "<<n1integrals<<std::endl;
 	return n1integrals;
 }
 
-void OneElectronIntegrals(const int natoms,double * atoms,const char * basisset,char type,double * matrix){ // Computing various one-electron integrals and saving them in lower triangular matrix.
+void OneElectronIntegrals(const int natoms,double * atoms,const char * basisset,char type,double * matrix,const bool output){ // Computing various one-electron integrals and saving them in lower triangular matrix.
 	libint2::Operator operator_=libint2::Operator::overlap;
 	if (type=='s'){
-	        std::cout<<"Calculating overlap integrals ... ";
+	        if (output) std::cout<<"Calculating overlap integrals ... ";
 		operator_=libint2::Operator::overlap;
 	}else if (type=='k'){
-	        std::cout<<"Calculating kinetic integrals ... ";
+	        if (output) std::cout<<"Calculating kinetic integrals ... ";
 		operator_=libint2::Operator::kinetic;
 	}else if (type=='n'){
-	        std::cout<<"Calculating nuclear integrals ... ";
+	        if (output) std::cout<<"Calculating nuclear integrals ... ";
 		operator_=libint2::Operator::nuclear;
 	}
 	time_t start=time(0);
@@ -111,23 +111,23 @@ void OneElectronIntegrals(const int natoms,double * atoms,const char * basisset,
 	}
 	libint2::finalize();
 	time_t end=time(0);
-	std::cout<<"done "<<end-start<<" s"<<std::endl;
+	if (output) std::cout<<"done "<<end-start<<" s"<<std::endl;
 }
 
-void Overlap(const int natoms,double * atoms,const char * basisset,double * overlap){
-	OneElectronIntegrals(natoms,atoms,basisset,'s',overlap);
+void Overlap(const int natoms,double * atoms,const char * basisset,double * overlap,const bool output){
+	OneElectronIntegrals(natoms,atoms,basisset,'s',overlap,output);
 }
 
-void Kinetic(const int natoms,double * atoms,const char * basisset,double * kinetic){
-	OneElectronIntegrals(natoms,atoms,basisset,'k',kinetic);
+void Kinetic(const int natoms,double * atoms,const char * basisset,double * kinetic,const bool output){
+	OneElectronIntegrals(natoms,atoms,basisset,'k',kinetic,output);
 }
 
-void Nuclear(const int natoms,double * atoms,const char * basisset,double * nuclear){
-	OneElectronIntegrals(natoms,atoms,basisset,'n',nuclear);
+void Nuclear(const int natoms,double * atoms,const char * basisset,double * nuclear,const bool output){
+	OneElectronIntegrals(natoms,atoms,basisset,'n',nuclear,output);
 }
 
-void RepulsionDiag(const int natoms,double * atoms,const char * basisset,double * repulsiondiag){ // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
-	std::cout<<"Calculating diagonal elements of repulsion integrals ... ";
+void RepulsionDiag(const int natoms,double * atoms,const char * basisset,double * repulsiondiag,const bool output){ // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
+	if (output) std::cout<<"Calculating diagonal elements of repulsion integrals ... ";
 	time_t start=time(0);
 	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
 	libint2::BasisSet obs(basisset,libint2atoms);
@@ -165,15 +165,15 @@ void RepulsionDiag(const int natoms,double * atoms,const char * basisset,double 
 	}
 	libint2::finalize();
 	time_t end=time(0);
-	std::cout<<"done "<<end-start<<" s"<<std::endl;
+	if (output) std::cout<<"done "<<end-start<<" s"<<std::endl;
 }
 
-long int nTwoElectronIntegrals(const int natoms,double * atoms,const char * basisset,double * repulsiondiag,int & nshellquartets){ // Numbers of two-electron integrals and nonequivalent shell quartets after Cauchy-Schwarz screening.
+long int nTwoElectronIntegrals(const int natoms,double * atoms,const char * basisset,double * repulsiondiag,int & nshellquartets,const bool output){ // Numbers of two-electron integrals and nonequivalent shell quartets after Cauchy-Schwarz screening.
 	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
 	libint2::BasisSet obs(basisset,libint2atoms);
         long int nbasis=(long int)nBasis_from_obs(obs);
 	long int n2integrals=nbasis*(nbasis+1)*(nbasis*(nbasis+1)/2+1)/4;
-        std::cout<<"Number of two electron integrals in total ... "<<n2integrals<<std::endl;
+        if (output) std::cout<<"Number of two electron integrals in total ... "<<n2integrals<<std::endl;
 	const auto shell2bf=obs.shell2bf();
 	n2integrals=0; // Number of integrals not discarded.
 	nshellquartets=0; // Number of shell quartets not discarded.
@@ -221,12 +221,12 @@ long int nTwoElectronIntegrals(const int natoms,double * atoms,const char * basi
 			}
 		}
 	}
-	std::cout<<"Number of two electron integrals after screening ... "<<n2integrals<<std::endl;
+	if (output) std::cout<<"Number of two electron integrals after screening ... "<<n2integrals<<std::endl;
 	return n2integrals;
 }
 
-void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellquartets,double * repulsiondiag,double * repulsion,short int * indices){
-	std::cout<<"Calculating electron repulsion integrals ... ";
+void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellquartets,double * repulsiondiag,double * repulsion,short int * indices,const int nprocs,const bool output){
+	if (output) std::cout<<"Calculating electron repulsion integrals ... ";
 	time_t start=time(0);
 	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
 	libint2::BasisSet obs(basisset,libint2atoms);
@@ -275,8 +275,7 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 			}
 		}
 	}
-	int nprocs=atoi(getenv("OMP_NUM_THREADS"));
-	std::cout<<"Spawning "<<nprocs<<" threads; ";
+	if (output) std::cout<<"Spawning "<<nprocs<<" threads; ";
 	omp_set_num_threads(nprocs);
 	long int nsqperthread_fewer=nshellquartets/nprocs; // How many shell quartets a thread will compute. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to compute a quartets, x, and that to compute (a+1) quartets, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of quartes and threads respectively.
 	int ntimes_fewer=nprocs-nshellquartets+nsqperthread_fewer*nprocs;
@@ -360,12 +359,12 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 			}
 		}
 		time_t tend=time(0);
-		std::cout<<"Thread "<<iproc<<" done in "<<tend-tstart<<"s; ";
+		if (output) std::cout<<"Thread "<<iproc<<" done in "<<tend-tstart<<"s; ";
 	}
 	libint2::finalize();
 	delete [] shellquartets;
 	time_t end=time(0);
-	std::cout<<"done "<<end-start<<" s"<<std::endl;
+	if (output) std::cout<<"done "<<end-start<<" s"<<std::endl;
 }
 
 
