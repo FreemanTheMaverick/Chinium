@@ -12,22 +12,22 @@ void CoreHamiltonian(const int natoms,double * atoms,const char * basisset,doubl
 
 void SuperpositionAtomicDensity(int nele,const int natoms,double * atoms,const char * basisset,double * densitymatrix,const bool output){
 	if (output) std::cout<<"Initial guess ... SOD"<<std::endl;
-	CoreHamiltonian(natoms,atoms,basisset,densitymatrix,0);
-	std::map<int,std::vector<int>> unique_atoms;
-	int ibasis=0;
+	CoreHamiltonian(natoms,atoms,basisset,densitymatrix,0); // Initializing the density matrix.
+	std::map<int,std::vector<int>> unique_atoms; // A map to store all unique atoms and their leading basis functions' indices.
+	int ibasis=0; // The leading basis function's index.
 	for (int iatom=0;iatom<natoms;iatom++){
 		int Z=(int)atoms[4*iatom];
 		double atom[]={(double)Z,0,0,0};
 		bool unique=1;
-		for (std::pair<const int,std::vector<int>> & unique_atom:unique_atoms)
-			if (unique_atom.first==Z) unique=0;
-		if (unique) unique_atoms.insert(std::pair<int,std::vector<int>>(Z,std::vector<int>{ibasis}));
-		else unique_atoms[Z].push_back(ibasis);
+		for (std::pair<const int,std::vector<int>> & unique_atom:unique_atoms) // Looping over all unique atoms in the map to see whether this atom is a new one.
+			if (unique_atom.first==Z) unique=0; // An identical atom is found in the map, meaning that this atom is not new.
+		if (unique) unique_atoms.insert(std::pair<int,std::vector<int>>(Z,std::vector<int>{ibasis})); // Adding a new unique atom and its first leading basis function's index.
+		else unique_atoms[Z].push_back(ibasis); // Adding this leading basis function's index to the corresponding unique atom.
 		ibasis+=nBasis(1,atom,basisset,0);
 	}
-	for (std::pair<const int,std::vector<int>> & unique_atom:unique_atoms){
+	for (std::pair<const int,std::vector<int>> & unique_atom:unique_atoms){ // Every unique atom will go through a RHF procedure for its relaxed atomic density matrix.
 		double atom[]={(double)unique_atom.first,0,0,0};
-		const int ne=(unique_atom.first%2==0)?unique_atom.first:(unique_atom.first+1);
+		const int ne=(unique_atom.first%2==0)?unique_atom.first:(unique_atom.first+1); // Since only RHF is supported now, the number of electron must be set to an even number.
 		const int nbasis=nBasis(1,atom,basisset,0);
 		const int atomicn1integrals=nOneElectronIntegrals(1,atom,basisset,0);
 		double atomicdensitymatrix[atomicn1integrals];
@@ -61,7 +61,7 @@ void SuperpositionAtomicDensity(int nele,const int natoms,double * atoms,const c
 				int i_=i+ibasis;
 				for (int j=0;j<=i;j++){
 					int j_=j+ibasis;
-					densitymatrix[i_*(i_+1)/2+j_]=atomicdensitymatrix[i*(i+1)/2+j];
+					densitymatrix[i_*(i_+1)/2+j_]=atomicdensitymatrix[i*(i+1)/2+j]; // Writing the atomic density matrix into the molecular density matrix.
 				}
 			}
 		}
