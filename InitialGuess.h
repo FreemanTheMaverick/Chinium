@@ -1,3 +1,7 @@
-void CoreHamiltonian(const int natoms,double * atoms,const char * basisset,double * densitymatrix,const bool output);
+#include <Eigen/Dense>
 
-void SuperpositionAtomicDensity(int nele,const int natoms,double * atoms,const char * basisset,double * densitymatrix,const bool output);
+typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
+
+EigenMatrix CoreHamiltonian(const int natoms,double * atoms,const char * basisset,const bool output);
+
+EigenMatrix SuperpositionAtomicDensity(int nele,const int natoms,double * atoms,const char * basisset,const bool output);

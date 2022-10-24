@@ -10,18 +10,17 @@ InitialGuess:InitialGuess.cpp
 AtomicIntegrals:AtomicIntegrals.cpp
 	g++ AtomicIntegrals.cpp -c -lint2 -fopenmp -Wall -O2
 
-LinearAlgebra:LinearAlgebra.cpp
-	g++ LinearAlgebra.cpp -c -Wall -O2
-
 HartreeFock:HartreeFock.cpp
 	g++ HartreeFock.cpp -c -fopenmp -Wall -O2
 
-LD:main.o Gateway.o InitialGuess.o AtomicIntegrals.o LinearAlgebra.o HartreeFock.o
-	g++ main.o Gateway.o InitialGuess.o AtomicIntegrals.o LinearAlgebra.o HartreeFock.o -lint2 -fopenmp
+LD:main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o
+	g++ main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o -lint2 -fopenmp
 
 
 
 
+LinearAlgebra:LinearAlgebra.cpp
+	g++ LinearAlgebra.cpp -c -Wall -O2
 
 Symmetry/PointGroups:Symmetry/PointGroups.cpp
 	icpc Symmetry/PointGroups.cpp -c -lint2 -Wall -O2

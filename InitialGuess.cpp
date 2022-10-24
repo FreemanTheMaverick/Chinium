@@ -1,18 +1,22 @@
+#include <Eigen/Dense>
 #include <map>
 #include <vector>
 #include <iostream>
 #include "AtomicIntegrals.h"
 #include "HartreeFock.h"
 
-void CoreHamiltonian(const int natoms,double * atoms,const char * basisset,double * densitymatrix,const bool output){
+typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
+
+EigenMatrix CoreHamiltonian(const int natoms,double * atoms,const char * basisset,const bool output){
 	if (output) std::cout<<"Initial guess ... Core"<<std::endl;
-	const int n1integrals=nOneElectronIntegrals(natoms,atoms,basisset,0);
-	for (int i=0;i<n1integrals;i++) densitymatrix[i]=0;
+	const int nbasis=nBasis(natoms,atoms,basisset,0);
+	EigenMatrix matrix(nbasis,nbasis);
+	return matrix*0;
 }
 
-void SuperpositionAtomicDensity(int nele,const int natoms,double * atoms,const char * basisset,double * densitymatrix,const bool output){
+EigenMatrix SuperpositionAtomicDensity(int nele,const int natoms,double * atoms,const char * basisset,const bool output){
 	if (output) std::cout<<"Initial guess ... SOD"<<std::endl;
-	CoreHamiltonian(natoms,atoms,basisset,densitymatrix,0); // Initializing the density matrix.
+	EigenMatrix densitymatrix=CoreHamiltonian(natoms,atoms,basisset,0); // Initializing the density matrix.
 	std::map<int,std::vector<int>> unique_atoms; // A map to store all unique atoms and their leading basis functions' indices.
 	int ibasis=0; // The leading basis function's index.
 	for (int iatom=0;iatom<natoms;iatom++){
@@ -29,43 +33,26 @@ void SuperpositionAtomicDensity(int nele,const int natoms,double * atoms,const c
 		double atom[]={(double)unique_atom.first,0,0,0};
 		const int ne=(unique_atom.first%2==0)?unique_atom.first:(unique_atom.first+1); // Since only RHF is supported now, the number of electron must be set to an even number.
 		const int nbasis=nBasis(1,atom,basisset,0);
-		const int atomicn1integrals=nOneElectronIntegrals(1,atom,basisset,0);
-		double atomicdensitymatrix[atomicn1integrals];
-		for (int i=0;i<atomicn1integrals;i++) atomicdensitymatrix[i]=0;
-		double * overlap=new double[atomicn1integrals];
-		Overlap(1,atom,basisset,overlap,0);
-		double * kinetic=new double[atomicn1integrals];
-		Kinetic(1,atom,basisset,kinetic,0);
-		double * nuclear=new double[atomicn1integrals];
-		Nuclear(1,atom,basisset,nuclear,0);
-		double * repulsiondiag=new double[atomicn1integrals];
-		RepulsionDiag(1,atom,basisset,repulsiondiag,0);
+		EigenMatrix atomicdensitymatrix(nbasis,nbasis);atomicdensitymatrix=atomicdensitymatrix*0;
+		const EigenMatrix overlap=Overlap(1,atom,basisset,0);
+		const EigenMatrix kinetic=Kinetic(1,atom,basisset,0);
+		const EigenMatrix nuclear=Nuclear(1,atom,basisset,0);
+		const EigenMatrix hcore=kinetic+nuclear;
+		const EigenMatrix repulsiondiag=RepulsionDiag(1,atom,basisset,0);
 		int nshellquartets;
 		const int n2integrals=nTwoElectronIntegrals(1,atom,basisset,repulsiondiag,nshellquartets,0);
 		double * repulsion=new double[n2integrals];
 		short int * indices=new short int[n2integrals*5];
 		Repulsion(1,atom,basisset,nshellquartets,repulsiondiag,repulsion,indices,1,0);
-		double orbitalenergies[nbasis];
-		for (int i=0;i<nbasis;i++) orbitalenergies[i]=0;
-		double coefficients[nbasis*nbasis];
-		for (int i=0;i<nbasis*nbasis;i++) coefficients[i]=0;
-		RHF(ne,overlap,kinetic,nuclear,atomicn1integrals,repulsion,indices,n2integrals,orbitalenergies,coefficients,atomicdensitymatrix,1,0);
-		delete [] overlap;
-		delete [] kinetic;
-		delete [] nuclear;
-		delete [] repulsiondiag;
+		EigenMatrix orbitalenergies(1,nbasis);
+		EigenMatrix coefficients(nbasis,nbasis);
+		RHF(ne,overlap,hcore,repulsion,indices,n2integrals,orbitalenergies,coefficients,atomicdensitymatrix,1,0);
 		delete [] repulsion;
 		delete [] indices;
-		for (int & ibasis:unique_atom.second){
-			for (int i=0;i<nbasis;i++){
-				int i_=i+ibasis;
-				for (int j=0;j<=i;j++){
-					int j_=j+ibasis;
-					densitymatrix[i_*(i_+1)/2+j_]=atomicdensitymatrix[i*(i+1)/2+j]; // Writing the atomic density matrix into the molecular density matrix.
-				}
-			}
-		}
+		for (int & ibasis:unique_atom.second)
+			densitymatrix.block(ibasis,ibasis,nbasis,nbasis)=atomicdensitymatrix;
 	}
+	return densitymatrix;
 }
 
 /*
