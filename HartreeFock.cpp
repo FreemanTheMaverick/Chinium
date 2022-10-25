@@ -5,15 +5,15 @@
 #include <iomanip>
 #include <omp.h>
 
+#define __diis_space_size__ 6
+#define __diis_start_threshold__ 0.1
 #define __convergence_threshold__ 1.e-8
-#define __damping_factor__ 0.
 
 typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
 
-EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix densitymatrix,const int nprocs,const bool output){
+EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix densitymatrix,const int nprocs){
 	int nbasis=densitymatrix.cols();
 	EigenMatrix zeromatrix(nbasis,nbasis);zeromatrix=zeromatrix*0;
-	if (output) std::cout<<"Spawning "<<nprocs<<" threads in G matrix formation  ";
 	omp_set_num_threads(nprocs);
 	long int nintsperthread_fewer=n2integrals/nprocs;
 	int ntimes_fewer=nprocs-n2integrals+nintsperthread_fewer*nprocs; // How many integrals a thread will handle. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to handle (a) integrals, x, and that to compute (a+1) integrals, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of integrals and threads respectively.
@@ -65,10 +65,45 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	return gmatrix;
 }
 
+double DIIS_scf(EigenMatrix * Ds,EigenMatrix * Es,EigenMatrix & D){
+	EigenMatrix B(__diis_space_size__+1,__diis_space_size__+1);
+	B(__diis_space_size__,__diis_space_size__)=0;
+	EigenMatrix b(__diis_space_size__+1,1);
+	b(__diis_space_size__,0)=-1;
+	for (int i=0;i<__diis_space_size__;i++){
+		for (int j=0;j<=i;j++){
+			EigenMatrix bij=Es[i].transpose()*Es[j];
+			B(i,j)=bij.trace();
+			B(j,i)=bij.trace();
+		}
+		B(i,__diis_space_size__)=-1;
+		B(__diis_space_size__,i)=-1;
+		b(i,0)=0;
+	}
+	EigenMatrix x=B.colPivHouseholderQr().solve(b);
+	for (int i=0;i<D.rows();i++)
+		for (int j=0;j<D.cols();j++)
+			D(i,j)=0;
+	for (int i=0;i<__diis_space_size__;i++)
+		D=D+x(i,0)*Ds[i];
+	double error2norm=0;
+	for (int i=0;i<__diis_space_size__;i++)
+		for (int j=0;j<=i;j++)
+			error2norm+=(i==j)?x(i,0)*x(j,0)*B(i,j):2*x(i,0)*x(j,0)*B(i,j);
+	return error2norm;
+}
+
 double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,short int * indices,long int n2integrals,EigenMatrix & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & densitymatrix,const int nprocs,const bool output){
 	if (output) std::cout<<"Restricted Hartree-Fock ..."<<std::endl;
-	int nocc=nele/2;
 	int nbasis=overlap.cols();
+	EigenMatrix zeromatrix(nbasis,nbasis);zeromatrix=zeromatrix*0;
+	EigenMatrix * Ds=new EigenMatrix[__diis_space_size__]; // Storing the last __diis_space_size__ density matrices and their error matrices.
+	EigenMatrix * Es=new EigenMatrix[__diis_space_size__];
+	for (int i=0;i<__diis_space_size__;i++){
+		Ds[i]=zeromatrix;
+		Es[i]=zeromatrix;
+	}
+	int nocc=nele/2;
 	EigenMatrix C_occ=coefficients.leftCols(nocc); // Normal Hartree-Fock procedure.
 	densitymatrix=C_occ*C_occ.transpose();
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
@@ -79,29 +114,40 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		sinversesqrt(i,i)=1/sqrt(s(i,0));
 	}
 	EigenMatrix U=eigensolver.eigenvectors();
-	EigenMatrix X=U*sinversesqrt;
+	EigenMatrix X=U*sinversesqrt*U.transpose();
 	double energy=114514;
 	double lastenergy=1919810;
+	double error2norm=-889464; // |e|^2=Sigma_ij(c_i*c_j*e_i*e_j)
 	int iiteration=0;
-	while (abs(lastenergy-energy)>__convergence_threshold__){ // Normal HF SCF procedure.
-		if (output) std::cout<<" Iteration "<<iiteration<<"  ";
+	while (abs(lastenergy-energy)>__convergence_threshold__ || error2norm>__convergence_threshold__){ // Normal RHF SCF procedure.
+		if (output) std::cout<<" Iteration "<<iiteration<<":  ";
 		clock_t iterstart=clock();
 		lastenergy=energy;
-		EigenMatrix G=GMatrix(repulsion,indices,n2integrals,densitymatrix,nprocs,output);
-		EigenMatrix F=hcore+G;
+		EigenMatrix F(nbasis,nbasis);
+		if (iiteration>=__diis_space_size__ && error2norm<__diis_start_threshold__){ // Starting DIIS after Ds and Es are filled and error2norm is not too large.
+			if (output) std::cout<<"density_update = DIIS  ";
+			error2norm=DIIS_scf(Ds,Es,densitymatrix);
+		}else if (output) std::cout<<"density_update = naive  ";
+		EigenMatrix G=GMatrix(repulsion,indices,n2integrals,densitymatrix,nprocs);
+		F=hcore+G;
 		EigenMatrix Fprime=X.transpose()*F*X;
 		eigensolver.compute(Fprime);
 		orbitalenergies=eigensolver.eigenvalues();
 		EigenMatrix Cprime=eigensolver.eigenvectors();
 		coefficients=X*Cprime;
 		EigenMatrix C_occ=coefficients.leftCols(nocc);
-		densitymatrix=C_occ*C_occ.transpose()*(1-__damping_factor__)+densitymatrix*__damping_factor__; // Mixing new density matrix with old one. This may improve robustness.
+		EigenMatrix newdensitymatrix=C_occ*C_occ.transpose();
+		Ds[iiteration%__diis_space_size__]=newdensitymatrix; // The oldest density matrix and its error matrix are replaced by the latest ones.
+		Es[iiteration%__diis_space_size__]=newdensitymatrix-densitymatrix;
+		densitymatrix=newdensitymatrix;
 		EigenMatrix Iamgoingtobeanobellaureate=densitymatrix*(hcore+F); // Intermediate matrix.
 		energy=Iamgoingtobeanobellaureate.trace();
 		clock_t iterend=clock();
 		if (output) std::cout<<"energy = "<<std::setprecision(12)<<energy<<" a.u."<<"  elapsed_time = "<<std::setprecision(3)<<double(iterend-iterstart)/CLOCKS_PER_SEC<<" s"<<std::endl;
 		iiteration++;
 	}
+	delete [] Ds;
+	delete [] Es;
 	if (output) std::cout<<"Done; Final RHF energy = "<<std::setprecision(12)<<energy<<" a.u."<<std::endl;
 	return energy;
 }

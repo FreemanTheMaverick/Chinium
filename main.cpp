@@ -22,7 +22,6 @@ int main(int argc,char *argv[]){
 	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms,1);
 
 	EigenMatrix densitymatrix=SuperpositionAtomicDensity(ne,natoms,atoms,basisset,1);
-//PrintMatrix_eigen(densitymatrix,nbasis,nbasis,'l');
 
 	const EigenMatrix overlap=Overlap(natoms,atoms,basisset,1);
 	const EigenMatrix kinetic=Kinetic(natoms,atoms,basisset,1);
