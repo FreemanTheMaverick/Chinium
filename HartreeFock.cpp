@@ -5,8 +5,10 @@
 #include <iomanip>
 #include <omp.h>
 
-#define __diis_space_size__ 6
+#define __damping_start_threshold 5.
+#define __damping_factor__ 0.25
 #define __diis_start_threshold__ 0.1
+#define __diis_space_size__ 6
 #define __convergence_threshold__ 1.e-8
 
 typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
@@ -95,7 +97,7 @@ double DIIS_scf(EigenMatrix * Ds,EigenMatrix * Es,EigenMatrix & D){
 
 double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,short int * indices,long int n2integrals,EigenMatrix & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & densitymatrix,const int nprocs,const bool output){
 	if (output) std::cout<<"Restricted Hartree-Fock ..."<<std::endl;
-	int nbasis=overlap.cols();
+	const int nbasis=overlap.cols();
 	EigenMatrix zeromatrix(nbasis,nbasis);zeromatrix=zeromatrix*0;
 	EigenMatrix * Ds=new EigenMatrix[__diis_space_size__]; // Storing the last __diis_space_size__ density matrices and their error matrices.
 	EigenMatrix * Es=new EigenMatrix[__diis_space_size__];
@@ -103,46 +105,48 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		Ds[i]=zeromatrix;
 		Es[i]=zeromatrix;
 	}
-	int nocc=nele/2;
-	EigenMatrix C_occ=coefficients.leftCols(nocc); // Normal Hartree-Fock procedure.
-	densitymatrix=C_occ*C_occ.transpose();
+	const int nocc=nele/2;
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 	eigensolver.compute(overlap);
-	EigenMatrix s=eigensolver.eigenvalues();
+	const EigenMatrix s=eigensolver.eigenvalues();
 	EigenMatrix sinversesqrt=Eigen::MatrixXd::Zero(nbasis,nbasis);
 	for (int i=0;i<nbasis;i++){
 		sinversesqrt(i,i)=1/sqrt(s(i,0));
 	}
-	EigenMatrix U=eigensolver.eigenvectors();
-	EigenMatrix X=U*sinversesqrt*U.transpose();
+	const EigenMatrix U=eigensolver.eigenvectors();
+	const EigenMatrix X=U*sinversesqrt*U.transpose();
 	double energy=114514;
 	double lastenergy=1919810;
+	EigenMatrix lastdensitymatrix=densitymatrix;
 	double error2norm=-889464; // |e|^2=Sigma_ij(c_i*c_j*e_i*e_j)
 	int iiteration=0;
 	while (abs(lastenergy-energy)>__convergence_threshold__ || error2norm>__convergence_threshold__){ // Normal RHF SCF procedure.
 		if (output) std::cout<<" Iteration "<<iiteration<<":  ";
-		clock_t iterstart=clock();
-		lastenergy=energy;
-		EigenMatrix F(nbasis,nbasis);
-		if (iiteration>=__diis_space_size__ && error2norm<__diis_start_threshold__){ // Starting DIIS after Ds and Es are filled and error2norm is not too large.
+		const clock_t iterstart=clock();
+		if (abs(lastenergy-energy)*(iiteration+1)>__damping_start_threshold){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
+			if (output) std::cout<<"density_update = damping  ";
+			densitymatrix=(1.-__damping_factor__)*densitymatrix+__damping_factor__*lastdensitymatrix;
+		}else if (iiteration>=__diis_space_size__ && error2norm<__diis_start_threshold__){ // Starting DIIS after Ds and Es are filled and error2norm is not too large.
 			if (output) std::cout<<"density_update = DIIS  ";
 			error2norm=DIIS_scf(Ds,Es,densitymatrix);
 		}else if (output) std::cout<<"density_update = naive  ";
-		EigenMatrix G=GMatrix(repulsion,indices,n2integrals,densitymatrix,nprocs);
-		F=hcore+G;
-		EigenMatrix Fprime=X.transpose()*F*X;
+		const EigenMatrix G=GMatrix(repulsion,indices,n2integrals,densitymatrix,nprocs);
+		const EigenMatrix F=hcore+G;
+		const EigenMatrix Fprime=X.transpose()*F*X;
 		eigensolver.compute(Fprime);
 		orbitalenergies=eigensolver.eigenvalues();
-		EigenMatrix Cprime=eigensolver.eigenvectors();
+		const EigenMatrix Cprime=eigensolver.eigenvectors();
 		coefficients=X*Cprime;
-		EigenMatrix C_occ=coefficients.leftCols(nocc);
-		EigenMatrix newdensitymatrix=C_occ*C_occ.transpose();
+		const EigenMatrix C_occ=coefficients.leftCols(nocc);
+		const EigenMatrix newdensitymatrix=C_occ*C_occ.transpose();
 		Ds[iiteration%__diis_space_size__]=newdensitymatrix; // The oldest density matrix and its error matrix are replaced by the latest ones.
 		Es[iiteration%__diis_space_size__]=newdensitymatrix-densitymatrix;
+		lastdensitymatrix=densitymatrix;
 		densitymatrix=newdensitymatrix;
-		EigenMatrix Iamgoingtobeanobellaureate=densitymatrix*(hcore+F); // Intermediate matrix.
+		const EigenMatrix Iamgoingtobeanobellaureate=densitymatrix*(hcore+F); // Intermediate matrix.
+		lastenergy=energy;
 		energy=Iamgoingtobeanobellaureate.trace();
-		clock_t iterend=clock();
+		const clock_t iterend=clock();
 		if (output) std::cout<<"energy = "<<std::setprecision(12)<<energy<<" a.u."<<"  elapsed_time = "<<std::setprecision(3)<<double(iterend-iterstart)/CLOCKS_PER_SEC<<" s"<<std::endl;
 		iiteration++;
 	}
