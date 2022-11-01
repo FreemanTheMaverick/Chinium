@@ -13,8 +13,11 @@ AtomicIntegrals:AtomicIntegrals.cpp
 HartreeFock:HartreeFock.cpp
 	g++ HartreeFock.cpp -c -fopenmp -Wall -O2
 
-LD:main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o
-	g++ main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o -lint2 -fopenmp
+Optimization:Optimization.cpp
+	g++ Optimization.cpp -c -Wall -O2
+
+LD:main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o
+	g++ main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o -lint2 -fopenmp
 
 
 

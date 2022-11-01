@@ -4,6 +4,7 @@
 #include <iostream>
 #include <iomanip>
 #include <omp.h>
+#include "Optimization.h"
 
 #define __damping_start_threshold 5.
 #define __damping_factor__ 0.25
@@ -66,36 +67,17 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	EigenMatrix gmatrix=jmatrix-0.5*kmatrix;
 	return gmatrix;
 }
-
-EigenMatrix DIIS_scf(EigenMatrix * Ds,EigenMatrix * Es,double & error2norm){
-	EigenMatrix B(__diis_space_size__+1,__diis_space_size__+1);
-	B(__diis_space_size__,__diis_space_size__)=0;
-	EigenMatrix b(__diis_space_size__+1,1);
-	b(__diis_space_size__,0)=-1;
-	for (int i=0;i<__diis_space_size__;i++){
-		for (int j=0;j<=i;j++){
-			EigenMatrix bij=Es[i].transpose()*Es[j];
-			B(i,j)=bij.trace();
-			B(j,i)=bij.trace();
-		}
-		B(i,__diis_space_size__)=-1;
-		B(__diis_space_size__,i)=-1;
-		b(i,0)=0;
-	}
-	EigenMatrix x=B.colPivHouseholderQr().solve(b);
-	EigenMatrix D=Ds[0];
-	for (int i=0;i<D.rows();i++)
-		for (int j=0;j<D.cols();j++)
-			D(i,j)=0;
-	for (int i=0;i<__diis_space_size__;i++)
-		D=D+x(i,0)*Ds[i];
-	error2norm=0;
-	for (int i=0;i<__diis_space_size__;i++)
-		for (int j=0;j<=i;j++)
-			error2norm+=(i==j)?x(i,0)*x(j,0)*B(i,j):2*x(i,0)*x(j,0)*B(i,j);
-	return D;
+/*
+EigenMatrix ElectronicGradient_scf(int nocc,EigenMatrix F,EigenMatrix C){
+	int nbasis=F.rows();
+	EigenMatrix Fmo=C.transpose()*F*C;
+	EigenMatrix g(nocc*(nbasis-occ),1);
+	for (int i=0,k=0;i<nocc;i++)
+		for (int j=nocc;j<nbasis;j++,k++)
+			g(k,0)=Fmo(i,j);
+	return g;
 }
-
+*/
 double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,short int * indices,long int n2integrals,EigenMatrix & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & densitymatrix,const int nprocs,const bool output){
 	if (output) std::cout<<"Restricted Hartree-Fock ..."<<std::endl;
 	const int nbasis=overlap.cols();
@@ -124,12 +106,12 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 	while (abs(lastenergy-energy)>__scf_convergence_threshold__ || error2norm>__scf_convergence_threshold__){ // Normal RHF SCF procedure.
 		if (output) std::cout<<" Iteration "<<iiteration<<":  ";
 		const clock_t iterstart=clock();
-		if (abs(lastenergy-energy)*(iiteration+1)>__damping_start_threshold){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
+		if (abs(lastenergy-energy)*iiteration>__damping_start_threshold){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
 			if (output) std::cout<<"density_update = damping  ";
 			densitymatrix=(1.-__damping_factor__)*densitymatrix+__damping_factor__*lastdensitymatrix;
 		}else if (iiteration>=__diis_space_size__ && error2norm<__diis_start_threshold__){ // Starting DIIS after Ds and Es are filled and error2norm is not too large.
 			if (output) std::cout<<"density_update = DIIS  ";
-			densitymatrix=DIIS_scf(Ds,Es,error2norm); // error2norm is updated.
+			densitymatrix=DIIS(Ds,Es,__diis_space_size__,error2norm); // error2norm is updated.
 		}else if (output) std::cout<<"density_update = naive  ";
 		const EigenMatrix G=GMatrix(repulsion,indices,n2integrals,densitymatrix,nprocs);
 		const EigenMatrix F=hcore+G;
