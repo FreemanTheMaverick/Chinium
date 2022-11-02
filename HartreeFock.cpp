@@ -6,10 +6,12 @@
 #include <omp.h>
 #include "Optimization.h"
 
-#define __damping_start_threshold 5.
+#define __damping_start_threshold__ 5.
 #define __damping_factor__ 0.25
-#define __diis_start_threshold__ 0.1
+#define __diis_start_iter__ 6
 #define __diis_space_size__ 6
+#define __asoscf_start_iter__ 20
+#define __trah_start_iter__ 50
 #define __scf_convergence_threshold__ 1.e-8
 
 typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
@@ -106,12 +108,16 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 	while (abs(lastenergy-energy)>__scf_convergence_threshold__ || error2norm>__scf_convergence_threshold__){ // Normal RHF SCF procedure.
 		if (output) std::cout<<" Iteration "<<iiteration<<":  ";
 		const clock_t iterstart=clock();
-		if (abs(lastenergy-energy)*iiteration>__damping_start_threshold){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
+		if (abs(lastenergy-energy)*iiteration>__damping_start_threshold__){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
 			if (output) std::cout<<"density_update = damping  ";
 			densitymatrix=(1.-__damping_factor__)*densitymatrix+__damping_factor__*lastdensitymatrix;
-		}else if (iiteration>=__diis_space_size__ && error2norm<__diis_start_threshold__){ // Starting DIIS after Ds and Es are filled and error2norm is not too large.
+		}else if (__asoscf_start_iter__>iiteration && iiteration>=__diis_start_iter__){ // Starting DIIS after Ds and Es are filled and error2norm is not too large.
 			if (output) std::cout<<"density_update = DIIS  ";
-			densitymatrix=DIIS(Ds,Es,__diis_space_size__,error2norm); // error2norm is updated.
+			densitymatrix=DIIS(Ds,Es,__diis_space_size__<iiteration?__diis_space_size__:iiteration,error2norm); // error2norm is updated.
+		}else if (__trah_start_iter__>iiteration && iiteration>=__asoscf_start_iter__){
+			if (output) std::cout<<"density_update = ASOSCF+DIIS  ";
+		}else if (iiteration>=__trah_start_iter__){
+			if (output) std::cout<<"density_update = TRAHSCF+DIIS  ";
 		}else if (output) std::cout<<"density_update = naive  ";
 		const EigenMatrix G=GMatrix(repulsion,indices,n2integrals,densitymatrix,nprocs);
 		const EigenMatrix F=hcore+G;
