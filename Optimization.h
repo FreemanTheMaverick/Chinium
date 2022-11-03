@@ -1,6 +1,6 @@
 #include <Eigen/Dense>
 
-typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
+#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
 
 EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int size,double & error2norm);
 

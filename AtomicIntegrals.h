@@ -1,6 +1,6 @@
 #include <Eigen/Dense>
 
-typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
+#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
 
 double NuclearRepulsion(const int natoms,double * atoms,const bool output);
 

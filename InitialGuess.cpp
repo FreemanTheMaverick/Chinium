@@ -5,13 +5,13 @@
 #include "AtomicIntegrals.h"
 #include "HartreeFock.h"
 
-typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
+#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
+#define EigenZero Eigen::MatrixXd::Zero
 
 EigenMatrix CoreHamiltonian(const int natoms,double * atoms,const char * basisset,const bool output){
 	if (output) std::cout<<"Initial guess ... Core"<<std::endl;
 	const int nbasis=nBasis(natoms,atoms,basisset,0);
-	EigenMatrix matrix(nbasis,nbasis);
-	return matrix*0;
+	return EigenZero(nbasis,nbasis);
 }
 
 EigenMatrix SuperpositionAtomicDensity(int nele,const int natoms,double * atoms,const char * basisset,const bool output){
@@ -33,7 +33,7 @@ EigenMatrix SuperpositionAtomicDensity(int nele,const int natoms,double * atoms,
 		double atom[]={(double)unique_atom.first,0,0,0};
 		const int ne=(unique_atom.first%2==0)?unique_atom.first:(unique_atom.first+1); // Since only RHF is supported now, the number of electron must be set to an even number.
 		const int nbasis=nBasis(1,atom,basisset,0);
-		EigenMatrix atomicdensitymatrix(nbasis,nbasis);atomicdensitymatrix=atomicdensitymatrix*0;
+		EigenMatrix atomicdensitymatrix=EigenZero(nbasis,nbasis);
 		const EigenMatrix overlap=Overlap(1,atom,basisset,0);
 		const EigenMatrix kinetic=Kinetic(1,atom,basisset,0);
 		const EigenMatrix nuclear=Nuclear(1,atom,basisset,0);

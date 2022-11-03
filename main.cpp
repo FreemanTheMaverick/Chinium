@@ -6,7 +6,7 @@
 #include "HartreeFock.h"
 #include "InitialGuess.h"
 
-typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
+#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
 
 int main(int argc,char *argv[]){
 
@@ -21,6 +21,7 @@ int main(int argc,char *argv[]){
 	nOneElectronIntegrals(natoms,atoms,basisset,1);
 	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms,1);
 
+	//EigenMatrix densitymatrix=CoreHamiltonian(natoms,atoms,basisset,1);
 	EigenMatrix densitymatrix=SuperpositionAtomicDensity(ne,natoms,atoms,basisset,1);
 
 	const EigenMatrix overlap=Overlap(natoms,atoms,basisset,1);

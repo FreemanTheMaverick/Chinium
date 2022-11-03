@@ -7,7 +7,7 @@
 
 #define __integral_threshold__ 10e-10
 
-typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
+#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
 
 std::vector<libint2::Atom> Libint2Atoms(const int natoms,double * atoms){ // Converting atoms array to libint's std::vector<libint2::Atom>.
 	std::vector<libint2::Atom> libint2atoms(natoms);

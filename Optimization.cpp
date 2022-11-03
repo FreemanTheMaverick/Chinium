@@ -1,6 +1,8 @@
 #include <Eigen/Dense>
 
-typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> EigenMatrix;
+#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
+#define EigenZero Eigen::MatrixXd::Zero
+#define EigenOne Eigen::MatrixXd::Identity
 
 EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int size,double & error2norm){
 	EigenMatrix B(size+1,size+1);
@@ -18,10 +20,7 @@ EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int size,double & error2norm)
 		b(i,0)=0;
 	}
 	EigenMatrix x=B.colPivHouseholderQr().solve(b);
-	EigenMatrix D=Ds[0];
-	for (int i=0;i<D.rows();i++)
-		for (int j=0;j<D.cols();j++)
-			D(i,j)=0;
+	EigenMatrix D=EigenZero(Ds[0].rows(),Ds[0].cols());
 	for (int i=0;i<size;i++)
 		D=D+x(i,0)*Ds[i];
 	error2norm=0;
