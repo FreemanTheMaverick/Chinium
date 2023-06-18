@@ -4,25 +4,44 @@
 #define EigenZero Eigen::MatrixXd::Zero
 #define EigenOne Eigen::MatrixXd::Identity
 
-EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int size,double & error2norm){
+#define __DIIS_determinant_threshold__ 1.e-20
+#define __minimum_DIIS_space__ 5
+
+void PushQueue(EigenMatrix M,EigenMatrix * Ms,int size){
+        Ms[size-1].resize(1,1);
+        for (int i=size-1;i>0;i--)
+                Ms[i]=Ms[i-1];
+        Ms[0]=M;
+}
+
+EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int maxsize,double & error2norm){
+	double determinant=0;
+	int size=maxsize;
 	EigenMatrix B(size+1,size+1);
-	B(size,size)=0;
 	EigenMatrix b(size+1,1);
-	b(size,0)=-1;
-	for (int i=0;i<size;i++){
-		for (int j=0;j<=i;j++){
-			EigenMatrix bij=Es[i].transpose()*Es[j];
-			B(i,j)=bij.trace();
-			B(j,i)=bij.trace();
+	do{
+		B=EigenZero(size+1,size+1);
+		B(size,size)=0;
+		b=EigenZero(size+1,1);
+		b(size,0)=-1;
+		for (int i=0;i<size;i++){
+			for (int j=0;j<=i;j++){
+				EigenMatrix bij=Es[i].transpose()*Es[j];
+				B(i,j)=bij.trace();
+				B(j,i)=bij.trace();
+			}
+			B(i,size)=-1;
+			B(size,i)=-1;
+			b(i,0)=0;
 		}
-		B(i,size)=-1;
-		B(size,i)=-1;
-		b(i,0)=0;
-	}
+		determinant=B.block(0,0,size,size).determinant();
+		size--;
+	}while (size>__minimum_DIIS_space__&&abs(determinant)<__DIIS_determinant_threshold__);
+	size++;
 	EigenMatrix x=B.colPivHouseholderQr().solve(b);
 	EigenMatrix D=EigenZero(Ds[0].rows(),Ds[0].cols());
 	for (int i=0;i<size;i++)
-		D=D+x(i,0)*Ds[i];
+		D+=x(i,0)*Ds[i];
 	error2norm=0;
 	for (int i=0;i<size;i++)
 		for (int j=0;j<=i;j++)

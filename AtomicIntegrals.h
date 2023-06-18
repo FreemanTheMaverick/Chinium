@@ -1,7 +1,3 @@
-#include <Eigen/Dense>
-
-#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
-
 double NuclearRepulsion(const int natoms,double * atoms,const bool output);
 
 int nBasis(const int natoms,double * atoms,const char * basisset,const bool output);

@@ -13,11 +13,14 @@ charge
 spin
 1
 
+guess
+sad
+
 method
 rhf
 
 basis
-cc-pvdz
+cc-pvqz
 
 derivative
 0

@@ -7,11 +7,11 @@
 #define __angstrom2bohr__ 1.8897259886
 
 int ReadXYZ(char * inp,double * atoms,const bool output){
+	std::ifstream file(inp);
 	std::map<std::string,double> ElementName2Z={
 		{"H",1},{"He",2},{"Li",3},{"Be",4},{"B",5},
 		{"C",6},{"N",7},{"O",8},{"F",9},{"Ne",10}
 	};
-	std::ifstream file(inp);
 	std::string thisline;
 	bool found=0;
 	int natoms=0;
@@ -38,8 +38,8 @@ int ReadXYZ(char * inp,double * atoms,const bool output){
 }
 
 std::string ReadBasisSet(char * inp,const bool output){
-	std::string basis;
 	std::ifstream file(inp);
+	std::string basis;
 	std::string thisline;
 	bool found=0;
 	while (getline(file,thisline) && ! found){
@@ -55,13 +55,13 @@ std::string ReadBasisSet(char * inp,const bool output){
 }
 
 int ReadNElectrons(char * inp,const bool output){
+	std::ifstream file(inp);
 	double atoms[10000];
 	const int natoms=ReadXYZ(inp,atoms,0);
 	int ne=0;
 	for (int iatom=0;iatom<natoms;iatom++)
-		ne=ne+(int)atoms[iatom*4];
+		ne+=(int)atoms[iatom*4];
 	int charge=0;
-	std::ifstream file(inp);
 	std::string thisline;
 	bool found=0;
 	while (getline(file,thisline) && ! found){
@@ -72,7 +72,7 @@ int ReadNElectrons(char * inp,const bool output){
 			ss>>charge;
 		}
 	}
-	ne=ne+charge;
+	ne+=charge;
 	if (output) std::cout<<"Charge ... "<<charge<<std::endl;
 	if (output) std::cout<<"Number of electrons ... "<<ne<<std::endl;
 	return ne;
@@ -93,6 +93,28 @@ int ReadNProcs(char * inp,const bool output){
 	}
 	if (output) std::cout<<"Number of threads ... "<<nprocs<<std::endl;
 	return nprocs;
+}
+
+std::string ReadGuess(char * inp,const bool output){
+	std::ifstream file(inp);
+	std::string thisline;
+	bool found=0;
+	std::string guess="sad";
+	while (getline(file,thisline) && ! found){
+		if (thisline.compare("guess")==0){
+			found=1;
+			getline(file,thisline);
+			std::stringstream ss(thisline);
+			ss>>guess;
+		}
+	}
+	if (guess.compare("core")==0 && output)
+		std::cout<<"Initial guessed density matrix ... Core"<<std::endl;
+	else if (guess.compare("sad")==0 && output)
+		std::cout<<"Initial guessed density matrix ... SAD"<<std::endl;
+	else if (output)
+		std::cout<<"Initial guessed density matrix ... taken from '"<<guess<<"'"<<std::endl;
+	return guess;
 }
 
 /*

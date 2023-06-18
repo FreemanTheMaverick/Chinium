@@ -1,12 +1,15 @@
 #include <Eigen/Dense>
 #include <string>
 #include <iostream>
+
+#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
+#define EigenZero Eigen::MatrixXd::Zero
+#define EigenOne Eigen::MatrixXd::Identity
+
 #include "Gateway.h"
 #include "AtomicIntegrals.h"
 #include "HartreeFock.h"
 #include "InitialGuess.h"
-
-#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
 
 int main(int argc,char *argv[]){
 
@@ -21,8 +24,12 @@ int main(int argc,char *argv[]){
 	nOneElectronIntegrals(natoms,atoms,basisset,1);
 	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms,1);
 
-	//EigenMatrix densitymatrix=CoreHamiltonian(natoms,atoms,basisset,1);
-	EigenMatrix densitymatrix=SuperpositionAtomicDensity(ne,natoms,atoms,basisset,1);
+	const std::string guess=ReadGuess(argv[1],1);
+	EigenMatrix densitymatrix;
+	if (guess.compare("core")==0)
+		densitymatrix=CoreHamiltonian(natoms,atoms,basisset);
+	else if (guess.compare("sad")==0)
+		densitymatrix=SuperpositionAtomicDensity(ne,natoms,atoms,basisset);
 
 	const EigenMatrix overlap=Overlap(natoms,atoms,basisset,1);
 	const EigenMatrix kinetic=Kinetic(natoms,atoms,basisset,1);
@@ -31,7 +38,7 @@ int main(int argc,char *argv[]){
 	const EigenMatrix repulsiondiag=RepulsionDiag(natoms,atoms,basisset,1);
 
 	int nshellquartets;
-	const int n2integrals=nTwoElectronIntegrals(natoms,atoms,basisset,repulsiondiag,nshellquartets,1);
+	const long int n2integrals=nTwoElectronIntegrals(natoms,atoms,basisset,repulsiondiag,nshellquartets,1);
 	double * repulsion=new double[n2integrals];
 	short int * indices=new short int[n2integrals*5];
 	Repulsion(natoms,atoms,basisset,nshellquartets,repulsiondiag,repulsion,indices,nprocs,1);

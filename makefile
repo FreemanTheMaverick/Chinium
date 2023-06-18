@@ -1,6 +1,6 @@
 CXX=g++
-EIGEN3=/home/yzhangnn/eigen3/include/eigen3
-LIBINT2=/home/yzhangnn/libint_2.7.1/
+EIGEN3=
+LIBINT2=
 
 .PHONY: all
 
