@@ -4,6 +4,10 @@
 #define EigenZero Eigen::MatrixXd::Zero
 #define EigenOne Eigen::MatrixXd::Identity
 
+extern "C"{
+	#include "OSQP.h"
+}
+
 #define __DIIS_determinant_threshold__ 1.e-20
 #define __minimum_DIIS_space__ 5
 
@@ -49,6 +53,89 @@ EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int maxsize,double & error2no
 	return D;
 }
 
+void Dense2CSC(EigenMatrix dense,bool sym,double * elements,int * rowindeces,int * colpointers){
+	double * element=elements;
+	int * rowindex=rowindeces;
+	int * colpointer=colpointers;
+	for (int j=0;j<dense.cols();j++){
+		*(colpointer++)=sym?(1+j)*j/2:dense.rows()*j;
+		for (int i=0;sym?(i<=j):(i<dense.rows());i++){
+			*(element++)=dense(i,j);
+			*(rowindex++)=i;
+		}
+	}
+	*colpointer=sym?((1+dense.cols())*dense.cols()/2):(dense.rows()*dense.cols());
+}
+
+/*
+#include <iostream>
+int main(){ // Testing OSQP related functions.
+	int size=2;
+	int nconstraints=3;
+	EigenMatrix h(size,size);h<<4,1,
+	                            1,2;
+	EigenMatrix a(nconstraints,size);a<<1,1,
+	                                    1,0,
+	                                    0,1;
+	double g[]={1,1};
+	double l[]={1,0,0};
+	double u[]={1,0.7,0.7};
+
+	int hnnz=(1+h.cols())*h.cols()/2;
+	double helements[hnnz]={0};
+	int hrowindeces[hnnz]={0};
+	int hcolpointers[h.cols()+1]={0};
+
+	int annz=a.rows()*a.cols();
+	double aelements[annz]={0};
+	int arowindeces[annz]={0};
+	int acolpointers[a.cols()+1]={0};
+
+	Dense2CSC(h,1,helements,hrowindeces,hcolpointers);
+	Dense2CSC(a,0,aelements,arowindeces,acolpointers);
+
+	std::cout<<"H ="<<std::endl;
+	std::cout<<h<<std::endl;
+	std::cout<<"H elements = "<<std::endl;
+	for (int i=0;i<hnnz;i++)
+		std::cout<<helements[i]<<",";
+	std::cout<<std::endl;
+	std::cout<<"H row indeces = "<<std::endl;
+	for (int i=0;i<hnnz;i++)
+		std::cout<<hrowindeces[i]<<",";
+	std::cout<<std::endl;
+	std::cout<<"H column pointers = "<<std::endl;
+	for (int i=0;i<h.cols()+1;i++)
+		std::cout<<hcolpointers[i]<<",";
+	std::cout<<std::endl;
+
+	std::cout<<"A ="<<std::endl;
+	std::cout<<a<<std::endl;
+	std::cout<<"A elements = ";
+	for (int i=0;i<annz;i++)
+		std::cout<<aelements[i]<<",";
+	std::cout<<std::endl;
+	std::cout<<"A row indeces = ";
+	for (int i=0;i<annz;i++)
+		std::cout<<arowindeces[i]<<",";
+	std::cout<<std::endl;
+	std::cout<<"A column pointers = "<<std::endl;
+	for (int i=0;i<a.cols()+1;i++)
+		std::cout<<acolpointers[i]<<",";
+	std::cout<<std::endl;
+
+	double x[size];
+	QuadraticProgramming(size,helements,hrowindeces,hcolpointers,g,aelements,arowindeces,acolpointers,nconstraints,l,u,x);
+	std::cout<<"Solution = ";
+	for (int i=0;i<size;i++)
+		std::cout<<x[i]<<",";
+	std::cout<<std::endl;
+
+	return 0;
+}
+*/
+
+/*
 EigenMatrix LBFGS(EigenMatrix g,EigenMatrix * Ss,EigenMatrix * Ys,int size,int latest){
 	EigenMatrix q=g;
 	double * Rs=new double[size];
@@ -76,7 +163,7 @@ EigenMatrix LBFGS(EigenMatrix g,EigenMatrix * Ss,EigenMatrix * Ys,int size,int l
 	return z;
 }
 
-/*
+
 // A test for L-BFGS
 // f(x1,x2)=(x1-2)^2+(x2-3)^2+x1*x2
 // df/dx1(x1,x2)=2*(x1-2)+x2
