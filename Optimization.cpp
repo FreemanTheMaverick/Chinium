@@ -73,14 +73,18 @@ void Dense2CSC(EigenMatrix dense,bool sym,double * elements,int * rowindeces,int
 	*colpointer=sym?((1+dense.cols())*dense.cols()/2):(dense.rows()*dense.cols());
 }
 
-EigenMatrix EDIIS(double * Es,EigenMatrix * Ds,EigenMatrix * Fs,int size){
+EigenMatrix AEDIIS(char diistype,double * Es,EigenMatrix * Ds,EigenMatrix * Fs,int size){
 	
 	int nconstraints=size+1; 
 	EigenMatrix h(size,size);
 	EigenMatrix a=EigenZero(nconstraints,size);
 	for (int i=0;i<size;i++){
 		for (int j=0;j<=i;j++){
-			EigenMatrix hij=(Ds[i].transpose()-Ds[j].transpose())*(Fs[i].transpose()-Fs[j].transpose());
+			EigenMatrix hij;
+			if (diistype=='e')
+				hij=-2*(Ds[i].transpose()-Ds[j].transpose())*(Fs[i]-Fs[j]);
+			else if (diistype=='a')
+				hij=2*(Ds[i].transpose()-Ds[0].transpose())*(Fs[j]-Fs[0]);
 			h(i,j)=hij.trace();
 			h(j,i)=hij.trace();
 		}
@@ -89,27 +93,53 @@ EigenMatrix EDIIS(double * Es,EigenMatrix * Ds,EigenMatrix * Fs,int size){
 	}
 
 	int hnnz=(size+1)*size/2;
-	double helements[hnnz]={0};
-	int hrowindeces[hnnz]={0};
-	int hcolpointers[size+1]={0};
+	double * helements=new double[hnnz];
+	int * hrowindeces=new int[hnnz];
+	int * hcolpointers=new int[size+1];
 
 	int annz=nconstraints*size;
-	double aelements[annz]={0};
-	int arowindeces[annz]={0};
-	int acolpointers[size+1]={0};
+	double * aelements=new double[annz];
+	int * arowindeces=new int[annz];
+	int * acolpointers=new int[size+1];
 
 	Dense2CSC(h,1,helements,hrowindeces,hcolpointers);
 	Dense2CSC(a,0,aelements,arowindeces,acolpointers);
 
-	double l[nconstraints]={0};l[0]=1;
-	double u[nconstraints]={1};
-	double x[size]={0};
+	double * l=new double[nconstraints];
+	double * u=new double[nconstraints];
+	for (int i=0;i<nconstraints;i++){
+		l[i]=0;
+		u[i]=1;
+	}
+	l[0]=1;
+	double * x=new double[size];
+	for (int i=0;i<size;i++) x[i]=0;
 
-	QuadraticProgramming(size,helements,hrowindeces,hcolpointers,Es,aelements,arowindeces,acolpointers,nconstraints,l,u,x);
+	if (diistype=='e')
+		QuadraticProgramming(size,helements,hrowindeces,hcolpointers,Es,aelements,arowindeces,acolpointers,nconstraints,l,u,x);
+	else if (diistype=='a'){
+		double * g=new double[size];
+		for (int i=0;i<size;i++){
+			EigenMatrix gi=(Ds[i].transpose()-Ds[0].transpose())*Fs[0];
+			g[i]=2*gi.trace();
+		}
+		QuadraticProgramming(size,helements,hrowindeces,hcolpointers,g,aelements,arowindeces,acolpointers,nconstraints,l,u,x);
+		delete [] g;
+	}
 
 	EigenMatrix F=Fs[0]*0;
 	for (int i=0;i<size;i++)
 		F+=Fs[i]*x[i];
+
+	delete [] helements;
+	delete [] hrowindeces;
+	delete [] hcolpointers;
+	delete [] aelements;
+	delete [] arowindeces;
+	delete [] acolpointers;
+	delete [] l;
+	delete [] u;
+	delete [] x;
 	return F;
 }
 

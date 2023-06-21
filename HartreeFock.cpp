@@ -116,7 +116,6 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		Gs[i]=gradient;
 		Es[i]=114514;
 	}
-	Es[0]=1919810;
 	double error2norm=-889464; // |e|^2=Sigma_ij(c_i*c_j*e_i*e_j)
 
 	// L-BFGS preparation
