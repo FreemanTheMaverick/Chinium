@@ -11,8 +11,14 @@ extern "C"{
 #define __DIIS_determinant_threshold__ 1.e-20
 #define __minimum_DIIS_space__ 5
 
-void PushQueue(EigenMatrix M,EigenMatrix * Ms,int size){
-        Ms[size-1].resize(1,1);
+void PushMatrixQueue(EigenMatrix M,EigenMatrix * Ms,int size){
+        Ms[size-1].resize(0,0);
+        for (int i=size-1;i>0;i--)
+                Ms[i]=Ms[i-1];
+        Ms[0]=M;
+}
+
+void PushDoubleQueue(double M,double * Ms,int size){
         for (int i=size-1;i>0;i--)
                 Ms[i]=Ms[i-1];
         Ms[0]=M;
@@ -66,6 +72,47 @@ void Dense2CSC(EigenMatrix dense,bool sym,double * elements,int * rowindeces,int
 	}
 	*colpointer=sym?((1+dense.cols())*dense.cols()/2):(dense.rows()*dense.cols());
 }
+
+EigenMatrix EDIIS(double * Es,EigenMatrix * Ds,EigenMatrix * Fs,int size){
+	
+	int nconstraints=size+1; 
+	EigenMatrix h(size,size);
+	EigenMatrix a=EigenZero(nconstraints,size);
+	for (int i=0;i<size;i++){
+		for (int j=0;j<=i;j++){
+			EigenMatrix hij=(Ds[i].transpose()-Ds[j].transpose())*(Fs[i].transpose()-Fs[j].transpose());
+			h(i,j)=hij.trace();
+			h(j,i)=hij.trace();
+		}
+		a(0,i)=1;
+		a(i+1,i)=1;
+	}
+
+	int hnnz=(size+1)*size/2;
+	double helements[hnnz]={0};
+	int hrowindeces[hnnz]={0};
+	int hcolpointers[size+1]={0};
+
+	int annz=nconstraints*size;
+	double aelements[annz]={0};
+	int arowindeces[annz]={0};
+	int acolpointers[size+1]={0};
+
+	Dense2CSC(h,1,helements,hrowindeces,hcolpointers);
+	Dense2CSC(a,0,aelements,arowindeces,acolpointers);
+
+	double l[nconstraints]={0};l[0]=1;
+	double u[nconstraints]={1};
+	double x[size]={0};
+
+	QuadraticProgramming(size,helements,hrowindeces,hcolpointers,Es,aelements,arowindeces,acolpointers,nconstraints,l,u,x);
+
+	EigenMatrix F=Fs[0]*0;
+	for (int i=0;i<size;i++)
+		F+=Fs[i]*x[i];
+	return F;
+}
+
 
 /*
 #include <iostream>

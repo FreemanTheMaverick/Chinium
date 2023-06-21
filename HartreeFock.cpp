@@ -26,8 +26,8 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	omp_set_num_threads(nprocs);
 	long int nintsperthread_fewer=n2integrals/nprocs;
 	int ntimes_fewer=nprocs-n2integrals+nintsperthread_fewer*nprocs; // How many integrals a thread will handle. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to handle (a) integrals, x, and that to compute (a+1) integrals, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of integrals and threads respectively.
-	long int iintfirstperthread[nprocs];
-	long int nintsperthread[nprocs];
+	long int * iintfirstperthread=new long int[nprocs];
+	long int * nintsperthread=new long int[nprocs];
 	for (int iproc=0;iproc<nprocs;iproc++){
 		iintfirstperthread[iproc]=iproc==0?0:(iintfirstperthread[iproc-1]+nintsperthread[iproc-1]);
 		nintsperthread[iproc]=iproc<ntimes_fewer?nintsperthread_fewer:(nintsperthread_fewer+1);
@@ -63,9 +63,13 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	EigenMatrix rawjmatrix=EigenZero(nbasis,nbasis);
 	EigenMatrix rawkmatrix=EigenZero(nbasis,nbasis);
 	for (int iproc=0;iproc<nprocs;iproc++){
-		rawjmatrix=rawjmatrix+bigrawjmatrix[iproc];
-		rawkmatrix=rawkmatrix+bigrawkmatrix[iproc];
+		rawjmatrix+=bigrawjmatrix[iproc];
+		bigrawjmatrix[iproc].resize(0,0);
+		rawkmatrix+=bigrawkmatrix[iproc];
+		bigrawkmatrix[iproc].resize(0,0);
 	}
+	delete [] iintfirstperthread;
+	delete [] nintsperthread;
 	delete [] bigrawjmatrix;
 	delete [] bigrawkmatrix;
 	EigenMatrix jmatrix=0.5*(rawjmatrix+rawjmatrix.transpose());
@@ -100,18 +104,19 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 	const EigenMatrix U=eigensolver.eigenvectors();
 	const EigenMatrix X=U*sinversesqrt*U.transpose();
 	EigenMatrix F=hcore+GMatrix(repulsion,indices,n2integrals,density,nprocs); // Fock matrix.
-	double energy=114514;
-	double lastenergy=1919810;
-	EigenMatrix gradient; // Electronic gradient of energy with respect to nonredundant orbital rotational parameters.
+	EigenMatrix gradient=4*(overlap*density*F-F*density*overlap); // Electronic gradient of energy with respect to nonredundant orbital rotational parameters.
 	int iiteration=0;
 
-	// Pulay's DIIS preparation
+	// DIIS preparation
 	EigenMatrix * Fs=new EigenMatrix[__diis_space_size__]; // Storing the last __diis_space_size__ density matrices and their error matrices.
-	EigenMatrix * Es=new EigenMatrix[__diis_space_size__];
+	EigenMatrix * Gs=new EigenMatrix[__diis_space_size__];
+	double * Es=new double[__diis_space_size__]; // Energy.
 	for (int i=0;i<__diis_space_size__;i++){
 		Fs[i]=F;
-		Es[i]=EigenZero(nbasis,nbasis);
+		Gs[i]=gradient;
+		Es[i]=114514;
 	}
+	Es[0]=1919810;
 	double error2norm=-889464; // |e|^2=Sigma_ij(c_i*c_j*e_i*e_j)
 
 	// L-BFGS preparation
@@ -123,7 +128,7 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 	}
 
 	// RHF-SCF iterations
-	while (abs(lastenergy-energy)>__scf_convergence_energy_threshold__ || gradient.norm()>__scf_convergence_gradient_threshold__){ // Normal RHF SCF procedure.
+	do{
 		if (output) std::cout<<" Iteration "<<iiteration<<":  ";
 		const clock_t iterstart=clock();
 
@@ -131,12 +136,12 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		if (iiteration==0){
 			if (output) std::cout<<"fock_update = naive  ";
 			F=Fs[0];
-		}else if (abs(lastenergy-energy)>__damping_start_threshold__){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
+		}else if (abs(Es[0]-Es[1])>__damping_start_threshold__){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
 			if (output) std::cout<<"fock_update = damping  ";
 			F=(1.-__damping_factor__)*Fs[0]+__damping_factor__*Fs[1];
-		}else if (iiteration>__diis_start_iter__){ // Starting DIIS after Fs and Es are filled and error2norm is not too large.
+		}else if (iiteration>__diis_start_iter__){ // Starting DIIS after Fs and Gs are filled and error2norm is not too large.
 			if (output) std::cout<<"fock_update = Pulay's_DIIS  ";
-			F=DIIS(Fs,Es,iiteration<__diis_space_size__?iiteration:__diis_space_size__,error2norm); // error2norm is updated.
+			F=DIIS(Fs,Gs,iiteration<__diis_space_size__?iiteration:__diis_space_size__,error2norm); // error2norm is updated.
 		}else{
 			if (output) std::cout<<"fock_update = naive  ";
 			F=Fs[0];
@@ -152,21 +157,26 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		density=C_occ*C_occ.transpose();
 		F=hcore+GMatrix(repulsion,indices,n2integrals,density,nprocs);
 		gradient=4*(overlap*density*F-F*density*overlap); // [F(D),D] instead of [F,D(F)].
-		PushQueue(F,Fs,__diis_space_size__); // The oldest density matrix and its error matrix are replaced by the latest ones.
-		PushQueue(sinversesqrt.transpose()*gradient*sinversesqrt,Es,__diis_space_size__); // I don't know why sinversesqrt is important, but its existence accelerates convergence.
+		PushMatrixQueue(F,Fs,__diis_space_size__); // The oldest density matrix and its error matrix are replaced by the latest ones.
+		PushMatrixQueue(sinversesqrt.transpose()*gradient*sinversesqrt,Gs,__diis_space_size__); // I don't know why sinversesqrt is important, but its existence accelerates convergence.
 
 		// Iteration information output
 		const EigenMatrix Iamgoingtobeanobellaureate=density*(hcore+F); // Intermediate matrix.
-		lastenergy=energy;
-		energy=Iamgoingtobeanobellaureate.trace();
+		PushDoubleQueue(Iamgoingtobeanobellaureate.trace(),Es,__diis_space_size__); // Update energy.
 		const clock_t iterend=clock();
-		if (output) std::cout<<"energy = "<<std::setprecision(12)<<energy<<std::setprecision(3)<<" a.u.  ||gradient|| = "<<gradient.norm()<<" a.u.  elapsed_time = "<<double(iterend-iterstart)/CLOCKS_PER_SEC<<" s"<<std::endl;
+		if (output) std::cout<<"energy = "<<std::setprecision(12)<<Es[0]<<std::setprecision(3)<<" a.u.  ||gradient|| = "<<gradient.norm()<<" a.u.  elapsed_time = "<<double(iterend-iterstart)/CLOCKS_PER_SEC<<" s"<<std::endl;
 		iiteration++;
+	}while (abs(Es[0]-Es[1])>__scf_convergence_energy_threshold__ || gradient.norm()>__scf_convergence_gradient_threshold__);
+	if (output) std::cout<<"Done; Final RHF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
+	const double energy=Es[0];
+	delete [] Es;
+	for (int i=0;i<__diis_space_size__;i++){
+		Fs[i].resize(0,0);
+		Gs[i].resize(0,0);
 	}
 	delete [] Fs;
-	delete [] Es;
-	delete [] Ss;
-	delete [] Ys;
-	if (output) std::cout<<"Done; Final RHF energy = "<<std::setprecision(12)<<energy<<" a.u."<<std::endl;
+	delete [] Gs;
+	//delete [] Ss;
+	//delete [] Ys;
 	return energy;
 }

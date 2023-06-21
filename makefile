@@ -1,41 +1,50 @@
 CXX=g++
 CC=gcc
-EIGEN3=/home/yzhangnn/eigen3/include/eigen3 # The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
-LIBINT2=/home/yzhangnn/libint_2.7.1/ # The path where you can find "include", "lib" and "share".
+# The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
+EIGEN3=/home/yzhangnn/eigen3/include/eigen3
+# The path where you can find "include/", "lib/" and "share/".
+LIBINT2=/home/yzhangnn/libint_2.7.1/
 OSQP=/home/yzhangnn/osqp_0.6.3/
 
+GeneralFlags=-Wall -O2
+EIGEN3Flags=-I$(EIGEN3)
+LIBINT2Flags=-I$(LIBINT2)/include -L$(LIBINT2)/lib -lint2
+OSQPFlags=-I$(OSQP)/include/osqp -L$(OSQP)/lib64 -losqp
 
 .PHONY: all
 
-all: main Gateway InitialGuess AtomicIntegrals HartreeFock Optimization
-	$(CXX) main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o -lint2 -fopenmp -I$(EIGEN3) -I$(LIBINT2)/include -L$(LIBINT2)/lib -o Chinium
+all: main Gateway InitialGuess AtomicIntegrals HartreeFock Optimization OSQP
+	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags)
 
 main: main.cpp
-	$(CXX) main.cpp -c -Wall -O2 -I$(EIGEN3)
+	$(CXX) main.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 Gateway: Gateway.cpp
-	$(CXX) Gateway.cpp -c -Wall -O2
+	$(CXX) Gateway.cpp -c $(GeneralFlags)
 
 InitialGuess: InitialGuess.cpp
-	$(CXX) InitialGuess.cpp -c -Wall -I$(EIGEN3)
+	$(CXX) InitialGuess.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 AtomicIntegrals: AtomicIntegrals.cpp
-	$(CXX) AtomicIntegrals.cpp -c -lint2 -fopenmp -Wall -O2 -I$(EIGEN3) -I$(LIBINT2)/include
+	$(CXX) AtomicIntegrals.cpp -c -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags)
 
 HartreeFock: HartreeFock.cpp
-	$(CXX) HartreeFock.cpp -c -fopenmp -Wall -O2 -I$(EIGEN3)
+	$(CXX) HartreeFock.cpp -c -fopenmp $(GeneralFlags) $(EIGEN3Flags)
 
 Optimization: Optimization.cpp
-	$(CXX) Optimization.cpp -c -Wall -O2  -I$(EIGEN3)
+	$(CXX) Optimization.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 OSQP: OSQP.c
-	$(CC) OSQP.c -c -Wall -O2 -I/home/yzhangnn/osqp_0.6.3/include/osqp -L/home/yzhangnn/osqp_0.6.3/lib64 -losqp
+	$(CC) OSQP.c -c $(GeneralFlags) $(OSQPFlags)
 
-LD: main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o
-	$(CXX) main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o -lint2 -fopenmp -I$(EIGEN3) -I$(LIBINT2)/include -L$(LIBINT2)/lib -o Chinium
+LD: main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o
+	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags)
+
+
 
 ld: OSQP.o Optimization.o
-	$(CXX) Optimization.o OSQP.o -I$(EIGEN3) -I$(OSQP)/include/osqp -L$(OSQP)/lib64 -losqp
+	$(CXX) Optimization.o OSQP.o $(GeneralFlags) $(EIGEN3Flags) $(OSQPFlags)
+
 
 
 

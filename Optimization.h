@@ -1,4 +1,6 @@
-void PushQueue(EigenMatrix M,EigenMatrix * Ms,int size);
+void PushMatrixQueue(EigenMatrix M,EigenMatrix * Ms,int size);
+
+void PushDoubleQueue(double M,double * Ms,int size);
 
 EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int size,double & error2norm);
 
