@@ -38,6 +38,7 @@ void QuadraticProgramming(int size,double * helements,int * hrowindeces,int * hc
 	OSQPSettings * settings=malloc(sizeof(OSQPSettings));
 	osqp_set_default_settings(settings);
 	settings->polishing=1;
+	settings->verbose=0;
 	OSQPSolver * solver=NULL;
 	osqp_setup(&solver,H,G,A,L,U,nconstraints,size,settings);
 	osqp_solve(solver);

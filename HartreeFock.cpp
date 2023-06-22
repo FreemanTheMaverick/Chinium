@@ -1,6 +1,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include <ctime>
+#include <chrono>
 #include <iostream>
 #include <iomanip>
 #include <omp.h>
@@ -11,9 +12,10 @@
 
 #include "Optimization.h"
 
-#define __damping_start_threshold__ 1.
+#define __damping_start_threshold__ 100.
 #define __damping_factor__ 0.25
-#define __diis_start_iter__ 3
+#define __adiis_start_iter__ 1
+#define __diis_start_iter__ 4
 #define __diis_space_size__ 6
 #define __asoscf_start_iter__ 100
 #define __lbfgs_space_size__ 6
@@ -110,10 +112,12 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 	// DIIS preparation
 	EigenMatrix * Fs=new EigenMatrix[__diis_space_size__]; // Storing the last __diis_space_size__ density matrices and their error matrices.
 	EigenMatrix * Gs=new EigenMatrix[__diis_space_size__];
+	EigenMatrix * Ds=new EigenMatrix[__diis_space_size__];
 	double * Es=new double[__diis_space_size__]; // Energy.
 	for (int i=0;i<__diis_space_size__;i++){
 		Fs[i]=F;
 		Gs[i]=gradient;
+		Ds[i]=density;
 		Es[i]=114514;
 	}
 	double error2norm=-889464; // |e|^2=Sigma_ij(c_i*c_j*e_i*e_j)
@@ -129,7 +133,8 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 	// RHF-SCF iterations
 	do{
 		if (output) std::cout<<" Iteration "<<iiteration<<":  ";
-		const clock_t iterstart=clock();
+		const clock_t iterstart_cpu=clock();
+		const auto iterstart_wall=std::chrono::system_clock::now();
 
 		// Convergence techniques
 		if (iiteration==0){
@@ -138,6 +143,9 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		}else if (abs(Es[0]-Es[1])>__damping_start_threshold__){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
 			if (output) std::cout<<"fock_update = damping  ";
 			F=(1.-__damping_factor__)*Fs[0]+__damping_factor__*Fs[1];
+		}else if (__diis_start_iter__>=iiteration && iiteration>__adiis_start_iter__){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
+			if (output) std::cout<<"fock_update = ADIIS  ";
+			F=AEDIIS('a',Es,Ds,Fs,iiteration<__diis_space_size__?iiteration:__diis_space_size__);
 		}else if (iiteration>__diis_start_iter__){ // Starting DIIS after Fs and Gs are filled and error2norm is not too large.
 			if (output) std::cout<<"fock_update = Pulay's_DIIS  ";
 			F=DIIS(Fs,Gs,iiteration<__diis_space_size__?iiteration:__diis_space_size__,error2norm); // error2norm is updated.
@@ -158,12 +166,13 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		gradient=4*(overlap*density*F-F*density*overlap); // [F(D),D] instead of [F,D(F)].
 		PushMatrixQueue(F,Fs,__diis_space_size__); // The oldest density matrix and its error matrix are replaced by the latest ones.
 		PushMatrixQueue(sinversesqrt.transpose()*gradient*sinversesqrt,Gs,__diis_space_size__); // I don't know why sinversesqrt is important, but its existence accelerates convergence.
+		PushMatrixQueue(density,Ds,__diis_space_size__);
 
 		// Iteration information output
 		const EigenMatrix Iamgoingtobeanobellaureate=density*(hcore+F); // Intermediate matrix.
 		PushDoubleQueue(Iamgoingtobeanobellaureate.trace(),Es,__diis_space_size__); // Update energy.
-		const clock_t iterend=clock();
-		if (output) std::cout<<"energy = "<<std::setprecision(12)<<Es[0]<<std::setprecision(3)<<" a.u.  ||gradient|| = "<<gradient.norm()<<" a.u.  elapsed_time = "<<double(iterend-iterstart)/CLOCKS_PER_SEC<<" s"<<std::endl;
+		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
+		if (output) std::cout<<"energy = "<<std::setprecision(12)<<Es[0]<<std::setprecision(3)<<" a.u.  ||gradient|| = "<<gradient.norm()<<" a.u.  cpu_time = "<<double(clock()-iterstart_cpu)/CLOCKS_PER_SEC<<" s  wall_time = "<<duration_wall.count()<<" s"<<std::endl;
 		iiteration++;
 	}while (abs(Es[0]-Es[1])>__scf_convergence_energy_threshold__ || gradient.norm()>__scf_convergence_gradient_threshold__);
 	if (output) std::cout<<"Done; Final RHF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
@@ -172,9 +181,11 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 	for (int i=0;i<__diis_space_size__;i++){
 		Fs[i].resize(0,0);
 		Gs[i].resize(0,0);
+		Ds[i].resize(0,0);
 	}
 	delete [] Fs;
 	delete [] Gs;
+	delete [] Ds;
 	//delete [] Ss;
 	//delete [] Ys;
 	return energy;

@@ -8,7 +8,7 @@ extern "C"{
 	#include "OSQP.h"
 }
 
-#define __DIIS_determinant_threshold__ 1.e-20
+#define __DIIS_determinant_threshold__ -1.e-50
 #define __minimum_DIIS_space__ 5
 
 void PushMatrixQueue(EigenMatrix M,EigenMatrix * Ms,int size){
@@ -84,13 +84,23 @@ EigenMatrix AEDIIS(char diistype,double * Es,EigenMatrix * Ds,EigenMatrix * Fs,i
 			if (diistype=='e')
 				hij=-2*(Ds[i].transpose()-Ds[j].transpose())*(Fs[i]-Fs[j]);
 			else if (diistype=='a')
-				hij=2*(Ds[i].transpose()-Ds[0].transpose())*(Fs[j]-Fs[0]);
+				hij=2*(Ds[i].transpose()-Ds[0].transpose())*(Fs[j]-Fs[0]); // This matrix is natural symmetric. I have no idea why. Maths is elusive.
 			h(i,j)=hij.trace();
 			h(j,i)=hij.trace();
 		}
 		a(0,i)=1;
 		a(i+1,i)=1;
 	}
+
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver; // QP demands the matrix be positive semi-definite. Finding the nearest PSD matrix.
+	eigensolver.compute(h);
+	const EigenMatrix lambdas=eigensolver.eigenvalues();
+	EigenMatrix new_lambdas=EigenZero(size,size);
+	for (int i=0;i<size;i++){
+		if (lambdas(i)>0) new_lambdas(i,i)=lambdas(i);
+		else new_lambdas(i,i)=0;
+	}
+	h=eigensolver.eigenvectors()*new_lambdas*eigensolver.eigenvectors().transpose();
 
 	int hnnz=(size+1)*size/2;
 	double * helements=new double[hnnz];
