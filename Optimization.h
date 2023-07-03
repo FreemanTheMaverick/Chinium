@@ -6,4 +6,4 @@ EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int maxsize,double & error2no
 
 EigenMatrix AEDIIS(char diistype,double * Es,EigenMatrix * Ds,EigenMatrix * Fs,int size);
 
-EigenMatrix LBFGS(EigenMatrix g,EigenMatrix * Ss,EigenMatrix * Ys,int size,int latest);
+EigenMatrix LBFGS(EigenMatrix * pGs,EigenMatrix * pXs,int size,EigenMatrix hessiandiag);

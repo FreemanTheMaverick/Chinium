@@ -1,12 +1,12 @@
 CXX=g++
 CC=gcc
 # The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
-EIGEN3=
+EIGEN3=/home/yzhangnn/eigen3/include/eigen3
 # The path where you can find "include/", "lib/" and "share/".
-LIBINT2=
-OSQP=
+LIBINT2=/home/yzhangnn/libint_2.7.1/
+OSQP=/home/yzhangnn/osqp_0.6.3/
 
-GeneralFlags=-Wall -O2
+GeneralFlags=-Wall -O2 -mavx2
 EIGEN3Flags=-I$(EIGEN3)
 LIBINT2Flags=-I$(LIBINT2)/include -L$(LIBINT2)/lib -lint2
 OSQPFlags=-I$(OSQP)/include/osqp -L$(OSQP)/lib64 -losqp

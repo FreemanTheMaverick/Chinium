@@ -4,12 +4,11 @@
 #define EigenZero Eigen::MatrixXd::Zero
 #define EigenOne Eigen::MatrixXd::Identity
 
-extern "C"{
-	#include "OSQP.h"
-}
+#include "OSQP.h"
 
 #define __DIIS_determinant_threshold__ -1.e-50
 #define __minimum_DIIS_space__ 5
+#define __LBFGS_convergence_threshold__ 1.e-10
 
 void PushMatrixQueue(EigenMatrix M,EigenMatrix * Ms,int size){
         Ms[size-1].resize(0,0);
@@ -84,7 +83,7 @@ EigenMatrix AEDIIS(char diistype,double * Es,EigenMatrix * Ds,EigenMatrix * Fs,i
 			if (diistype=='e')
 				hij=-2*(Ds[i].transpose()-Ds[j].transpose())*(Fs[i]-Fs[j]);
 			else if (diistype=='a')
-				hij=2*(Ds[i].transpose()-Ds[0].transpose())*(Fs[j]-Fs[0]); // This matrix is natural symmetric. I have no idea why. Maths is elusive.
+				hij=2*(Ds[i].transpose()-Ds[0].transpose())*(Fs[j]-Fs[0]); // This matrix is naturally symmetric. I have no idea why. Maths is elusive.
 			h(i,j)=hij.trace();
 			h(j,i)=hij.trace();
 		}
@@ -222,35 +221,59 @@ int main(){ // Testing OSQP related functions.
 }
 */
 
-/*
-EigenMatrix LBFGS(EigenMatrix g,EigenMatrix * Ss,EigenMatrix * Ys,int size,int latest){
-	EigenMatrix q=g;
+#define __Clean_Arrays__\
+	for (int j=0;j<size;j++){\
+		Ys[j].resize(0,0);\
+		Ss[j].resize(0,0);\
+	}\
+	delete [] Ys;\
+	delete [] Ss;\
+	delete [] Rs;\
+	delete [] As;
+
+EigenMatrix LBFGS(EigenMatrix * pGs,EigenMatrix * pXs,int size,EigenMatrix hessiandiag){ // pGs - packed gradients
+	EigenMatrix * Ys=new EigenMatrix[size];
+	EigenMatrix * Ss=new EigenMatrix[size];
+	for (int i=0;i<size;i++){
+		Ys[i]=pGs[i]-pGs[i+1];
+		Ss[i]=pXs[i]-pXs[i+1];
+	}
+	EigenMatrix Y=Ys[0];
+	EigenMatrix S=Ss[0];
+	EigenMatrix q=pGs[0];
 	double * Rs=new double[size];
 	double * As=new double[size];
 	EigenMatrix intermediate1;
 	EigenMatrix intermediate2;
-	for (int i=latest,j=0;j<size;i=(i==0?size-1:i-1),j++){
+	for (int i=0;i<size;i++){
 		intermediate1=Ys[i].transpose()*Ss[i];
+		if (intermediate1(0,0)<__LBFGS_convergence_threshold__){
+			__Clean_Arrays__
+			return pXs[0]*0;
+		}
 		Rs[i]=1/intermediate1(0,0);
 		intermediate1=Rs[i]*Ss[i].transpose()*q;
 		As[i]=intermediate1(0,0);
 		q-=As[i]*Ys[i];
 	}
-	intermediate1=Ss[latest].transpose()*Ys[latest];
-	intermediate2=Ys[latest].transpose()*Ys[latest];
+	intermediate1=Ss[0].transpose()*Ys[0];
+	intermediate2=Ys[0].transpose()*Ys[0];
 	double r=intermediate1(0,0)/intermediate2(0,0);
-	EigenMatrix z=-r*q;
-	for (int i=(latest==size-1?0:latest+1),j=0;j<size;i=(i==size-1?0:i+1),j++){
+	EigenMatrix z;
+	if (hessiandiag(0)==0) z=-r*q;
+	else{
+		intermediate1=-hessiandiag.cwiseInverse();
+		z=intermediate1.cwiseProduct(q);
+	}	
+	for (int i=size-1;i>=0;i--){
 		intermediate1=-Rs[i]*Ys[i].transpose()*z;
-		double b=intermediate1(0,0);
-		z-=Ss[i]*(As[i]-b);
+		z-=Ss[i]*(As[i]-intermediate1(0,0));
 	}
-	delete [] Rs;
-	delete [] As;
+	__Clean_Arrays__
 	return z;
 }
 
-
+/*
 // A test for L-BFGS
 // f(x1,x2)=(x1-2)^2+(x2-3)^2+x1*x2
 // df/dx1(x1,x2)=2*(x1-2)+x2
@@ -258,35 +281,31 @@ EigenMatrix LBFGS(EigenMatrix g,EigenMatrix * Ss,EigenMatrix * Ys,int size,int l
 // Solution: fmin=f(2/3,8/3)=11/3
 #include <iostream>
 int main(){
-	EigenMatrix * Xs=new EigenMatrix[4];
-	EigenMatrix * Gs=new EigenMatrix[4];
-	for (int i=0;i<4;i++){
-		EigenMatrix X(2,1);X(0)=i;X(1)=i;
-		EigenMatrix G=X;
-		G(0)=2*(X(0)-2)+X(1);
-		G(1)=2*(X(1)-3)+X(0);
+	int size=3;
+	int dimension=2;
+	EigenMatrix * Xs=new EigenMatrix[size+1];
+	EigenMatrix * Gs=new EigenMatrix[size+1];
+	EigenMatrix X(2,1);
+	EigenMatrix G(2,1);
+	for (int i=size;i>=0;i--){
+		X(0)=17*i;X(1)=7*i;
+		G(0)=2*(X(0)-2)+X(1);G(1)=2*(X(1)-3)+X(0);
 		Xs[i]=X;
 		Gs[i]=G;
 	}
-	EigenMatrix * Ss=new EigenMatrix[3];
-	EigenMatrix * Ys=new EigenMatrix[3];
-	for (int i=0;i<3;i++){
-		Ss[i]=Xs[i+1]-Xs[i];
-		Ys[i]=Gs[i+1]-Gs[i];
-	}
-	EigenMatrix lastx=Xs[2];
-	EigenMatrix lastg=Gs[2];
-	EigenMatrix x=lastx;
-	EigenMatrix g=lastg;
-	for (int iter=0;iter<10;iter++){
-		x=lastx+LBFGS(lastg,Ss,Ys,3,(iter+2)%3);
-		std::cout<<"Iteration "<<iter<<": current x = "<<x.transpose()<<" current f = "<<(x(0)-2)*(x(0)-2)+(x(1)-3)*(x(1)-3)+x(0)*x(1)<<std::endl;
-		g(0)=2*(x(0)-2)+x(1);
-		g(1)=2*(x(1)-3)+x(0);
-		Ss[iter%3]=x-lastx;
-		Ys[iter%3]=g-lastg;
-		lastx=x;
-		lastg=g;
+	std::cout<<"Iteration 0: current x = "<<X.transpose()<<" current f = "<<(X(0)-2)*(X(0)-2)+(X(1)-3)*(X(1)-3)+X(0)*X(1)<<std::endl;
+	for (int iter=1;iter<10;iter++){
+		EigenMatrix hessiandiag;
+		if (iter==1){
+			EigenMatrix tmp=EigenOne(dimension,dimension);
+			hessiandiag=tmp.diagonal();
+		}else hessiandiag=EigenZero(dimension,1);
+		X+=LBFGS(Gs,Xs,size<iter+1?size:iter+1,hessiandiag);
+		std::cout<<"Iteration "<<iter<<": current x = "<<X.transpose()<<" current f = "<<(X(0)-2)*(X(0)-2)+(X(1)-3)*(X(1)-3)+X(0)*X(1)<<std::endl;
+		G(0)=2*(X(0)-2)+X(1);
+		G(1)=2*(X(1)-3)+X(0);
+		PushMatrixQueue(X,Xs,size);
+		PushMatrixQueue(G,Gs,size);
 	}
 	return 0;
 }
