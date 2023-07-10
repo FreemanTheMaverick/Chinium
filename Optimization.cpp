@@ -1,4 +1,5 @@
 #include <Eigen/Dense>
+#include <iostream>
 
 #define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
 #define EigenZero Eigen::MatrixXd::Zero
@@ -8,7 +9,7 @@
 
 #define __DIIS_determinant_threshold__ -1.e-50
 #define __minimum_DIIS_space__ 5
-#define __LBFGS_convergence_threshold__ 1.e-10
+#define __LBFGS_convergence_threshold__ -1.e-50
 
 void PushMatrixQueue(EigenMatrix M,EigenMatrix * Ms,int size){
         Ms[size-1].resize(0,0);
@@ -245,12 +246,16 @@ EigenMatrix LBFGS(EigenMatrix * pGs,EigenMatrix * pXs,int size,EigenMatrix hessi
 	double * As=new double[size];
 	EigenMatrix intermediate1;
 	EigenMatrix intermediate2;
+
+	intermediate1=Ys[0].transpose()*Ss[0];
+	if (intermediate1(0,0)*intermediate1(0,0)<__LBFGS_convergence_threshold__*__LBFGS_convergence_threshold__){
+		__Clean_Arrays__
+//std::cout<<"fuck"<<intermediate1(0,0)<<std::endl;
+		return pXs[0]*0;
+	}
+
 	for (int i=0;i<size;i++){
 		intermediate1=Ys[i].transpose()*Ss[i];
-		if (intermediate1(0,0)<__LBFGS_convergence_threshold__){
-			__Clean_Arrays__
-			return pXs[0]*0;
-		}
 		Rs[i]=1/intermediate1(0,0);
 		intermediate1=Rs[i]*Ss[i].transpose()*q;
 		As[i]=intermediate1(0,0);
@@ -304,9 +309,19 @@ int main(){
 		std::cout<<"Iteration "<<iter<<": current x = "<<X.transpose()<<" current f = "<<(X(0)-2)*(X(0)-2)+(X(1)-3)*(X(1)-3)+X(0)*X(1)<<std::endl;
 		G(0)=2*(X(0)-2)+X(1);
 		G(1)=2*(X(1)-3)+X(0);
-		PushMatrixQueue(X,Xs,size);
-		PushMatrixQueue(G,Gs,size);
+		PushMatrixQueue(X,Xs,size+1);
+		PushMatrixQueue(G,Gs,size+1);
 	}
 	return 0;
 }
 */
+
+#define __small_constant__ 1.e-7
+EigenMatrix AdaGrad(EigenMatrix * pGs,int size){
+	EigenMatrix r=pGs[0]*0;
+	for (int i=0;i<size;i++)
+		r+=pGs[i].cwiseProduct(pGs[i]);
+	const EigenMatrix a=1/(__small_constant__+r.array().sqrt());
+	return -a.cwiseProduct(pGs[0]);
+}
+
