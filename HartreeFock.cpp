@@ -5,20 +5,16 @@
 #include <iostream>
 #include <iomanip>
 #include <omp.h>
-
-#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
-#define EigenZero Eigen::MatrixXd::Zero
-#define EigenOne Eigen::MatrixXd::Identity
-
+#include "Aliases.h"
 #include "Optimization.h"
 
 #define __damping_start_threshold__ 100.
 #define __damping_factor__ 0.25
 #define __adiis_start_iter__ 1
-#define __diis_start_iter__ 5
+#define __diis_start_iter__ 4
 #define __diis_space_size__ 6
-#define __lbfgs_start_threshold__ 1.e-2
-#define __lbfgs_space_size__ 6
+#define __lbfgs_start_threshold__ 1.e-3
+#define __lbfgs_space_size__ 10
 #define __trah_start_iter__ 50
 #define __scf_convergence_energy_threshold__ 1.e-8
 #define __scf_convergence_gradient_threshold__ 1.e-5
@@ -143,10 +139,10 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 	double error2norm=-889464; // |e|^2=Sigma_ij(c_i*c_j*e_i*e_j)
 
 	// L-BFGS preparation
-	EigenMatrix pG=EigenZero(nocc*(nbasis-nocc),1); // Packed form of gradient matrix.
-	EigenMatrix pX=EigenZero(nocc*(nbasis-nocc),1);
-	EigenMatrix * pGs=new EigenMatrix[__lbfgs_space_size__+1];
-	EigenMatrix * pXs=new EigenMatrix[__lbfgs_space_size__+1];
+	EigenVector pG(nocc*(nbasis-nocc)); // Packed form of gradient matrix and NR parametres.
+	EigenVector pX(nocc*(nbasis-nocc));pX.setZero();
+	EigenVector * pGs=new EigenVector[__lbfgs_space_size__+1];
+	EigenVector * pXs=new EigenVector[__lbfgs_space_size__+1];
 	for (int i=0;i<__lbfgs_space_size__;i++){
 		pGs[i]=pG;
 		pXs[i]=pX;
@@ -178,24 +174,23 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 			update='f';
 			F=DIIS(Fs,Gs,iiteration<__diis_space_size__?iiteration:__diis_space_size__,error2norm); // error2norm is updated.
 		}else if ((iiteration>__diis_start_iter__ && pG.norm()<__lbfgs_start_threshold__) || nlbfgs>=0){ // Stopping DIIS for ASOSCF (or simply L-BFGS) in the final part to prevent trailing.
-			EigenMatrix hessiandiag=EigenZero(nocc*(nbasis-nocc),1);
+			EigenVector hessiandiag(nocc*(nbasis-nocc));
 			if (output) std::cout<<"density_update = ASOSCF  ";
 			update='d';
 			if (nlbfgs==-1){
 				firstcoefficients=coefficients;
 				firstcoefficients_inverse=firstcoefficients.inverse();
 			}
-			if (nlbfgs<2){
-				__Loop_Over_OV__
-					hessiandiag(i)=4*(orbitalenergies(v)-orbitalenergies(o));
-				pX-=pG.cwiseProduct(hessiandiag.cwiseInverse());
-			}else pX+=LBFGS(pGs,pXs,nlbfgs+1<__lbfgs_space_size__?nlbfgs+1:__lbfgs_space_size__,hessiandiag);
+			__Loop_Over_OV__
+				hessiandiag(i)=4*(orbitalenergies(v)-orbitalenergies(o));
+			if (nlbfgs<2) pX-=pG.cwiseProduct(hessiandiag.cwiseInverse());
+			else pX+=LBFGS(pGs,pXs,nlbfgs+1<__lbfgs_space_size__?nlbfgs+1:__lbfgs_space_size__,hessiandiag);
 			EigenMatrix A=EigenZero(nbasis,nbasis);
 			__Loop_Over_OV__{
 				A(o,v)=pX(i);
 				A(v,o)=-pX(i);
 			}
-			coefficients=firstcoefficients*(EigenOne(nbasis,nbasis)+A+0.5*A*A+0.166666667*A*A*A);
+			coefficients=firstcoefficients*(EigenOne(nbasis,nbasis)+A+0.5*A*A+0.16666666666666666667*A*A*A+0.04166666666666666667*A*A*A*A);
 			const EigenMatrix C_occ=coefficients.leftCols(nocc);
 			density=C_occ*C_occ.transpose();
 			nlbfgs++;
@@ -216,8 +211,8 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 
 		const EigenMatrix Fmo=coefficients.transpose()*F*coefficients;
 		__Loop_Over_OV__ pG(i)=-4*Fmo(o,v);
-		PushMatrixQueue(pG,pGs,__lbfgs_space_size__+1); // Updating packed gradient matrix.
-		PushMatrixQueue(pX,pXs,__lbfgs_space_size__+1);
+		PushVectorQueue(pG,pGs,__lbfgs_space_size__+1); // Updating packed gradient matrix.
+		PushVectorQueue(pX,pXs,__lbfgs_space_size__+1);
 
 		if (update=='d'){__Fock_2_Density__} // Some techniques update Fock matrix. To complete the iteration, we obtain density matrix from it.
 
@@ -246,8 +241,8 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		Ds[i].resize(0,0);
 	}
 	for (int i=0;i<__lbfgs_space_size__;i++){
-		pGs[i].resize(0,0);
-		pXs[i].resize(0,0);
+		pGs[i].resize(0);
+		pXs[i].resize(0);
 	}
 	delete [] Fs;
 	delete [] Gs;

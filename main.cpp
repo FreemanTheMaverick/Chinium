@@ -1,11 +1,7 @@
 #include <Eigen/Dense>
 #include <string>
 #include <iostream>
-
-#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
-#define EigenZero Eigen::MatrixXd::Zero
-#define EigenOne Eigen::MatrixXd::Identity
-
+#include "Aliases.h"
 #include "Gateway.h"
 #include "AtomicIntegrals.h"
 #include "HartreeFock.h"

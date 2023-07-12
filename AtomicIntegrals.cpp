@@ -4,8 +4,7 @@
 #include <ctime>
 #include <iostream>
 #include <omp.h>
-
-#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
+#include "Aliases.h"
 
 #define __integral_threshold__ -1.e-12
 
@@ -376,26 +375,4 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 	time_t end=time(0);
 	if (output) std::cout<<"done "<<end-start<<" s"<<std::endl;
 }
-
-
-/*
-void SaveHDF5(hid_t file,int n1integrals,double * matrix,char * title){
-	hsize_t dims[1]={(long long unsigned int)n1integrals};
-	hid_t space=H5Screate_simple(1,dims,NULL);
-	hid_t dcpl=H5Pcreate(H5P_DATASET_CREATE);
-	H5Pset_layout(dcpl,H5D_COMPACT);
-	hid_t dset=H5Dcreate(file,title,H5T_NATIVE_DOUBLE,space,H5P_DEFAULT,dcpl,H5P_DEFAULT);
-	H5Dwrite(dset,H5T_NATIVE_DOUBLE,H5S_ALL,H5S_ALL,H5P_DEFAULT,matrix);
-	H5Dclose(dset);
-	H5Pclose(dcpl);
-	H5Sclose(space);
-}
-	hid_t file=H5Fcreate("_atomicintegrals.h5",H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
-	SaveHDF5(file,n1integrals,overlap,(char *)"overlap");
-	SaveHDF5(file,n1integrals,kinetic,(char *)"kinetic");
-	SaveHDF5(file,n1integrals,nuclear,(char *)"nuclear");
-	SaveHDF5(file,n1integrals,repulsiondiag,(char *)"repulsiondiag");
-	H5Fclose(file);
-*/
-
 

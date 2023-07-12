@@ -2,10 +2,7 @@
 #include <map>
 #include <vector>
 #include <iostream>
-
-#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
-#define EigenZero Eigen::MatrixXd::Zero
-
+#include "Aliases.h"
 #include "AtomicIntegrals.h"
 #include "HartreeFock.h"
 

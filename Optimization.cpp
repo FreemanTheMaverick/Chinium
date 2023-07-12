@@ -1,27 +1,29 @@
 #include <Eigen/Dense>
 #include <iostream>
-
-#define EigenMatrix Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>
-#define EigenZero Eigen::MatrixXd::Zero
-#define EigenOne Eigen::MatrixXd::Identity
-
+#include "Aliases.h"
 #include "OSQP.h"
 
 #define __DIIS_determinant_threshold__ -1.e-50
 #define __minimum_DIIS_space__ 5
 #define __LBFGS_convergence_threshold__ -1.e-50
 
+#define __Push_Queue__\
+	for (int i=size-1;i>0;i--)\
+		Ms[i]=Ms[i-1];\
+	Ms[0]=M;
+
+void PushVectorQueue(EigenVector M,EigenVector * Ms,int size){
+	Ms[size-1].resize(0);
+	__Push_Queue__
+}
+
 void PushMatrixQueue(EigenMatrix M,EigenMatrix * Ms,int size){
-        Ms[size-1].resize(0,0);
-        for (int i=size-1;i>0;i--)
-                Ms[i]=Ms[i-1];
-        Ms[0]=M;
+	Ms[size-1].resize(0,0);
+	__Push_Queue__
 }
 
 void PushDoubleQueue(double M,double * Ms,int size){
-        for (int i=size-1;i>0;i--)
-                Ms[i]=Ms[i-1];
-        Ms[0]=M;
+	__Push_Queue__
 }
 
 EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int maxsize,double & error2norm){
@@ -224,56 +226,46 @@ int main(){ // Testing OSQP related functions.
 
 #define __Clean_Arrays__\
 	for (int j=0;j<size;j++){\
-		Ys[j].resize(0,0);\
-		Ss[j].resize(0,0);\
+		Ys[j].resize(0);\
+		Ss[j].resize(0);\
 	}\
 	delete [] Ys;\
 	delete [] Ss;\
 	delete [] Rs;\
 	delete [] As;
 
-EigenMatrix LBFGS(EigenMatrix * pGs,EigenMatrix * pXs,int size,EigenMatrix hessiandiag){ // pGs - packed gradients
-	EigenMatrix * Ys=new EigenMatrix[size];
-	EigenMatrix * Ss=new EigenMatrix[size];
+EigenVector LBFGS(EigenVector * pGs,EigenVector * pXs,int size,EigenVector hessiandiag){ // pGs - packed gradients
+	EigenVector * Ys=new EigenVector[size];
+	EigenVector * Ss=new EigenVector[size];
 	for (int i=0;i<size;i++){
 		Ys[i]=pGs[i]-pGs[i+1];
 		Ss[i]=pXs[i]-pXs[i+1];
 	}
-	EigenMatrix Y=Ys[0];
-	EigenMatrix S=Ss[0];
-	EigenMatrix q=pGs[0];
+	EigenVector Y=Ys[0];
+	EigenVector S=Ss[0];
+	EigenVector q=pGs[0];
 	double * Rs=new double[size];
 	double * As=new double[size];
-	EigenMatrix intermediate1;
-	EigenMatrix intermediate2;
 
-	intermediate1=Ys[0].transpose()*Ss[0];
-	if (intermediate1(0,0)*intermediate1(0,0)<__LBFGS_convergence_threshold__*__LBFGS_convergence_threshold__){
+	if (abs(Ys[0].dot(Ss[0]))<__LBFGS_convergence_threshold__){
 		__Clean_Arrays__
-//std::cout<<"fuck"<<intermediate1(0,0)<<std::endl;
 		return pXs[0]*0;
 	}
 
 	for (int i=0;i<size;i++){
-		intermediate1=Ys[i].transpose()*Ss[i];
-		Rs[i]=1/intermediate1(0,0);
-		intermediate1=Rs[i]*Ss[i].transpose()*q;
-		As[i]=intermediate1(0,0);
+		Rs[i]=1/Ys[i].dot(Ss[i]);
+		As[i]=Rs[i]*Ss[i].dot(q);
 		q-=As[i]*Ys[i];
 	}
-	intermediate1=Ss[0].transpose()*Ys[0];
-	intermediate2=Ys[0].transpose()*Ys[0];
-	double r=intermediate1(0,0)/intermediate2(0,0);
-	EigenMatrix z;
+	double r=Ss[0].dot(Ys[0])/Ys[0].dot(Ys[0]);
+	EigenVector z;
 	if (hessiandiag(0)==0) z=-r*q;
 	else{
-		intermediate1=-hessiandiag.cwiseInverse();
-		z=intermediate1.cwiseProduct(q);
+		const EigenVector inversehessiandiag=hessiandiag.cwiseInverse();
+		z=-inversehessiandiag.cwiseProduct(q);
 	}	
-	for (int i=size-1;i>=0;i--){
-		intermediate1=-Rs[i]*Ys[i].transpose()*z;
-		z-=Ss[i]*(As[i]-intermediate1(0,0));
-	}
+	for (int i=size-1;i>=0;i--)
+		z-=Ss[i]*(As[i]+Rs[i]*Ys[i].dot(z));
 	__Clean_Arrays__
 	return z;
 }
@@ -288,10 +280,10 @@ EigenMatrix LBFGS(EigenMatrix * pGs,EigenMatrix * pXs,int size,EigenMatrix hessi
 int main(){
 	int size=3;
 	int dimension=2;
-	EigenMatrix * Xs=new EigenMatrix[size+1];
-	EigenMatrix * Gs=new EigenMatrix[size+1];
-	EigenMatrix X(2,1);
-	EigenMatrix G(2,1);
+	EigenVector * Xs=new EigenVector[size+1];
+	EigenVector * Gs=new EigenVector[size+1];
+	EigenVector X(2,1);
+	EigenVector G(2,1);
 	for (int i=size;i>=0;i--){
 		X(0)=17*i;X(1)=7*i;
 		G(0)=2*(X(0)-2)+X(1);G(1)=2*(X(1)-3)+X(0);
@@ -300,21 +292,56 @@ int main(){
 	}
 	std::cout<<"Iteration 0: current x = "<<X.transpose()<<" current f = "<<(X(0)-2)*(X(0)-2)+(X(1)-3)*(X(1)-3)+X(0)*X(1)<<std::endl;
 	for (int iter=1;iter<10;iter++){
-		EigenMatrix hessiandiag;
+		EigenVector hessiandiag;
 		if (iter==1){
-			EigenMatrix tmp=EigenOne(dimension,dimension);
+			EigenVector tmp=EigenOne(dimension,dimension);
 			hessiandiag=tmp.diagonal();
 		}else hessiandiag=EigenZero(dimension,1);
 		X+=LBFGS(Gs,Xs,size<iter+1?size:iter+1,hessiandiag);
 		std::cout<<"Iteration "<<iter<<": current x = "<<X.transpose()<<" current f = "<<(X(0)-2)*(X(0)-2)+(X(1)-3)*(X(1)-3)+X(0)*X(1)<<std::endl;
 		G(0)=2*(X(0)-2)+X(1);
 		G(1)=2*(X(1)-3)+X(0);
-		PushMatrixQueue(X,Xs,size+1);
-		PushMatrixQueue(G,Gs,size+1);
+		PushVectorQueue(X,Xs,size+1);
+		PushVectorQueue(G,Gs,size+1);
 	}
 	return 0;
 }
 */
+
+EigenVector FABFGS(EigenVector * pGs,EigenVector * pXs,int size,EigenVector hessiandiag){ // A variant of BFGS proposed in https://pubs.acs.org/doi/10.1021/j100203a036 .
+	EigenVector w=pGs[0].cwiseProduct(hessiandiag.cwiseInverse());
+	if (size==1) return w;
+	EigenVector * DELTAs=new EigenVector[size];
+	EigenVector * Deltas=new EigenVector[size];
+	EigenVector * Ys=new EigenVector[size];
+	for (int i=0;i<size;i++){
+		DELTAs[i]=pGs[i]-pGs[i+1];
+		Deltas[i]=pXs[i]-pXs[i+1];
+		Ys[i]=DELTAs[i].cwiseProduct(hessiandiag.cwiseInverse());
+	}
+	for (int i=size-1;0<i;i--){
+		const double s1=1/Deltas[i].dot(DELTAs[i]);
+		const double s2=1/DELTAs[i].dot(Ys[i]);
+		const double s3=Deltas[i].dot(pGs[0]);
+		const double s4=Ys[i].dot(pGs[0]);
+		const double s5=Deltas[i].dot(DELTAs[0]);
+		const double s6=Ys[i].dot(DELTAs[0]);
+		const double t1=(1+s1/s2)*s1*s3-s1*s4;
+		const double t2=s1*s3;
+		const double t3=(1+s1/s2)*s1*s5-s1*s6;
+		const double t4=s1*s5;
+		w+=t1*Deltas[i]-t2*Ys[i];
+		Ys[0]+=t3*Deltas[i]-t4*Ys[i];
+	}
+	const double s1=1/Deltas[0].dot(DELTAs[0]);
+	const double s2=1/DELTAs[0].dot(Ys[0]);
+	const double s3=Deltas[0].dot(pGs[0]);
+	const double s4=Ys[0].dot(pGs[0]);
+	const double t1=(1+s1/s2)*s1*s3-s1*s4;
+	const double t2=s1*s3;
+	w+=t1*Deltas[0]-t2*Ys[0];
+	return w;
+}
 
 #define __small_constant__ 1.e-7
 EigenMatrix AdaGrad(EigenMatrix * pGs,int size){
@@ -324,4 +351,3 @@ EigenMatrix AdaGrad(EigenMatrix * pGs,int size){
 	const EigenMatrix a=1/(__small_constant__+r.array().sqrt());
 	return -a.cwiseProduct(pGs[0]);
 }
-
