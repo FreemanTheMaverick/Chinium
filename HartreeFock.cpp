@@ -175,7 +175,8 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 			F=DIIS(Fs,Gs,iiteration<__diis_space_size__?iiteration:__diis_space_size__,error2norm); // error2norm is updated.
 		}else if ((iiteration>__diis_start_iter__ && pG.norm()<__lbfgs_start_threshold__) || nlbfgs>=0){ // Stopping DIIS for ASOSCF (or simply L-BFGS) in the final part to prevent trailing.
 			EigenVector hessiandiag(nocc*(nbasis-nocc));
-			if (output) std::cout<<"density_update = ASOSCF  ";
+			hessiandiag.setZero();
+			if (output) std::cout<<"density_update = FA-BFGS  ";
 			update='d';
 			if (nlbfgs==-1){
 				firstcoefficients=coefficients;
@@ -184,7 +185,7 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 			__Loop_Over_OV__
 				hessiandiag(i)=4*(orbitalenergies(v)-orbitalenergies(o));
 			if (nlbfgs<2) pX-=pG.cwiseProduct(hessiandiag.cwiseInverse());
-			else pX+=LBFGS(pGs,pXs,nlbfgs+1<__lbfgs_space_size__?nlbfgs+1:__lbfgs_space_size__,hessiandiag);
+			else pX+=FABFGS(pGs,pXs,nlbfgs+1<__lbfgs_space_size__?nlbfgs+1:__lbfgs_space_size__,hessiandiag);
 			EigenMatrix A=EigenZero(nbasis,nbasis);
 			__Loop_Over_OV__{
 				A(o,v)=pX(i);

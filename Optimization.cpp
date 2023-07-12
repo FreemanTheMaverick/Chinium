@@ -310,7 +310,7 @@ int main(){
 
 EigenVector FABFGS(EigenVector * pGs,EigenVector * pXs,int size,EigenVector hessiandiag){ // A variant of BFGS proposed in https://pubs.acs.org/doi/10.1021/j100203a036 .
 	EigenVector w=pGs[0].cwiseProduct(hessiandiag.cwiseInverse());
-	if (size==1) return w;
+	if (size==1) return -w;
 	EigenVector * DELTAs=new EigenVector[size];
 	EigenVector * Deltas=new EigenVector[size];
 	EigenVector * Ys=new EigenVector[size];
@@ -340,7 +340,12 @@ EigenVector FABFGS(EigenVector * pGs,EigenVector * pXs,int size,EigenVector hess
 	const double t1=(1+s1/s2)*s1*s3-s1*s4;
 	const double t2=s1*s3;
 	w+=t1*Deltas[0]-t2*Ys[0];
-	return w;
+	for (int i=0;i<size;i++){
+		DELTAs[i].resize(0);
+		Deltas[i].resize(0);
+		Ys[i].resize(0);
+	}
+	return -w;
 }
 
 #define __small_constant__ 1.e-7
