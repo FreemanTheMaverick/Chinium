@@ -6,6 +6,7 @@
 #include "AtomicIntegrals.h"
 #include "HartreeFock.h"
 #include "InitialGuess.h"
+#include "GridIntegrals.h"
 
 int main(int argc,char *argv[]){
 
@@ -39,7 +40,7 @@ int main(int argc,char *argv[]){
 	short int * indices=new short int[n2integrals*5];
 	Repulsion(natoms,atoms,basisset,nshellquartets,repulsiondiag,repulsion,indices,nprocs,1);
 
-	EigenMatrix orbitalenergies(1,nbasis);
+	EigenVector orbitalenergies(nbasis);
 	EigenMatrix coefficients(nbasis,nbasis);
 
 	double energy=RHF(ne,overlap,hcore,repulsion,indices,n2integrals,orbitalenergies,coefficients,densitymatrix,nprocs,1);
@@ -49,7 +50,9 @@ int main(int argc,char *argv[]){
 	delete [] indices;
 
 	std::cout<<"*** Chinium terminated normally ***"<<std::endl;
-
+double overheadlength=2;
+double griddensity=30;
+std::cout<<UniformBoxGridDensity(natoms,atoms,basisset,densitymatrix,overheadlength,griddensity)<<std::endl;
 	return 0;
 }
 

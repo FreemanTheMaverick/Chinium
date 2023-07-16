@@ -13,7 +13,7 @@
 #define __adiis_start_iter__ 1
 #define __diis_start_iter__ 4
 #define __diis_space_size__ 6
-#define __lbfgs_start_threshold__ 1.e-3
+#define __lbfgs_start_threshold__ -1.e-3
 #define __lbfgs_space_size__ 10
 #define __trah_start_iter__ 50
 #define __scf_convergence_energy_threshold__ 1.e-8
@@ -103,9 +103,9 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	std::cout<<'x'<<std::endl;\
 	std::cout<<x<<std::endl;\
 	std::cout<<'g'<<std::endl;\
-	std::cout<<g<<std::endl;\
+	std::cout<<g<<std::endl;
 
-double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,short int * indices,long int n2integrals,EigenMatrix & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,const int nprocs,const bool output){
+double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,short int * indices,long int n2integrals,EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,const int nprocs,const bool output){
 	if (output) std::cout<<"Restricted Hartree-Fock ..."<<std::endl;
 
 	// General preparation
@@ -147,7 +147,7 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		pGs[i]=pG;
 		pXs[i]=pX;
 	}
-	EigenMatrix firstcoefficients,firstcoefficients_inverse;
+	EigenMatrix firstcoefficients;
 	int nlbfgs=-1;
 
 	// RHF-SCF iterations
@@ -176,16 +176,15 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		}else if ((iiteration>__diis_start_iter__ && pG.norm()<__lbfgs_start_threshold__) || nlbfgs>=0){ // Stopping DIIS for ASOSCF (or simply L-BFGS) in the final part to prevent trailing.
 			EigenVector hessiandiag(nocc*(nbasis-nocc));
 			hessiandiag.setZero();
-			if (output) std::cout<<"density_update = FA-BFGS  ";
+			if (output) std::cout<<"density_update = L-BFGS  ";
 			update='d';
-			if (nlbfgs==-1){
+			if (nlbfgs==-1)
 				firstcoefficients=coefficients;
-				firstcoefficients_inverse=firstcoefficients.inverse();
-			}
-			__Loop_Over_OV__
-				hessiandiag(i)=4*(orbitalenergies(v)-orbitalenergies(o));
+			if (nlbfgs<2)
+				__Loop_Over_OV__
+					hessiandiag(i)=4*(orbitalenergies(v)-orbitalenergies(o));
 			if (nlbfgs<2) pX-=pG.cwiseProduct(hessiandiag.cwiseInverse());
-			else pX+=FABFGS(pGs,pXs,nlbfgs+1<__lbfgs_space_size__?nlbfgs+1:__lbfgs_space_size__,hessiandiag);
+			else pX+=LBFGS(pGs,pXs,nlbfgs+1<__lbfgs_space_size__?nlbfgs+1:__lbfgs_space_size__,hessiandiag);
 			EigenMatrix A=EigenZero(nbasis,nbasis);
 			__Loop_Over_OV__{
 				A(o,v)=pX(i);

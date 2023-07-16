@@ -14,8 +14,8 @@ OSQPFlags=-I$(OSQP)/include/osqp -L$(OSQP)/lib64 -losqpstatic -lm
 
 .PHONY: all
 
-all: main Gateway InitialGuess AtomicIntegrals HartreeFock Optimization OSQP LinearAlgebra
-	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags)
+all: main Gateway InitialGuess Libint2 AtomicIntegrals HartreeFock Optimization OSQP LinearAlgebra GridIntegrals
+	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags)
 
 main: main.cpp
 	$(CXX) main.cpp -c $(GeneralFlags) $(EIGEN3Flags)
@@ -25,6 +25,9 @@ Gateway: Gateway.cpp
 
 InitialGuess: InitialGuess.cpp
 	$(CXX) InitialGuess.cpp -c $(GeneralFlags) $(EIGEN3Flags)
+
+Libint2: Libint2.cpp
+	$(CXX) Libint2.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags)
 
 AtomicIntegrals: AtomicIntegrals.cpp
 	$(CXX) AtomicIntegrals.cpp -c -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags)
@@ -41,8 +44,11 @@ OSQP: OSQP.c
 LinearAlgebra: LinearAlgebra.cpp
 	$(CXX) LinearAlgebra.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
-LD: main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o
-	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags)
+GridIntegrals: GridIntegrals.cpp
+	$(CXX) GridIntegrals.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags)
+
+LD:
+	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags)
 
 
 

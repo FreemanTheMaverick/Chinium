@@ -234,15 +234,14 @@ int main(){ // Testing OSQP related functions.
 	delete [] Rs;\
 	delete [] As;
 
+[[deprecated("L-BFGS is an inefficient SCF optimizer in this version.")]]
 EigenVector LBFGS(EigenVector * pGs,EigenVector * pXs,int size,EigenVector hessiandiag){ // pGs - packed gradients
-	EigenVector * Ys=new EigenVector[size];
 	EigenVector * Ss=new EigenVector[size];
+	EigenVector * Ys=new EigenVector[size];
 	for (int i=0;i<size;i++){
 		Ys[i]=pGs[i]-pGs[i+1];
 		Ss[i]=pXs[i]-pXs[i+1];
 	}
-	EigenVector Y=Ys[0];
-	EigenVector S=Ss[0];
 	EigenVector q=pGs[0];
 	double * Rs=new double[size];
 	double * As=new double[size];
@@ -308,6 +307,7 @@ int main(){
 }
 */
 
+[[deprecated("FA-BFGS is an inefficient SCF optimizer in this version.")]]
 EigenVector FABFGS(EigenVector * pGs,EigenVector * pXs,int size,EigenVector hessiandiag){ // A variant of BFGS proposed in https://pubs.acs.org/doi/10.1021/j100203a036 .
 	EigenVector w=pGs[0].cwiseProduct(hessiandiag.cwiseInverse());
 	if (size==1) return -w;

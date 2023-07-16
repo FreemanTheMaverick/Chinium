@@ -5,21 +5,9 @@
 #include <iostream>
 #include <omp.h>
 #include "Aliases.h"
+#include "Libint2.h"
 
 #define __integral_threshold__ -1.e-12
-
-std::vector<libint2::Atom> Libint2Atoms(const int natoms,double * atoms){ // Converting atoms array to libint's std::vector<libint2::Atom>.
-	std::vector<libint2::Atom> libint2atoms(natoms);
-	for (int iatom=0;iatom<natoms;iatom++){
-		libint2::Atom atomi;
-		atomi.atomic_number=(int)atoms[iatom*4];
-		atomi.x=atoms[iatom*4+1];
-		atomi.y=atoms[iatom*4+2];
-		atomi.z=atoms[iatom*4+3];
-		libint2atoms[iatom]=atomi;
-	}
-	return libint2atoms;
-}
 
 double NuclearRepulsion(const int natoms,double * atoms,const bool output){
 	double nuclearrepulsion=0;
@@ -39,14 +27,6 @@ double NuclearRepulsion(const int natoms,double * atoms,const bool output){
 	}
 	if (output) std::cout<<"Nuclear repulsion energy ... "<<nuclearrepulsion<<" a.u."<<std::endl;
 	return nuclearrepulsion;
-}
-
-int nBasis_from_obs(libint2::BasisSet obs){ // Size of basis set directly derived from libint2::BasisSet.
-	int n=0;
-	for (const auto& shell:obs){
-		n=n+shell.size();
-	}
-	return n;
 }
 
 int nBasis(const int natoms,double * atoms,const char * basisset,const bool output){ // Size of basis set.
