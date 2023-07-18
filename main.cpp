@@ -50,8 +50,8 @@ int main(int argc,char *argv[]){
 	delete [] indices;
 
 	std::cout<<"*** Chinium terminated normally ***"<<std::endl;
-double overheadlength=2;
-double griddensity=30;
+double overheadlength=6;
+double griddensity=20;
 std::cout<<UniformBoxGridDensity(natoms,atoms,basisset,densitymatrix,overheadlength,griddensity)<<std::endl;
 	return 0;
 }

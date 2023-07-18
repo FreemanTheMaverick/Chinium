@@ -7,7 +7,7 @@ LIBINT2=/home/yzhangnn/libint_2.7.1
 # The path where you can find "include/" and "lib64/".
 OSQP=/home/yzhangnn/osqp_0.6.3
 
-GeneralFlags=-Wall -O2
+GeneralFlags=-Wall -O3
 EIGEN3Flags=-I$(EIGEN3) -mavx2
 LIBINT2Flags=-I$(LIBINT2)/include -L$(LIBINT2)/lib -lint2
 OSQPFlags=-I$(OSQP)/include/osqp -L$(OSQP)/lib64 -losqpstatic -lm

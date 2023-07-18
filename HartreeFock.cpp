@@ -42,16 +42,16 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 		long int iintfirst=iintfirstperthread[iproc];
 		double * repulsionranger=repulsion+iintfirst;
 		short int * indicesranger=indices+iintfirst*5;
+		short int a,b,c,d;
+		double deg_value;
 
 		// Without SIMD
 		for (long int i=0;i<nints;i++){ // Manual loop unrolling does not help.
-			const short int a=*(indicesranger++); // Moving the ranger pointer to the right, where the next index is located.
-			const short int b=*(indicesranger++);
-			const short int c=*(indicesranger++);
-			const short int d=*(indicesranger++); // Moving the ranger pointer to the right, where the degeneracy factor is located.
-			const short int deg=*(indicesranger++);
-			const double value=*(repulsionranger++); // Moving the ranger pointer to the right, where the next integral is located.
-			const double deg_value=deg*value;
+			a=*(indicesranger++); // Moving the ranger pointer to the right, where the next index is located.
+			b=*(indicesranger++);
+			c=*(indicesranger++);
+			d=*(indicesranger++); // Moving the ranger pointer to the right, where the degeneracy factor is located.
+			deg_value=*(indicesranger++)**(repulsionranger++); // Moving the ranger pointer to the right, where the next integral is located.
 			rawjs[iproc](a,b)+=density(c,d)*deg_value;
 			rawjs[iproc](c,d)+=density(a,b)*deg_value;
 			rawks[iproc](a,c)+=density(b,d)*deg_value;

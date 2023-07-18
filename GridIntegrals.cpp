@@ -9,29 +9,35 @@ void CalculateDensity(double * xxx,double * yyy,double * zzz,long int size,Eigen
 	const int nbasis=nBasis_from_obs(obs);
 	const auto shell2bf=obs.shell2bf();
 	double x,y,z,xx,yy,zz,r2,a,result,phi[8192]; // Basis function values;
-	int n;
+	int two_l_plus_one,nprims; // These in-loop variables had better be declared outside the loop. Tests showed that the codes as such are faster than those otherwise.
 	EigenVector Di_times_phii;
+	/*libint2::Shell shell;
+	libint2::Shell::Contraction contraction; Do not use these codes and those marked with "SLOW" below, which slow down the iterations! */
 	double * x_ranger=xxx;
 	double * y_ranger=yyy;
 	double * z_ranger=zzz;
 	double * phi_ranger;
 	double * result_ranger=results;
-	for (long int k=0;k<size;k++){
+	for (long int k=0;k<size;++k){
 		xx=*(x_ranger++);
 		yy=*(y_ranger++);
 		zz=*(z_ranger++);
 		result=0;
 		phi_ranger=phi;
-		for (int s=0;s<(int)obs.size();s++){
-			n=obs[s].size();
-			x=xx-obs[s].O[0]; // Coordintes with the origin at the centre of the shell.
-			y=yy-obs[s].O[1];
-			z=zz-obs[s].O[2];
+		for (const libint2::Shell & shell:obs){
+		/*for (int s=0;s<obs.size();s++){ // SLOW
+			shell=obs[s];
+			contraction=shell.contr[0]; // Do not use these codes, which slow down the iterations! */
+			two_l_plus_one=shell.size();
+			nprims=shell.nprim();
+			x=xx-shell.O[0]; // Coordintes with the origin at the centre of the shell.
+			y=yy-shell.O[1];
+			z=zz-shell.O[2];
 			r2=x*x+y*y+z*z;
 			a=0;
-			for (int iprim=0;iprim<(int)obs[s].nprim();iprim++) // Looping over primitive gaussians.
-				a+=obs[s].contr[0].coeff[iprim]*std::exp(-obs[s].alpha[iprim]*r2); // Each primitive gaussian contributes to the radial parts of basis functions.
-			switch(n){ // Basis function values are the products of the radial parts and the spherical harmonic parts.
+			for (int iprim=0;iprim<nprims;++iprim) // Looping over primitive gaussians.
+				a+=shell.contr[0].coeff[iprim]*std::exp(-shell.alpha[iprim]*r2); // Each primitive gaussian contributes to the radial parts of basis functions.
+			switch(two_l_plus_one){ // Basis function values are the products of the radial parts and the spherical harmonic parts.
 				case 1: // S
 					*(phi_ranger++)=a;
 					break;
@@ -40,7 +46,7 @@ void CalculateDensity(double * xxx,double * yyy,double * zzz,long int size,Eigen
 					*(phi_ranger++)=a*y;
 					*(phi_ranger++)=a*z;
 					break;
-				case 5: // D
+				case 5: // D rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API
 					*(phi_ranger++)=a*x*y*sqrt(3);
 					*(phi_ranger++)=a*y*z*sqrt(3);
 					*(phi_ranger++)=a*(3*z*z-r2)*0.5;
@@ -84,7 +90,7 @@ void CalculateDensity(double * xxx,double * yyy,double * zzz,long int size,Eigen
 }
 
 [[deprecated("This function is for test only.")]]
-double UniformBoxGridDensity(const int natoms,double * atoms,const char * basisset,EigenMatrix D,double overheadlength,int griddensity){
+double UniformBoxGridDensity(const int natoms,double * atoms,const char * basisset,EigenMatrix D,double overheadlength,double griddensity){
 	const std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
 	const libint2::BasisSet obs(basisset,libint2atoms);
 	double xu=-10000;
@@ -113,9 +119,9 @@ double UniformBoxGridDensity(const int natoms,double * atoms,const char * basiss
 	const double xlength=xu-xl;
 	const double ylength=yu-yl;
 	const double zlength=zu-zl;
-	const int nx=int(xlength*griddensity);
-	const int ny=int(ylength*griddensity);
-	const int nz=int(zlength*griddensity);
+	const int nx=int(xlength*griddensity)+1;
+	const int ny=int(ylength*griddensity)+1;
+	const int nz=int(zlength*griddensity)+1;
 	double * xx=new double[nx*ny*nz];double * x_ranger=xx;
 	double * yy=new double[nx*ny*nz];double * y_ranger=yy;
 	double * zz=new double[nx*ny*nz];double * z_ranger=zz;
@@ -137,7 +143,7 @@ double UniformBoxGridDensity(const int natoms,double * atoms,const char * basiss
 	double nele=0;
 	for (long int i=0;i<nx*ny*nz;i++)
 		nele+=*(result_ranger++);
-	nele/=griddensity*griddensity*griddensity;
+	nele*=2./griddensity/griddensity/griddensity;
 	delete [] xx;
 	delete [] yy;
 	delete [] zz;
