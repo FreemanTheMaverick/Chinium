@@ -50,9 +50,22 @@ int main(int argc,char *argv[]){
 	delete [] indices;
 
 	std::cout<<"*** Chinium terminated normally ***"<<std::endl;
+
 double overheadlength=6;
-double griddensity=20;
-std::cout<<UniformBoxGridDensity(natoms,atoms,basisset,densitymatrix,overheadlength,griddensity)<<std::endl;
+double spacing=0.1;
+long int ngrids=UniformBoxGridNumber(natoms,atoms,basisset,overheadlength,spacing);
+double * xs=new double[ngrids];
+double * ys=new double[ngrids];
+double * zs=new double[ngrids];
+double * aos=new double[ngrids*nbasis];
+double * dens=new double[ngrids];
+UniformBoxGrid(natoms,atoms,basisset,overheadlength,spacing,xs,ys,zs);
+GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,aos);
+GetDensity(aos,ngrids,densitymatrix,dens);
+std::cout<<GetNumElectrons(dens,ngrids,spacing)<<std::endl;
+//int n=2000020;
+//std::cout<<xs[n]<<" "<<ys[n]<<" "<<zs[n]<<" "<<dens[n]<<std::endl;
+//for (int i=0;i<nbasis;i++) std::cout<<aos[ngrids*i+n]<<std::endl;
 	return 0;
 }
 
