@@ -1,16 +1,21 @@
 CXX=g++
 CC=gcc
 # The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
-EIGEN3=/home/yzhangnn/eigen3/include/eigen3
+EIGEN3=/usr/include/eigen3
 # The path where you can find "include/", "lib/" and "share/".
-LIBINT2=/home/yzhangnn/libint_2.7.1
+LIBINT2=/home/freeman/libint_2.7.2
 # The path where you can find "include/" and "lib64/".
-OSQP=/home/yzhangnn/osqp_0.6.3
+OSQP=/home/freeman/osqp/osqp-1.0.0.beta1
+# The path where you can fine "bin/", "include/" and "lib/".
+LIBXC=/home/freeman/libxc_6.2.2
 
 GeneralFlags=-Wall -O3
 EIGEN3Flags=-I$(EIGEN3) -mavx2
 LIBINT2Flags=-I$(LIBINT2)/include -L$(LIBINT2)/lib -lint2
-OSQPFlags=-I$(OSQP)/include/osqp -L$(OSQP)/lib64 -losqpstatic -lm
+OSQPFlags=-I$(OSQP)/include/public -I$(OSQP)/build/include/public -L$(OSQP)/build/out -losqpstatic -lm
+LIBXCFlags=-I$(LIBXC)/include -L$(LIBXC)/lib -lxc
+
+DFLib='-D__DF_library_path__="$(PWD)/DensityFunctionals/"'
 
 .PHONY: all
 
@@ -47,13 +52,16 @@ LinearAlgebra: LinearAlgebra.cpp
 GridIntegrals: GridIntegrals.cpp
 	$(CXX) GridIntegrals.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags)
 
+DensityFunctional: DensityFunctional.cpp
+	$(CXX) DensityFunctional.cpp -c $(GeneralFlags) $(LIBXCFlags) $(DFLib)
+
 LD:
 	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags)
 
 
 
-ld: OSQP.o Optimization.o
-	$(CXX) Optimization.o OSQP.o $(GeneralFlags) $(EIGEN3Flags) $(OSQPFlags)
+ld: DensityFunctional.o
+	$(CXX) DensityFunctional.o $(GeneralFlags) $(LIBXCFlags)
 
 
 
