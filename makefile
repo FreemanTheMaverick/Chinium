@@ -1,18 +1,17 @@
 CXX=g++
-CC=gcc
 # The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
-EIGEN3=/usr/include/eigen3
+EIGEN3=/home/yzhangnn/eigen3/include/eigen3
 # The path where you can find "include/", "lib/" and "share/".
-LIBINT2=/home/freeman/libint_2.7.2
+LIBINT2=/home/yzhangnn/libint_2.7.1
 # The path where you can find "include/" and "lib64/".
-OSQP=/home/freeman/osqp/osqp-1.0.0.beta1
+OSQP=/home/yzhangnn/osqp_0.6.3
 # The path where you can fine "bin/", "include/" and "lib/".
 LIBXC=/home/freeman/libxc_6.2.2
 
 GeneralFlags=-Wall -O3
 EIGEN3Flags=-I$(EIGEN3) -mavx2
 LIBINT2Flags=-I$(LIBINT2)/include -L$(LIBINT2)/lib -lint2
-OSQPFlags=-I$(OSQP)/include/public -I$(OSQP)/build/include/public -L$(OSQP)/build/out -losqpstatic -lm
+OSQPFlags=-I$(OSQP)/include/osqp -L$(OSQP)/lib64 -losqpstatic
 LIBXCFlags=-I$(LIBXC)/include -L$(LIBXC)/lib -lxc
 
 DFLib='-D__DF_library_path__="$(PWD)/DensityFunctionals/"'
@@ -43,8 +42,8 @@ HartreeFock: HartreeFock.cpp
 Optimization: Optimization.cpp
 	$(CXX) Optimization.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
-OSQP: OSQP.c
-	$(CC) OSQP.c -c $(GeneralFlags) $(OSQPFlags)
+OSQP: OSQP.cpp
+	$(CXX) OSQP.cpp -c $(GeneralFlags) $(OSQPFlags)
 
 LinearAlgebra: LinearAlgebra.cpp
 	$(CXX) LinearAlgebra.cpp -c $(GeneralFlags) $(EIGEN3Flags)
@@ -77,4 +76,3 @@ Symmetry/OrbitalTransformation:Symmetry/OrbitalTransformation.cpp
 
 Parser:Parser.cpp
 	icpc Parser.cpp -c -Wall -O2
-
