@@ -44,7 +44,8 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 		short int * indicesranger=indices+iintfirst*5;
 		short int a,b,c,d;
 		double deg_value;
-
+		EigenMatrix * thisrawj=&rawjs[iproc];
+		EigenMatrix * thisrawk=&rawks[iproc];
 		// Without SIMD
 		for (long int i=0;i<nints;i++){ // Manual loop unrolling does not help.
 			a=*(indicesranger++); // Moving the ranger pointer to the right, where the next index is located.
@@ -52,12 +53,12 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 			c=*(indicesranger++);
 			d=*(indicesranger++); // Moving the ranger pointer to the right, where the degeneracy factor is located.
 			deg_value=*(indicesranger++)**(repulsionranger++); // Moving the ranger pointer to the right, where the next integral is located.
-			rawjs[iproc](a,b)+=density(c,d)*deg_value;
-			rawjs[iproc](c,d)+=density(a,b)*deg_value;
-			rawks[iproc](a,c)+=density(b,d)*deg_value;
-			rawks[iproc](b,d)+=density(a,c)*deg_value;
-			rawks[iproc](a,d)+=density(b,c)*deg_value;
-			rawks[iproc](b,c)+=density(a,d)*deg_value;
+			(*thisrawj)(a,b)+=density(c,d)*deg_value;
+			(*thisrawj)(c,d)+=density(a,b)*deg_value;
+			(*thisrawk)(a,c)+=density(b,d)*deg_value;
+			(*thisrawk)(b,d)+=density(a,c)*deg_value;
+			(*thisrawk)(a,d)+=density(b,c)*deg_value;
+			(*thisrawk)(b,c)+=density(a,d)*deg_value;
 		}
 	}
 	EigenMatrix rawj=EigenZero(nbasis,nbasis);
@@ -152,7 +153,7 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 
 	// RHF-SCF iterations
 	do{
-		if (output) std::cout<<" Iteration "<<iiteration<<":  ";
+		if (output) std::cout<<"| Iteration "<<iiteration<<":  ";
 		const clock_t iterstart_cpu=clock();
 		const auto iterstart_wall=std::chrono::system_clock::now();
 
