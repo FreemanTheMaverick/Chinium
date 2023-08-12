@@ -6,7 +6,7 @@ LIBINT2=/home/yzhangnn/libint_2.7.1
 # The path where you can find "include/" and "lib64/".
 OSQP=/home/yzhangnn/osqp_0.6.3
 # The path where you can fine "bin/", "include/" and "lib/".
-LIBXC=/home/freeman/libxc_6.2.2
+LIBXC=/home/yzhangnn/libxc_6.2.2
 
 GeneralFlags=-Wall -O3
 EIGEN3Flags=-I$(EIGEN3) -mavx2
