@@ -161,11 +161,34 @@ void GetDensity(double * aos,long int ngrids,EigenMatrix D,double * ds){
 	}
 }
 
-double GetNumElectrons(double * ds,long int ngrids,double spacing){
+double SumUp(double * ds,double * weights,long int ngrids){
 	double * d_ranger=ds;
+	double * weight_ranger=weights;
 	double n=0;
 	for (long int i=0;i<ngrids;i++)
-		n+=*(d_ranger++);
-	return n*2*spacing*spacing*spacing;
+		n+=*(d_ranger++)**(weight_ranger++);
+	return n;
 }
 
+EigenMatrix VxcMatrix(double * aos,double * weights,double * vrs,long int ngrids,int nbasis){
+	double * iao_ranger;
+	double * jao_ranger;
+	double * weight_ranger;
+	double * v_ranger;
+	EigenMatrix vxc=EigenZero(nbasis,nbasis);
+	double vij;
+	for (int irow=0;irow<nbasis;irow++){
+		for (int jcol=0;jcol<irow;jcol++){
+			iao_ranger=aos+irow*ngrids;
+			jao_ranger=aos+jcol*ngrids;
+			weight_ranger=weights;
+			v_ranger=vrs;
+			vij=0;
+			for (int kgrid=0;kgrid<ngrids;kgrid++)
+				vij+=*(iao_ranger++)**(jao_ranger++)**(weight_ranger++)**(v_ranger++);
+			vxc(irow,jcol)=vij;
+			vxc(jcol,irow)=vij;
+		}
+	}
+	return vxc;
+}

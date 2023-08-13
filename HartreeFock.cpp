@@ -6,6 +6,8 @@
 #include <iomanip>
 #include <omp.h>
 #include "Aliases.h"
+#include "GridIntegrals.h"
+#include "DensityFunctional.h"
 #include "Optimization.h"
 
 #define __damping_start_threshold__ 100.
@@ -19,7 +21,7 @@
 #define __scf_convergence_energy_threshold__ 1.e-8
 #define __scf_convergence_gradient_threshold__ 1.e-5
 
-EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix density,const int nprocs){
+EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix density,double kscale,const int nprocs){
 	int nbasis=density.cols();
 	omp_set_num_threads(nprocs);
 	long int nintsperthread_fewer=n2integrals/nprocs;
@@ -32,10 +34,6 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	}
 	EigenMatrix * rawjs=new EigenMatrix[nprocs];
 	EigenMatrix * rawks=new EigenMatrix[nprocs];
-	for (int iproc=0;iproc<nprocs;iproc++){
-		rawjs[iproc]=EigenZero(nbasis,nbasis);
-		rawks[iproc]=EigenZero(nbasis,nbasis);
-	}
 	#pragma omp parallel for
 	for (int iproc=0;iproc<nprocs;iproc++){
 		long int nints=nintsperthread[iproc];
@@ -45,7 +43,9 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 		short int a,b,c,d;
 		double deg_value;
 		EigenMatrix * thisrawj=&rawjs[iproc];
+		*thisrawj=EigenZero(nbasis,nbasis);
 		EigenMatrix * thisrawk=&rawks[iproc];
+		*thisrawk=EigenZero(nbasis,nbasis);
 		// Without SIMD
 		for (long int i=0;i<nints;i++){ // Manual loop unrolling does not help.
 			a=*(indicesranger++); // Moving the ranger pointer to the right, where the next index is located.
@@ -55,10 +55,12 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 			deg_value=*(indicesranger++)**(repulsionranger++); // Moving the ranger pointer to the right, where the next integral is located.
 			(*thisrawj)(a,b)+=density(c,d)*deg_value;
 			(*thisrawj)(c,d)+=density(a,b)*deg_value;
-			(*thisrawk)(a,c)+=density(b,d)*deg_value;
-			(*thisrawk)(b,d)+=density(a,c)*deg_value;
-			(*thisrawk)(a,d)+=density(b,c)*deg_value;
-			(*thisrawk)(b,c)+=density(a,d)*deg_value;
+			if (kscale>0){
+				(*thisrawk)(a,c)+=density(b,d)*deg_value;
+				(*thisrawk)(b,d)+=density(a,c)*deg_value;
+				(*thisrawk)(a,d)+=density(b,c)*deg_value;
+				(*thisrawk)(b,c)+=density(a,d)*deg_value;
+			}
 		}
 	}
 	EigenMatrix rawj=EigenZero(nbasis,nbasis);
@@ -66,8 +68,10 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	for (int iproc=0;iproc<nprocs;iproc++){
 		rawj+=rawjs[iproc];
 		rawjs[iproc].resize(0,0);
-		rawk+=rawks[iproc];
-		rawks[iproc].resize(0,0);
+		if (kscale>0){
+			rawk+=rawks[iproc];
+			rawks[iproc].resize(0,0);
+		}
 	}
 	delete [] iintfirstperthread;
 	delete [] nintsperthread;
@@ -75,9 +79,24 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	delete [] rawks;
 	EigenMatrix j=0.5*(rawj+rawj.transpose());
 	EigenMatrix k=0.25*(rawk+rawk.transpose());
-	EigenMatrix g=j-0.5*k;
+	EigenMatrix g=j-0.5*kscale*k;
 	return g;
 }
+#define __Density_2_Fock__\
+	F=hcore+GMatrix(repulsion,indices,n2integrals,density,kscale,nprocs); /* Fock matrix. */\
+	if (dfxid){\
+		GetDensity(gridaos,ngrids,density,ds);\
+		getEVxc(dfxid,ds,gs,ngrids,exs,vrs,vss);\
+		Vxc=VxcMatrix(gridaos,gridweights,vrs,ngrids,nbasis);\
+		exc=SumUp(exs,gridweights,ngrids);\
+		if (dfcid){\
+			getEVxc(dfcid,ds,gs,ngrids,ecs,vrs,vss);\
+			Vxc+=VxcMatrix(gridaos,gridweights,vrs,ngrids,nbasis);\
+			exc+=SumUp(ecs,gridweights,ngrids);\
+		}\
+		F+=Vxc;\
+	}\
+	G=4*(overlap*density*F-F*density*overlap); // Electronic gradient of energy with respect to nonredundant orbital rotational parameters. [F(D),D] instead of [F,D(F)].
 
 #define __Fock_2_Density__\
 	const EigenMatrix Fprime=X.transpose()*F*X;\
@@ -106,7 +125,11 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	std::cout<<'g'<<std::endl;\
 	std::cout<<g<<std::endl;
 
-double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,short int * indices,long int n2integrals,EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,const int nprocs,const bool output){
+double RSCF(int nele,EigenMatrix overlap,EigenMatrix hcore,
+            double * repulsion,short int * indices,long int n2integrals,
+            int dfxid,int dfcid,long int ngrids,double * gridaos,double * gridao1derivs,double * gridweights,
+            EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,
+            const int nprocs,const bool output){
 	if (output) std::cout<<"Restricted Hartree-Fock ..."<<std::endl;
 
 	// General preparation
@@ -116,13 +139,29 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 	eigensolver.compute(overlap);
 	const EigenMatrix s=eigensolver.eigenvalues();
 	EigenMatrix sinversesqrt=Eigen::MatrixXd::Zero(nbasis,nbasis);
-	for (int i=0;i<nbasis;i++){
+	for (int i=0;i<nbasis;i++)
 		sinversesqrt(i,i)=1/sqrt(s(i,0));
-	}
 	const EigenMatrix U=eigensolver.eigenvectors();
 	const EigenMatrix X=U*sinversesqrt*U.transpose();
-	EigenMatrix F=hcore+GMatrix(repulsion,indices,n2integrals,density,nprocs); // Fock matrix.
-	EigenMatrix G=4*(overlap*density*F-F*density*overlap); // Electronic gradient of energy with respect to nonredundant orbital rotational parameters.
+	EigenMatrix F,G;
+	EigenMatrix Vxc=EigenZero(nbasis,nbasis);
+	int xkind,ckind,xfamily,cfamily;
+	double exc=0;
+	double * ds=new double[ngrids];
+	double * gs=new double[ngrids*3];
+	double * exs=new double[ngrids];
+	double * ecs=new double[ngrids];
+	double * vrs=new double[ngrids];
+	double * vss=new double[ngrids];
+
+	// Initial Fock matrix
+	double kscale=1;
+	if (dfxid){
+		char rubbish[64];
+		if(dfcid!=0) XCInfo(dfcid,rubbish,ckind,cfamily,kscale);
+		XCInfo(dfxid,rubbish,xkind,xfamily,kscale);
+	}
+	__Density_2_Fock__
 	char update='f';
 	int iiteration=0;
 
@@ -204,8 +243,7 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		if (update=='f'){__Fock_2_Density__} // Some techniques update Fock matrix. To complete the iteration, we obtain density matrix from it.
 
 		// Common procedures necessary for all convergence techniques
-		F=hcore+GMatrix(repulsion,indices,n2integrals,density,nprocs);
-		G=4*(overlap*density*F-F*density*overlap); // [F(D),D] instead of [F,D(F)].
+		__Density_2_Fock__
 		PushMatrixQueue(F,Fs,__diis_space_size__); // Updating Fock matrix.
 		PushMatrixQueue(sinversesqrt.transpose()*G*sinversesqrt,Gs,__diis_space_size__); // Updating gradient. I don't know why sinversesqrt is important, but its existence accelerates convergence.
 		PushMatrixQueue(density,Ds,__diis_space_size__); // Updating atomic density matrix.
@@ -218,8 +256,8 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 		if (update=='d'){__Fock_2_Density__} // Some techniques update Fock matrix. To complete the iteration, we obtain density matrix from it.
 
 		// Iteration information output
-		const EigenMatrix Iamgoingtobeanobellaureate=density*(hcore+F); // Intermediate matrix.
-		PushDoubleQueue(Iamgoingtobeanobellaureate.trace(),Es,__diis_space_size__); // Updating energy.
+		const EigenMatrix Iamgoingtobeanobellaureate=density*(hcore+F-Vxc); // Intermediate matrix.
+		PushDoubleQueue(Iamgoingtobeanobellaureate.trace()+exc,Es,__diis_space_size__); // Updating energy.
 		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
 		if (output){
 			std::cout.setf(std::ios::fixed);
@@ -252,3 +290,15 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,double * repulsion,sho
 	delete [] pXs;
 	return energy;
 }
+
+double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,
+           double * repulsion,short int * indices,long int n2integrals,
+           EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,
+           const int nprocs,const bool output){
+	return RSCF(nele,overlap,hcore,
+                    repulsion,indices,n2integrals,
+                    0,0,0,nullptr,nullptr,nullptr,
+                    orbitalenergies,coefficients,density,
+                    nprocs,output);
+}
+

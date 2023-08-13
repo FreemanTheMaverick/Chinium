@@ -6,4 +6,6 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,double * 
 
 void GetDensity(double * aos,long int ngrids,EigenMatrix D,double * density);
 
-double GetNumElectrons(double * d,long int ngrids,double spacing);
+double SumUp(double * ds,double * weights,long int ngrids);
+
+EigenMatrix VxcMatrix(double * aos,double * weights,double * vrs,long int ngrids,int nbasis);

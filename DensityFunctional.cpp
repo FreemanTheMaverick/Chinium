@@ -7,13 +7,13 @@ extern "C"{
 #include <cstring>
 #include <string>
 
-void XCInfo(int id,char * name,int * kind,int * family,double * hf){
+void XCInfo(int id,char * name,int & kind,int & family,double & hf){
 	xc_func_type func;
 	xc_func_init(&func,id,XC_UNPOLARIZED);
 	std::strcpy(name,func.info->name);
-	*kind=func.info->kind;
-	*family=func.info->family;
-	*hf=xc_hyb_exx_coef(&func);
+	kind=func.info->kind;
+	family=func.info->family;
+	hf=xc_hyb_exx_coef(&func);
 	xc_func_end(&func);
 }
 
@@ -30,17 +30,15 @@ void ReadDF(std::string df,int & x,int & c,double & hf,char & approx,const bool 
 
 	char xname[64],cname[64];
 	int xkind,ckind,xfamily,cfamily;
-	if(cc!=0) XCInfo(cc,cname,&ckind,&cfamily,&hf);
-	XCInfo(xx,xname,&xkind,&xfamily,&hf);
+	if(cc!=0) XCInfo(cc,cname,ckind,cfamily,hf);
+	XCInfo(xx,xname,xkind,xfamily,hf); // Correlation functional is obtained firstly and exchange functional lastly so that 'hf' is finally the correct value. After all, a correlation functional's "HF component" is always zero.
 	switch (xfamily){
 		case(1): // XC_FAMILY_LDA
 			approx='l';break;
 		case(2): // XC_FAMILY_GGA
-	//		approx='g';break;
 		case(32): // XC_FAMILY_HYB_GGA
 			approx='g';break;
 		case(4): // XC_FAMILY_MGGA
-	//		approx='m';break;
 		case(64): // XC_FAMILY_HYB_MGGA
 			approx='m';break;
 	}
@@ -88,10 +86,12 @@ void getEVxc(int id,double * ds,double * gs,long int ngrids,double * es,double *
 	xc_func_end(&func);
 }
 
+/*
 int main(){
-	std::string df="mn15";
+	std::string df="m06-2x";
 	int x,c;
 	double hf;
 	char approx;
 	ReadDF(df,x,c,hf,approx,1);
 }
+*/
