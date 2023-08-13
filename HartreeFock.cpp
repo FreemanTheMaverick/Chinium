@@ -82,6 +82,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	EigenMatrix g=j-0.5*kscale*k;
 	return g;
 }
+
 #define __Density_2_Fock__\
 	F=hcore+GMatrix(repulsion,indices,n2integrals,density,kscale,nprocs); /* Fock matrix. */\
 	if (dfxid){\
@@ -125,7 +126,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	std::cout<<'g'<<std::endl;\
 	std::cout<<g<<std::endl;
 
-double RSCF(int nele,EigenMatrix overlap,EigenMatrix hcore,
+double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
             double * repulsion,short int * indices,long int n2integrals,
             int dfxid,int dfcid,long int ngrids,double * gridaos,double * gridao1derivs,double * gridweights,
             EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,
@@ -295,7 +296,7 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,
            double * repulsion,short int * indices,long int n2integrals,
            EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,
            const int nprocs,const bool output){
-	return RSCF(nele,overlap,hcore,
+	return RKS(nele,overlap,hcore,
                     repulsion,indices,n2integrals,
                     0,0,0,nullptr,nullptr,nullptr,
                     orbitalenergies,coefficients,density,

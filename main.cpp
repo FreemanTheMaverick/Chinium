@@ -7,6 +7,7 @@
 #include "HartreeFock.h"
 #include "InitialGuess.h"
 #include "GridIntegrals.h"
+#include "DensityFunctional.h"
 
 int main(int argc,char *argv[]){
 
@@ -43,7 +44,17 @@ int main(int argc,char *argv[]){
 	EigenVector orbitalenergies(nbasis);
 	EigenMatrix coefficients(nbasis,nbasis);
 
-	double energy=RHF(ne,overlap,hcore,repulsion,indices,n2integrals,orbitalenergies,coefficients,densitymatrix,nprocs,1);
+	double energy=114514;
+	const std::string method=ReadMethod(argv[1],1);
+	if (method.compare("rhf")==0)
+		energy=RHF(ne,overlap,hcore,repulsion,indices,n2integrals,orbitalenergies,coefficients,densitymatrix,nprocs,1);
+	else{
+		int dfxid,dfcid;
+		double kscale;
+		char approx;
+		ReadDF(method,dfxid,dfcid,kscale,approx,1);
+	}
+
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
 	delete [] repulsion;

@@ -117,6 +117,24 @@ std::string ReadGuess(char * inp,const bool output){
 	return guess;
 }
 
+std::string ReadMethod(char * inp,const bool output){
+	std::ifstream file(inp);
+	std::string thisline;
+	bool found=0;
+	std::string method="rhf";
+	while (getline(file,thisline) && ! found){
+		if (thisline.compare("method")==0){
+			found=1;
+			getline(file,thisline);
+			std::stringstream ss(thisline);
+			ss>>method;
+		}
+	}
+	if (output)
+		std::cout<<"Computational method ... "<<method<<std::endl;
+	return method;
+}
+
 /*
 int main(int argc,char *argv[]){
 	double * atoms=new double[10000];
