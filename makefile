@@ -15,17 +15,18 @@ OSQPFlags=-I$(OSQP)/include/osqp -L$(OSQP)/lib64 -losqpstatic
 LIBXCFlags=-I$(LIBXC)/include -L$(LIBXC)/lib -lxc
 
 DFLib='-D__DF_library_path__="$(PWD)/DensityFunctionals/"'
+GridLib='-D__Grid_library_path__="$(PWD)/Grids/"'
 
 .PHONY: all
 
-all: main Gateway InitialGuess Libint2 AtomicIntegrals HartreeFock Optimization OSQP LinearAlgebra GridIntegrals DensityFunctional
-	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o  DensityFunctional.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
+all: main Gateway InitialGuess Libint2 AtomicIntegrals HartreeFock Optimization OSQP LinearAlgebra GridIntegrals DensityFunctional Lebedev
+	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
 
 main: main.cpp
 	$(CXX) main.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 Gateway: Gateway.cpp
-	$(CXX) Gateway.cpp -c $(GeneralFlags)
+	$(CXX) Gateway.cpp -c $(GeneralFlags) $(DFLib) $(GridLib)
 
 InitialGuess: InitialGuess.cpp
 	$(CXX) InitialGuess.cpp -c $(GeneralFlags) $(EIGEN3Flags)
@@ -49,13 +50,16 @@ LinearAlgebra: LinearAlgebra.cpp
 	$(CXX) LinearAlgebra.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 GridIntegrals: GridIntegrals.cpp
-	$(CXX) GridIntegrals.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags)
+	$(CXX) GridIntegrals.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(GridLib)
 
 DensityFunctional: DensityFunctional.cpp
 	$(CXX) DensityFunctional.cpp -c $(GeneralFlags) $(LIBXCFlags) $(DFLib)
 
+Lebedev: sphere_lebedev_rule.cpp
+	$(CXX) sphere_lebedev_rule.cpp -c $(GeneralFlags)
+
 LD:
-	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
+	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
 
 
 

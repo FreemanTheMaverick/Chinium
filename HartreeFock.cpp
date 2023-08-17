@@ -131,7 +131,10 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
             int dfxid,int dfcid,long int ngrids,double * gridaos,double * gridao1derivs,double * gridweights,
             EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,
             const int nprocs,const bool output){
-	if (output) std::cout<<"Restricted Hartree-Fock ..."<<std::endl;
+	if (output){
+		if (dfxid) std::cout<<"Restricted Kohn-Sham ..."<<std::endl;
+		else std::cout<<"Restricted Hartree-Fock ..."<<std::endl;
+	}
 
 	// General preparation
 	const int nbasis=overlap.cols();
@@ -284,6 +287,14 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 		pGs[i].resize(0);
 		pXs[i].resize(0);
 	}
+
+	delete [] ds;
+	delete [] gs;
+	delete [] exs;
+	delete [] ecs;
+	delete [] vrs;
+	delete [] vss;
+
 	delete [] Fs;
 	delete [] Gs;
 	delete [] Ds;

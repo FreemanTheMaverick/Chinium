@@ -1,17 +1,14 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>		
-#include <map>
 #include <string>
-
-#define __angstrom2bohr__ 1.8897259886
+#include <map>
+#include <cassert>
+#include "Aliases.h"
 
 int ReadXYZ(char * inp,double * atoms,const bool output){
 	std::ifstream file(inp);
-	std::map<std::string,double> ElementName2Z={
-		{"H",1},{"He",2},{"Li",3},{"Be",4},{"B",5},
-		{"C",6},{"N",7},{"O",8},{"F",9},{"Ne",10}
-	};
+	__Name_2_Z__
 	std::string thisline;
 	bool found=0;
 	int natoms=0;
@@ -26,11 +23,11 @@ int ReadXYZ(char * inp,double * atoms,const bool output){
 			for (int iatom=0;iatom<natoms;iatom++){
 				std::getline(file,thisline);	
 				std::stringstream ss(thisline);
-				std::string elementname;ss>>elementname;atoms[4*iatom]=ElementName2Z[elementname];
+				std::string elementname;ss>>elementname;atoms[4*iatom]=Name2Z[elementname];
 				double x;ss>>x;atoms[4*iatom+1]=x*__angstrom2bohr__;
 				double y;ss>>y;atoms[4*iatom+2]=y*__angstrom2bohr__;
 				double z;ss>>z;atoms[4*iatom+3]=z*__angstrom2bohr__;
-				if (output) std::cout<<" "<<iatom<<" "<<elementname<<" "<<ElementName2Z[elementname]<<" "<<x*__angstrom2bohr__<<" "<<y*__angstrom2bohr__<<" "<<z*__angstrom2bohr__<<std::endl;
+				if (output) std::cout<<" "<<iatom<<" "<<Name2Z[elementname]<<" "<<elementname<<" "<<x*__angstrom2bohr__<<" "<<y*__angstrom2bohr__<<" "<<z*__angstrom2bohr__<<std::endl;
 			}
 		}
 	}
@@ -117,6 +114,30 @@ std::string ReadGuess(char * inp,const bool output){
 	return guess;
 }
 
+std::string ReadGrid(char * inp,const bool output){
+	std::ifstream file(inp);
+	std::string thisline;
+	bool found=0;
+	std::string grid="";
+	while (getline(file,thisline) && ! found){
+		if (thisline.compare("grid")==0){
+			found=1;
+			getline(file,thisline);
+			std::stringstream ss(thisline);
+			ss>>grid;
+		}
+	}
+	if (!grid.empty()){
+		std::string filename=std::string(__Grid_library_path__)+grid;
+		std::ifstream gridfile(filename);
+		assert((void("Cannot find the grid folder in " __Grid_library_path__),gridfile.good()));
+
+		if (output)
+			std::cout<<"Grid ... "<<grid<<" found in "<<std::string(__Grid_library_path__)<<std::endl;
+	}
+	return grid;
+}
+
 std::string ReadMethod(char * inp,const bool output){
 	std::ifstream file(inp);
 	std::string thisline;
@@ -130,8 +151,13 @@ std::string ReadMethod(char * inp,const bool output){
 			ss>>method;
 		}
 	}
-	if (output)
-		std::cout<<"Computational method ... "<<method<<std::endl;
+	if (method!="rhf"){
+		std::string filename=std::string(__DF_library_path__)+method+".df";
+		std::ifstream dffile(filename);
+		assert((void("Cannot find the DF file in " __DF_library_path__),dffile.good()));
+		if (output) std::cout<<"Computational method ... "<<method<<" found in "<<std::string(__DF_library_path__)<<std::endl;
+	}
+	else if (output) std::cout<<"Computational method ... RHF"<<std::endl;
 	return method;
 }
 

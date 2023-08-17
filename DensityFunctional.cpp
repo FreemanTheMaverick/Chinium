@@ -18,7 +18,7 @@ void XCInfo(int id,char * name,int & kind,int & family,double & hf){
 }
 
 void ReadDF(std::string df,int & x,int & c,double & hf,char & approx,const bool output){
-	std::string filename=__DF_library_path__+df+".df";
+	std::string filename=std::string(__DF_library_path__)+"/"+df+".df";
 	std::ifstream file(filename);
 	std::string thisline;
 

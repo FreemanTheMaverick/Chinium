@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <string>
+#include <cassert>
 #include <iostream>
 #include "Aliases.h"
 #include "Gateway.h"
@@ -23,11 +24,29 @@ int main(int argc,char *argv[]){
 	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms,1);
 
 	const std::string guess=ReadGuess(argv[1],1);
-	EigenMatrix densitymatrix;
+	EigenMatrix density;
 	if (guess.compare("core")==0)
-		densitymatrix=CoreHamiltonian(natoms,atoms,basisset);
+		density=CoreHamiltonian(natoms,atoms,basisset);
 	else if (guess.compare("sad")==0)
-		densitymatrix=SuperpositionAtomicDensity(ne,natoms,atoms,basisset);
+		density=SuperpositionAtomicDensity(ne,natoms,atoms,basisset);
+
+	std::string grid=ReadGrid(argv[1],1);
+	long int ngrids=0;
+	double * xs=nullptr;
+	double * ys=nullptr;
+	double * zs=nullptr;
+	double * ws=nullptr;
+	double * gridaos=nullptr;
+	double * gridao1derivs=nullptr;
+	if (! grid.empty()){
+		ngrids=SphericalGridNumber(grid,natoms,atoms,1);
+		xs=new double[ngrids];
+		ys=new double[ngrids];
+		zs=new double[ngrids];
+		ws=new double[ngrids];
+		SphericalGrid(grid,natoms,atoms,ngrids,
+                              xs,ys,zs,ws,1);
+	}
 
 	const EigenMatrix overlap=Overlap(natoms,atoms,basisset,1);
 	const EigenMatrix kinetic=Kinetic(natoms,atoms,basisset,1);
@@ -47,36 +66,45 @@ int main(int argc,char *argv[]){
 	double energy=114514;
 	const std::string method=ReadMethod(argv[1],1);
 	if (method.compare("rhf")==0)
-		energy=RHF(ne,overlap,hcore,repulsion,indices,n2integrals,orbitalenergies,coefficients,densitymatrix,nprocs,1);
+		energy=RHF(ne,overlap,hcore,
+		           repulsion,indices,n2integrals,
+		           orbitalenergies,coefficients,density,
+		           nprocs,1);
 	else{
+		assert((void("DFT needs a grid to be set!"),ngrids>0));
 		int dfxid,dfcid;
 		double kscale;
 		char approx;
 		ReadDF(method,dfxid,dfcid,kscale,approx,1);
+		if (! gridaos){
+			gridaos=new double[nbasis*ngrids];
+			GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,gridaos);
+		}
+		if (! gridao1derivs && approx=='g'){
+			gridao1derivs=new double[nbasis*ngrids*3];
+		}
+		energy=RKS(ne,overlap,hcore,
+		           repulsion,indices,n2integrals,
+		           dfxid,dfcid,ngrids,gridaos,gridao1derivs,ws,
+		           orbitalenergies,coefficients,density,
+		           nprocs,1);
 	}
-
+gridaos=new double[nbasis*ngrids];
+double * ds=new double[ngrids];
+GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,gridaos);
+GetDensity(gridaos,ngrids,density,ds);
+std::cout<<SumUp(ds,ws,ngrids);
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
+	delete [] xs;
+	delete [] ys;
+	delete [] zs;
+	delete [] ws;
+	delete [] gridaos;
+	delete [] gridao1derivs;
 	delete [] repulsion;
 	delete [] indices;
 
 	std::cout<<"*** Chinium terminated normally ***"<<std::endl;
-/*
-double overheadlength=6;
-double spacing=0.1;
-long int ngrids=UniformBoxGridNumber(natoms,atoms,basisset,overheadlength,spacing);
-double * xs=new double[ngrids];
-double * ys=new double[ngrids];
-double * zs=new double[ngrids];
-double * aos=new double[ngrids*nbasis];
-double * dens=new double[ngrids];
-UniformBoxGrid(natoms,atoms,basisset,overheadlength,spacing,xs,ys,zs);
-GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,aos);
-GetDensity(aos,ngrids,densitymatrix,dens);
-std::cout<<GetNumElectrons(dens,ngrids,spacing)<<std::endl;
-//int n=2000020;
-//std::cout<<xs[n]<<" "<<ys[n]<<" "<<zs[n]<<" "<<dens[n]<<std::endl;
-//for (int i=0;i<nbasis;i++) std::cout<<aos[ngrids*i+n]<<std::endl;
-*/	return 0;
+	return 0;
 }
-

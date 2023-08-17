@@ -1,10 +1,10 @@
 Taking `h.grid` as an example:
 ```
 5 75 # There are 5 groups of consecutive shells with the same numbers of spherical points and 75 shells in total.
+2.6 -2.312968699567745 1.0237771469892318 # Alpha, minimal xi and maximal xi introduced in [*Theor. Chem. Acc.* (2011) 130:645-669](https://link.springer.com/article/10.1007/s00214-011-0985-x).
 6 35 # Each of the innermost 35 shells has 6 spherical points.
 110 12 # ...
 302 16 # ...
 86 7 # ...
 26 5 # Each of the outmost 5 shells have 26 spherical points.
-2.6 -2.312968699567745 1.0237771469892318 # Alpha, minimal xi and maximal xiintroduced in [*Theor. Chem. Acc.* (2011) 130:645-669](https://link.springer.com/article/10.1007/s00214-011-0985-x).
 ```

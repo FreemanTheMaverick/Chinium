@@ -1,9 +1,139 @@
 #include <Eigen/Dense>
 #include <libint2.hpp>
 #include <cmath>
+#include <ctime>
+#include <sstream>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <map>
+#include <functional>
 #include "Aliases.h"
 #include "Libint2.h"
-#include <iostream>
+#include "sphere_lebedev_rule.hpp"
+
+#define __Read_One_Line__(filename,var)\
+	std::ifstream file(filename);\
+	std::string thisline;\
+	getline(file,thisline);\
+	std::stringstream ss_(thisline);\
+	ss_>>var;
+
+long int SphericalGridNumber(std::string grid,const int natoms,double * atoms,const bool output){
+	long int ngrids=0;
+	__Z_2_Name__
+	for (int iatom=0;iatom<natoms;iatom++){
+		int ngroups;
+		__Read_One_Line__(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid",ngroups)
+		getline(file,thisline);
+		for (int igroup=0;igroup<ngroups;igroup++){
+			getline(file,thisline);
+			std::stringstream ss(thisline);
+			int nshells,npoints;
+			ss>>nshells;ss>>npoints;
+			ngrids+=nshells*npoints;
+		}
+	}
+	if (output) std::cout<<"Number of grid points ... "<<ngrids<<std::endl;
+	return ngrids;
+}
+
+double s_p_miu(double x0,double y0,double z0,double x1,double y1,double z1,double x2,double y2,double z2){
+	const double x01=x0-x1;const double y01=y0-y1;const double z01=z0-z1;
+	const double ra=sqrt(x01*x01+y01*y01+z01*z01);
+	const double x02=x0-x2;const double y02=y0-y2;const double z02=z0-z2;
+	const double rb=sqrt(x02*x02+y02*y02+z02*z02);
+	const double x12=x1-x2;const double y12=y1-y2;const double z12=z1-z2;
+	const double rab=sqrt(x12*x12+y12*y12+z12*z12);
+	const double miu=(ra-rb)/rab;
+	const double p1=1.5*miu+0.5*miu*miu*miu;
+	const double p2=1.5*p1+0.5*p1*p1*p1;
+	const double p3=1.5*p2+0.5*p2*p2*p2;
+	return 0.5*(1-p3);
+}
+
+void SphericalGrid(std::string grid,const int natoms,double * atoms,long int ngrids,
+                   double * xs,double * ys,double * zs,double * ws,
+                   const bool output){
+	const clock_t start=clock();
+	double * x_ranger=xs;
+	double * y_ranger=ys;
+	double * z_ranger=zs;
+	double * w_ranger=ws;
+	std::function<double(double)> ri_func;
+	std::function<double(double)> radial_weight_func;
+	__Z_2_Name__
+	std::string radialformula;
+	{__Read_One_Line__(std::string(__Grid_library_path__)+"/"+grid+"/formula",radialformula);}
+	for (int iatom=0;iatom<natoms;iatom++){
+		int ngroups,nshells_total;
+		__Read_One_Line__(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid",ngroups)
+		ss_>>nshells_total;
+		getline(file,thisline);
+		std::stringstream ss__(thisline);
+		double token1,token2,token3;
+		ss__>>token1;ss__>>token2;ss__>>token3; // Radial-formula-dependent line.
+		if (radialformula.compare("de2")==0){
+			const double a=token1;
+			const double h=(token3-token2)/(nshells_total-1);
+			ri_func=[=](double i){
+				const double xi=h*i+token2;
+				return exp(3*a*xi-3*exp(-xi));
+			};
+			radial_weight_func=[=](double i){
+				const double xi=h*i+token2;
+				return exp(3*a*xi-3*exp(-xi))*(a+exp(-xi))*h;
+			};
+		}
+		int ishell_total=0;
+		for (int igroup=0;igroup<ngroups;igroup++){
+			getline(file,thisline);
+			std::stringstream ss(thisline);
+			int npoints,nshells;
+			ss>>npoints;ss>>nshells;
+			double lebedev_xs[8192]={0};
+			double lebedev_ys[8192]={0};
+			double lebedev_zs[8192]={0};
+			double lebedev_ws[8192]={0};
+			ld_by_order(npoints,lebedev_xs,lebedev_ys,lebedev_zs,lebedev_ws);
+			for (int ishell=0;ishell<nshells;ishell++,ishell_total++){
+				const double ri=ri_func(ishell_total);
+				const double radial_w=radial_weight_func(ishell_total);
+				for (int ipoint=0;ipoint<npoints;ipoint++){
+					const double x=lebedev_xs[ipoint]*ri+atoms[4*iatom+1];
+					const double y=lebedev_ys[ipoint]*ri+atoms[4*iatom+2];
+					const double z=lebedev_zs[ipoint]*ri+atoms[4*iatom+3];
+					const double lebedev_w=4*M_PI*lebedev_ws[ipoint];
+					double unnorm_becke_w_total=0;
+					double unnorm_becke_w=0;
+					for (int jatom=0;jatom<natoms;jatom++){
+						double unnorm_becke_wj=1;
+						const double xj=atoms[4*jatom+1];
+						const double yj=atoms[4*jatom+2];
+						const double zj=atoms[4*jatom+3];
+						for (int katom=0;katom<natoms;katom++){
+							if (jatom==katom) continue;
+							const double xk=atoms[4*katom+1];
+							const double yk=atoms[4*katom+2];
+							const double zk=atoms[4*katom+3];
+							unnorm_becke_wj*=s_p_miu(x,y,z,xj,yj,zj,xk,yk,zk);
+						}
+						unnorm_becke_w_total+=unnorm_becke_wj;
+						if (iatom==jatom)
+							unnorm_becke_w=unnorm_becke_wj;
+					}
+					const double becke_w=unnorm_becke_w/unnorm_becke_w_total;
+					const double w=radial_w*lebedev_w*becke_w;
+					*(x_ranger++)=x;
+					*(y_ranger++)=y;
+					*(z_ranger++)=z;
+					*(w_ranger++)=w;
+				}
+			}
+		}
+	}
+	if (output) std::cout<<"Generating grid points and weights ... "<<double(clock()-start)/CLOCKS_PER_SEC<<" s"<<std::endl;;
+}
 
 #define __Uniform_Box_Grid_Number__\
 	const std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);\
@@ -63,7 +193,9 @@ void UniformBoxGrid(const int natoms,double * atoms,const char * basisset,double
 	}
 }
 
-void GetAoValues(const int natoms,double * atoms,const char * basisset,double * xs,double * ys,double * zs,long int ngrids,double * aos){ // ibasis*ngrids+jgrid
+void GetAoValues(const int natoms,double * atoms,const char * basisset,
+                 double * xs,double * ys,double * zs,long int ngrids,
+                 double * aos){ // ibasis*ngrids+jgrid
 	const std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
 	const libint2::BasisSet obs(basisset,libint2atoms);
 	double xo,yo,zo,x,y,z,r2,a; // Basis function values;
