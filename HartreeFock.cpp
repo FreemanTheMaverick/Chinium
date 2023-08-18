@@ -274,7 +274,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 		}
 		iiteration++;
 	}while (abs(Es[0]-Es[1])>__scf_convergence_energy_threshold__ || pG.norm()>__scf_convergence_gradient_threshold__);
-	if (output) std::cout<<"Done; Final RHF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
+	if (output) std::cout<<"| Done; Final RHF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
 	const double energy=Es[0];
 
 	delete [] Es;

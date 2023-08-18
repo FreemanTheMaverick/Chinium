@@ -17,7 +17,7 @@ LIBXCFlags=-I$(LIBXC)/include -L$(LIBXC)/lib -lxc
 DFLib='-D__DF_library_path__="$(PWD)/DensityFunctionals/"'
 GridLib='-D__Grid_library_path__="$(PWD)/Grids/"'
 
-.PHONY: all
+.PHONY: all, clean
 
 all: main Gateway InitialGuess Libint2 AtomicIntegrals HartreeFock Optimization OSQP LinearAlgebra GridIntegrals DensityFunctional Lebedev
 	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
@@ -60,7 +60,6 @@ Lebedev: sphere_lebedev_rule.cpp
 
 LD:
 	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
-
 
 
 ld: DensityFunctional.o

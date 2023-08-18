@@ -1,7 +1,8 @@
 long int SphericalGridNumber(std::string grid,const int natoms,double * atoms,const bool output);
 
-void SphericalGrid(std::string grid,const int natoms,double * atoms,long int ngrids,
-                   double * xs,double * ys,double * zs,double * ws,const bool output);
+void SphericalGrid(std::string grid,const int natoms,double * atoms,
+                   double * xs,double * ys,double * zs,double * ws,
+                   const bool output);
 
 long int UniformBoxGridNumber(const int natoms,double * atoms,const char * basisset,double overheadlength,double spacing);
 

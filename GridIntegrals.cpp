@@ -12,22 +12,20 @@
 #include "Libint2.h"
 #include "sphere_lebedev_rule.hpp"
 
-#define __Read_One_Line__(filename,var)\
-	std::ifstream file(filename);\
-	std::string thisline;\
-	getline(file,thisline);\
-	std::stringstream ss_(thisline);\
-	ss_>>var;
-
 long int SphericalGridNumber(std::string grid,const int natoms,double * atoms,const bool output){
 	long int ngrids=0;
 	__Z_2_Name__
 	for (int iatom=0;iatom<natoms;iatom++){
 		int ngroups;
-		__Read_One_Line__(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid",ngroups)
-		getline(file,thisline);
+		std::ifstream gridfile(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
+		assert((void("Not enough element grid files in " __Grid_library_path__),gridfile.good()));
+		std::string thisline;
+		getline(gridfile,thisline);
+		std::stringstream ss_(thisline);
+		ss_>>ngroups;
+		getline(gridfile,thisline);
 		for (int igroup=0;igroup<ngroups;igroup++){
-			getline(file,thisline);
+			getline(gridfile,thisline);
 			std::stringstream ss(thisline);
 			int nshells,npoints;
 			ss>>nshells;ss>>npoints;
@@ -40,19 +38,19 @@ long int SphericalGridNumber(std::string grid,const int natoms,double * atoms,co
 
 double s_p_miu(double x0,double y0,double z0,double x1,double y1,double z1,double x2,double y2,double z2){
 	const double x01=x0-x1;const double y01=y0-y1;const double z01=z0-z1;
-	const double ra=sqrt(x01*x01+y01*y01+z01*z01);
+	const double r01=sqrt(x01*x01+y01*y01+z01*z01);
 	const double x02=x0-x2;const double y02=y0-y2;const double z02=z0-z2;
-	const double rb=sqrt(x02*x02+y02*y02+z02*z02);
+	const double r02=sqrt(x02*x02+y02*y02+z02*z02);
 	const double x12=x1-x2;const double y12=y1-y2;const double z12=z1-z2;
-	const double rab=sqrt(x12*x12+y12*y12+z12*z12);
-	const double miu=(ra-rb)/rab;
+	const double r12=sqrt(x12*x12+y12*y12+z12*z12);
+	const double miu=(r01-r02)/r12;
 	const double p1=1.5*miu+0.5*miu*miu*miu;
 	const double p2=1.5*p1+0.5*p1*p1*p1;
 	const double p3=1.5*p2+0.5*p2*p2*p2;
 	return 0.5*(1-p3);
 }
 
-void SphericalGrid(std::string grid,const int natoms,double * atoms,long int ngrids,
+void SphericalGrid(std::string grid,const int natoms,double * atoms,
                    double * xs,double * ys,double * zs,double * ws,
                    const bool output){
 	const clock_t start=clock();
@@ -60,34 +58,37 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,long int ngr
 	double * y_ranger=ys;
 	double * z_ranger=zs;
 	double * w_ranger=ws;
-	std::function<double(double)> ri_func;
-	std::function<double(double)> radial_weight_func;
 	__Z_2_Name__
-	std::string radialformula;
-	{__Read_One_Line__(std::string(__Grid_library_path__)+"/"+grid+"/formula",radialformula);}
 	for (int iatom=0;iatom<natoms;iatom++){
+		std::ifstream gridfile(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
+		assert((void("Not enough element grid files in " __Grid_library_path__),gridfile.good()));
+		std::string thisline;
+		getline(gridfile,thisline);
+		std::stringstream ss_(thisline);
 		int ngroups,nshells_total;
-		__Read_One_Line__(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid",ngroups)
-		ss_>>nshells_total;
-		getline(file,thisline);
+		ss_>>ngroups;ss_>>nshells_total;
+		getline(gridfile,thisline); // Radial-formula-dependent line.
 		std::stringstream ss__(thisline);
+		std::string radialformula;
 		double token1,token2,token3;
-		ss__>>token1;ss__>>token2;ss__>>token3; // Radial-formula-dependent line.
+		ss__>>radialformula;ss__>>token1;ss__>>token2;ss__>>token3;
+		std::function<double(double)> ri_func;
+		std::function<double(double)> radial_weight_func;
 		if (radialformula.compare("de2")==0){
 			const double a=token1;
-			const double h=(token3-token2)/(nshells_total-1);
+			const double h=(token3-token2)/(double)(nshells_total-1);
 			ri_func=[=](double i){
 				const double xi=h*i+token2;
-				return exp(3*a*xi-3*exp(-xi));
+				return exp(a*xi-exp(-xi));
 			};
 			radial_weight_func=[=](double i){
 				const double xi=h*i+token2;
 				return exp(3*a*xi-3*exp(-xi))*(a+exp(-xi))*h;
 			};
-		}
+		}else assert((void("Unrecognized radial formula!"),0));
 		int ishell_total=0;
 		for (int igroup=0;igroup<ngroups;igroup++){
-			getline(file,thisline);
+			getline(gridfile,thisline);
 			std::stringstream ss(thisline);
 			int npoints,nshells;
 			ss>>npoints;ss>>nshells;

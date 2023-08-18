@@ -44,8 +44,7 @@ int main(int argc,char *argv[]){
 		ys=new double[ngrids];
 		zs=new double[ngrids];
 		ws=new double[ngrids];
-		SphericalGrid(grid,natoms,atoms,ngrids,
-                              xs,ys,zs,ws,1);
+		SphericalGrid(grid,natoms,atoms,xs,ys,zs,ws,1);
 	}
 
 	const EigenMatrix overlap=Overlap(natoms,atoms,basisset,1);
