@@ -15,6 +15,6 @@
 
 #define __Z_2_Name__\
 	std::string Z2Name[]={"FuckIndexZero",\
-		"h","he","li","be","b","c","n","o","f","ne",\
-		"na","mg","al","si","p","s","cl","ar","k","ca"\
+		"H","He","Li","Be","B","C","N","O","F","Ne",\
+		"Na","Mg","Al","Si","P","S","Cl","Ar","K","Ca"\
 	};

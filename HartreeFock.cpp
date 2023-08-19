@@ -86,7 +86,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 #define __Density_2_Fock__\
 	F=hcore+GMatrix(repulsion,indices,n2integrals,density,kscale,nprocs); /* Fock matrix. */\
 	if (dfxid){\
-		GetDensity(gridaos,ngrids,density,ds);\
+		GetDensity(gridaos,ngrids,2*density,ds);\
 		getEVxc(dfxid,ds,gs,ngrids,exs,vrs,vss);\
 		Vxc=VxcMatrix(gridaos,gridweights,vrs,ngrids,nbasis);\
 		exc=SumUp(exs,gridweights,ngrids);\

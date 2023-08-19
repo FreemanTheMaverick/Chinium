@@ -232,7 +232,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
 					*(ao_rangers[1]++)=a*y;
 					*(ao_rangers[2]++)=a*z;
 					break;
-				case 5: // D rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API
+				case 5: // D and the following spherical harmonics are rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API. The normalization constants here differ from those from "Symmetries of Spherical Harmonics: applications to ambisonics" @ https://iaem.at/ambisonics/symposium2009/proceedings/ambisym09-chapman-shsymmetries.pdf/@@download/file/AmbiSym09_Chapman_SHSymmetries.pdf by a factor of sqrt(2l+1) except if l=1.
 					*(ao_rangers[0]++)=a*x*y*sqrt(3);
 					*(ao_rangers[1]++)=a*y*z*sqrt(3);
 					*(ao_rangers[2]++)=a*(3*z*z-r2)*0.5;
@@ -249,19 +249,43 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
 					*(ao_rangers[6]++)=a*x*(x*x-3*y*y)*sqrt(10)/4;
 					break;
 				case 9: // G
-					*(ao_rangers[0]++)=a*x*y*(x*x-y*y);
-					*(ao_rangers[1]++)=a*y*(3*x*x-y*y)*z;
-					*(ao_rangers[2]++)=a*x*y*(7*z*z-r2);
-					*(ao_rangers[3]++)=a*y*(7*z*z*z-3*z*r2);
-					*(ao_rangers[4]++)=a*(35*z*z*z*z-30*z*z*r2+3*r2*r2);
-					*(ao_rangers[5]++)=a*x*(7*z*z*z-3*z*r2);
-					*(ao_rangers[6]++)=a*(x*x-y*y)*(7*z*z-r2);
-					*(ao_rangers[7]++)=a*x*(x*x-3*y*y)*z;
-					*(ao_rangers[8]++)=a*(x*x*(x*x-3*y*y)-y*y*(3*x*x-y*y));
+					*(ao_rangers[0]++)=a*x*y*(x*x-y*y)*sqrt(35)/2;
+					*(ao_rangers[1]++)=a*y*(3*x*x-y*y)*z*sqrt(70)/4;
+					*(ao_rangers[2]++)=a*x*y*(7*z*z-r2)*sqrt(5)/2;
+					*(ao_rangers[3]++)=a*y*(7*z*z*z-3*z*r2)*sqrt(10)/4;
+					*(ao_rangers[4]++)=a*(35*z*z*z*z-30*z*z*r2+3*r2*r2)/8;
+					*(ao_rangers[5]++)=a*x*(7*z*z*z-3*z*r2)*sqrt(10)/4;
+					*(ao_rangers[6]++)=a*(x*x-y*y)*(7*z*z-r2)*sqrt(5)/4;
+					*(ao_rangers[7]++)=a*x*(x*x-3*y*y)*z*sqrt(70)/4;
+					*(ao_rangers[8]++)=a*(x*x*(x*x-3*y*y)-y*y*(3*x*x-y*y))*sqrt(35)/8;
 					break;
 				case 11: // H
+					*(ao_rangers[0]++)=a*y*(5*x*x*x*x-10*x*x*y*y+y*y*y*y)*3*sqrt(14)/16;
+					*(ao_rangers[1]++)=a*x*y*z*(x*x-y*y)*3*sqrt(35)/2;
+					*(ao_rangers[2]++)=a*y*(y*y*y*y-2*x*x*y*y-3*x*x*x*x-8*y*y*z*z+24*x*x*z*z)*sqrt(70)/16;
+					*(ao_rangers[3]++)=a*x*y*z*(2*z*z-x*x-y*y)*sqrt(105)/2;
+					*(ao_rangers[4]++)=a*y*(x*x*x*x+2*x*x*y*y+y*y*y*y-12*x*x*z*z-12*y*y*z*z+8*z*z*z*z)*sqrt(15)/8;
+					*(ao_rangers[5]++)=a*z*(15*x*x*x*x+15*y*y*y*y+8*z*z*z*z+30*x*x*y*y-40*x*x*z*z-40*y*y*z*z)/8;
+					*(ao_rangers[6]++)=a*x*(x*x*x*x+2*x*x*y*y+y*y*y*y-12*x*x*z*z-12*y*y*z*z+8*z*z*z*z)*sqrt(15)/8;
+					*(ao_rangers[7]++)=a*z*(2*x*x*z*z-2*y*y*z*z-x*x*x*x+y*y*y*y)*sqrt(105)/4;
+					*(ao_rangers[8]++)=a*x*(2*x*x*y*y+8*x*x*z*z-24*y*y*z*z-x*x*x*x+3*y*y*y*y)*sqrt(70)/16;
+					*(ao_rangers[9]++)=a*z*(x*x*x*x-6*x*x*y*y+y*y*y*y)*3*sqrt(35)/8;
+					*(ao_rangers[10]++)=a*x*(x*x*x*x-10*x*x*y*y+5*y*y*y*y)*3*sqrt(14)/16;
 					break;
 				case 13: // I
+					*(ao_rangers[0]++)=a*x*y*(3*x*x*x*x-10*x*x*y*y+3*y*y*y*y)*sqrt(462)/16;
+					*(ao_rangers[1]++)=a*y*z*(5*x*x*x*x-10*x*x*y*y+y*y*y*y)*3*sqrt(154)/16;
+					*(ao_rangers[2]++)=a*x*y*(-x*x*x*x+y*y*y*y+10*x*x*z*z-10*y*y*z*z)*3*sqrt(7)/4;
+					*(ao_rangers[3]++)=a*y*z*(-9*x*x*x*x+3*y*y*y*y-6*x*x*y*y+24*x*x*z*z-8*y*y*z*z)*sqrt(210)/16;
+					*(ao_rangers[4]++)=a*x*y*(x*x*x*x+y*y*y*y+16*z*z*z*z+2*x*x*y*y-16*x*x*z*z-16*y*y*z*z)*sqrt(210)/16;
+					*(ao_rangers[5]++)=a*y*z*(5*x*x*x*x+5*y*y*y*y+8*z*z*z*z+10*x*x*y*y-20*x*x*z*z-20*y*y*z*z)*sqrt(21)/8;
+					*(ao_rangers[6]++)=a*(16*z*z*z*z*z*z-5*x*x*x*x*x*x-5*y*y*y*y*y*y-15*x*x*x*x*y*y+90*x*x*x*x*z*z+90*y*y*y*y*z*z-120*y*y*z*z*z*z-15*x*x*y*y*y*y-120*x*x*z*z*z*z+180*x*x*y*y*z*z)/16;
+					*(ao_rangers[7]++)=a*x*z*(5*x*x*x*x+5*y*y*y*y+8*z*z*z*z+10*x*x*y*y-20*x*x*z*z-20*y*y*z*z)*sqrt(21)/8;
+					*(ao_rangers[8]++)=a*(x*x*x*x*x*x-y*y*y*y*y*y+x*x*x*x*y*y-x*x*y*y*y*y-16*x*x*x*x*z*z+16*x*x*z*z*z*z+16*y*y*y*y*z*z-16*y*y*z*z*z*z)*sqrt(210)/32;
+					*(ao_rangers[9]++)=a*x*z*(-3*x*x*x*x+6*x*x*y*y+8*x*x*z*z-24*y*y*z*z+9*y*y*y*y)*sqrt(210)/16;
+					*(ao_rangers[10]++)=a*(-x*x*x*x*x*x+5*x*x*x*x*y*y+10*x*x*x*x*z*z+5*x*x*y*y*y*y+10*y*y*y*y*z*z-y*y*y*y*y*y-60*x*x*y*y*z*z)*3*sqrt(7)/16;
+					*(ao_rangers[11]++)=a*x*z*(x*x*x*x-10*x*x*y*y+5*y*y*y*y)*3*sqrt(154)/16;
+					*(ao_rangers[12]++)=a*(x*x*x*x*x*x-15*x*x*x*x*y*y+15*x*x*y*y*y*y-y*y*y*y*y*y)*sqrt(462)/32;
 					break;
 			}
 		}
