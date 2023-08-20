@@ -69,12 +69,12 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 		ss_>>ngroups;ss_>>nshells_total;
 		getline(gridfile,thisline); // Radial-formula-dependent line.
 		std::stringstream ss__(thisline);
-		std::string radialformula;
-		double token1,token2,token3;
-		ss__>>radialformula;ss__>>token1;ss__>>token2;ss__>>token3;
+		std::string radialformula;ss__>>radialformula;
 		std::function<double(double)> ri_func;
 		std::function<double(double)> radial_weight_func;
 		if (radialformula.compare("de2")==0){
+			double token1,token2,token3;
+			ss__>>token1;ss__>>token2;ss__>>token3;
 			const double a=token1;
 			const double h=(token3-token2)/(double)(nshells_total-1);
 			ri_func=[=](double i){
@@ -84,6 +84,15 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 			radial_weight_func=[=](double i){
 				const double xi=h*i+token2;
 				return exp(3*a*xi-3*exp(-xi))*(a+exp(-xi))*h;
+			};
+		}else if (radialformula.compare("em")==0){
+			double token1;ss__>>token1;
+			const double R=token1;
+			ri_func=[=](double i){
+				return R*pow(i/(nshells_total+1-i),2);
+			};
+			radial_weight_func=[=](double i){
+				return 2*pow(R,3)*(nshells_total+1)*pow(i,5)/pow(nshells_total+1-i,7);
 			};
 		}else assert((void("Unrecognized radial formula!"),0));
 		int ishell_total=0;
