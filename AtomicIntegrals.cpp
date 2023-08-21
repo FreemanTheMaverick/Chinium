@@ -30,16 +30,14 @@ double NuclearRepulsion(const int natoms,double * atoms,const bool output){
 }
 
 int nBasis(const int natoms,double * atoms,const char * basisset,const bool output){ // Size of basis set.
-	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
-	libint2::BasisSet obs(basisset,libint2atoms);
+	__Basis_From_Atoms__
 	int n=nBasis_from_obs(obs);
 	if (output) std::cout<<"Number of atomic bases ... "<<n<<std::endl;
 	return n;
 }
 
 int nOneElectronIntegrals(const int natoms,double * atoms,const char * basisset,const bool output){ // Number of one-electron integrals.
-	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
-	libint2::BasisSet obs(basisset,libint2atoms);
+	__Basis_From_Atoms__
 	int nbasis=nBasis_from_obs(obs);
 	int n1integrals=(1+nbasis)*nbasis/2;
 	if (output) std::cout<<"Number of one-electron integrals in total ... "<<n1integrals<<std::endl;
@@ -59,8 +57,7 @@ EigenMatrix OneElectronIntegrals(const int natoms,double * atoms,const char * ba
 		operator_=libint2::Operator::nuclear;
 	}
 	time_t start=time(0);
-	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
-	libint2::BasisSet obs(basisset,libint2atoms);
+	__Basis_From_Atoms__
 	int nbasis=nBasis_from_obs(obs);
 	EigenMatrix matrix(nbasis,nbasis);
 	libint2::initialize();
@@ -114,8 +111,7 @@ EigenMatrix Nuclear(const int natoms,double * atoms,const char * basisset,const 
 EigenMatrix RepulsionDiag(const int natoms,double * atoms,const char * basisset,const bool output){ // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
 	if (output) std::cout<<"Calculating diagonal elements of repulsion integrals ... ";
 	time_t start=time(0);
-	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
-	libint2::BasisSet obs(basisset,libint2atoms);
+	__Basis_From_Atoms__
 	int nbasis=nBasis_from_obs(obs);
 	EigenMatrix repulsiondiag(nbasis,nbasis);
 	libint2::initialize();
@@ -158,8 +154,7 @@ EigenMatrix RepulsionDiag(const int natoms,double * atoms,const char * basisset,
 }
 
 long int nTwoElectronIntegrals(const int natoms,double * atoms,const char * basisset,EigenMatrix repulsiondiag,int & nshellquartets,const bool output){ // Numbers of two-electron integrals and nonequivalent shell quartets after Cauchy-Schwarz screening.
-	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
-	libint2::BasisSet obs(basisset,libint2atoms);
+	__Basis_From_Atoms__
         long int nbasis=(long int)nBasis_from_obs(obs);
 	long int n2integrals=nbasis*(nbasis+1)*(nbasis*(nbasis+1)/2+1)/4;
         if (output) std::cout<<"Number of two electron integrals in total ... "<<n2integrals<<std::endl;
@@ -217,8 +212,7 @@ long int nTwoElectronIntegrals(const int natoms,double * atoms,const char * basi
 void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellquartets,EigenMatrix repulsiondiag,double * repulsion,short int * indices,const int nprocs,const bool output){
 	if (output) std::cout<<"Calculating electron repulsion integrals ... ";
 	time_t start=time(0);
-	std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
-	libint2::BasisSet obs(basisset,libint2atoms);
+	__Basis_From_Atoms__
 	const auto shell2bf=obs.shell2bf();
 	short int * shellquartets=new short int[nshellquartets*4];
 	short int * shellquartetsranger=shellquartets;

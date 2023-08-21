@@ -18,3 +18,8 @@
 		"H","He","Li","Be","B","C","N","O","F","Ne",\
 		"Na","Mg","Al","Si","P","S","Cl","Ar","K","Ca"\
 	};
+
+#define __Basis_From_Atoms__\
+	const std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);\
+	libint2::BasisSet obs(basisset,libint2atoms);\
+	obs.set_pure(true);

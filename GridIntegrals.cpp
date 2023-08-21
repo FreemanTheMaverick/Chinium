@@ -89,10 +89,12 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 			double token1;ss__>>token1;
 			const double R=token1;
 			ri_func=[=](double i){
-				return R*pow(i/(nshells_total+1-i),2);
+				const double ii=i+1;
+				return R*pow(ii/(nshells_total+1-ii),2);
 			};
 			radial_weight_func=[=](double i){
-				return 2*pow(R,3)*(nshells_total+1)*pow(i,5)/pow(nshells_total+1-i,7);
+				const double ii=i+1;
+				return 2*pow(R,3)*(nshells_total+1)*pow(ii,5)/pow(nshells_total+1-ii,7);
 			};
 		}else assert((void("Unrecognized radial formula!"),0));
 		int ishell_total=0;
@@ -142,7 +144,7 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 			}
 		}
 	}
-	if (output) std::cout<<"Generating grid points and weights ... "<<double(clock()-start)/CLOCKS_PER_SEC<<" s"<<std::endl;;
+	if (output) std::cout<<"Generating grid points and weights ... "<<double(clock()-start)/CLOCKS_PER_SEC<<" s"<<std::endl;
 }
 
 #define __Uniform_Box_Grid_Number__\
@@ -206,8 +208,7 @@ void UniformBoxGrid(const int natoms,double * atoms,const char * basisset,double
 void GetAoValues(const int natoms,double * atoms,const char * basisset,
                  double * xs,double * ys,double * zs,long int ngrids,
                  double * aos){ // ibasis*ngrids+jgrid
-	const std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);
-	const libint2::BasisSet obs(basisset,libint2atoms);
+	__Basis_From_Atoms__
 	double xo,yo,zo,x,y,z,r2,a; // Basis function values;
 	double * x_ranger,* y_ranger,* z_ranger;
 	double * ao_rangers[16];
@@ -232,21 +233,21 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
 			a=0;
 			for (int iprim=0;iprim<nprims;++iprim) // Looping over primitive gaussians.
 				a+=shell.contr[0].coeff[iprim]*std::exp(-shell.alpha[iprim]*r2); // Each primitive gaussian contributes to the radial parts of basis functions.
-			switch(two_l_plus_one){ // Basis function values are the products of the radial parts and the spherical harmonic parts.
+			switch(two_l_plus_one){ // Basis function values are the products of the radial parts and the spherical harmonic parts. The following spherical harmonics are rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API. The normalization constants here differ from those from "Symmetries of Spherical Harmonics: applications to ambisonics" @ https://iaem.at/ambisonics/symposium2009/proceedings/ambisym09-chapman-shsymmetries.pdf/@@download/file/AmbiSym09_Chapman_SHSymmetries.pdf by a factor of sqrt(2l+1).
 				case 1: // S
 					*(ao_rangers[0]++)=a;
 					break;
 				case 3: // P
-					*(ao_rangers[0]++)=a*x;
-					*(ao_rangers[1]++)=a*y;
-					*(ao_rangers[2]++)=a*z;
+					*(ao_rangers[0]++)=a*y;
+					*(ao_rangers[1]++)=a*z;
+					*(ao_rangers[2]++)=a*x;
 					break;
-				case 5: // D and the following spherical harmonics are rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API. The normalization constants here differ from those from "Symmetries of Spherical Harmonics: applications to ambisonics" @ https://iaem.at/ambisonics/symposium2009/proceedings/ambisym09-chapman-shsymmetries.pdf/@@download/file/AmbiSym09_Chapman_SHSymmetries.pdf by a factor of sqrt(2l+1) except if l=1.
+				case 5: // D
 					*(ao_rangers[0]++)=a*x*y*sqrt(3);
 					*(ao_rangers[1]++)=a*y*z*sqrt(3);
-					*(ao_rangers[2]++)=a*(3*z*z-r2)*0.5;
+					*(ao_rangers[2]++)=a*(3*z*z-r2)/2;
 					*(ao_rangers[3]++)=a*x*z*sqrt(3);
-					*(ao_rangers[4]++)=a*(x*x-y*y)*sqrt(3)*0.5;
+					*(ao_rangers[4]++)=a*(x*x-y*y)*sqrt(3)/2;
 					break;
 				case 7: // F
 					*(ao_rangers[0]++)=a*y*(3*x*x-y*y)*sqrt(10)/4;
