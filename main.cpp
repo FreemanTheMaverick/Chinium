@@ -88,23 +88,7 @@ int main(int argc,char *argv[]){
 		           orbitalenergies,coefficients,density,
 		           nprocs,1);
 	}
-//double overhead=3;
-//double spacing=0.04;
-//ngrids=UniformBoxGridNumber(natoms,atoms,basisset,overhead,spacing);
-//UniformBoxGrid(natoms,atoms,basisset,overhead,spacing,xs,ys,zs);
-ngrids=SphericalGridNumber(grid,natoms,atoms,1);
-xs=new double[ngrids];
-ys=new double[ngrids];
-zs=new double[ngrids];
-ws=new double[ngrids];
-//for (long int igrid=0;igrid<ngrids;igrid++)
-//	ws[igrid]=spacing*spacing*spacing;
-SphericalGrid(grid,natoms,atoms,xs,ys,zs,ws,1);
-gridaos=new double[nbasis*ngrids];
-double * ds=new double[ngrids];
-GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,gridaos);
-GetDensity(gridaos,ngrids,2*density,ds);
-std::cout<<SumUp(ds,ws,ngrids);
+
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
 	delete [] xs;
@@ -113,7 +97,6 @@ std::cout<<SumUp(ds,ws,ngrids);
 	delete [] ws;
 	delete [] gridaos;
 	delete [] gridao1derivs;
-	delete [] ds;
 	delete [] repulsion;
 	delete [] indices;
 

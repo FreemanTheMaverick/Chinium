@@ -84,6 +84,8 @@ void getEVxc(int id,double * ds,double * gs,long int ngrids,double * es,double *
 			break;
 	}
 	xc_func_end(&func);
+	for (long int igrid=0;igrid<ngrids;igrid++)
+		es[igrid]*=ds[igrid];
 }
 
 /*

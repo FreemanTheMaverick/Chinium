@@ -18,7 +18,7 @@ long int SphericalGridNumber(std::string grid,const int natoms,double * atoms,co
 	for (int iatom=0;iatom<natoms;iatom++){
 		int ngroups;
 		std::ifstream gridfile(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
-		assert((void("Not enough element grid files in " __Grid_library_path__),gridfile.good()));
+		assert((void("Missing element grid files"),gridfile.good()));
 		std::string thisline;
 		getline(gridfile,thisline);
 		std::stringstream ss_(thisline);
@@ -36,17 +36,17 @@ long int SphericalGridNumber(std::string grid,const int natoms,double * atoms,co
 	return ngrids;
 }
 
-double s_p_miu(double x0,double y0,double z0,double x1,double y1,double z1,double x2,double y2,double z2){
+double s_p_mu(double x0,double y0,double z0,double x1,double y1,double z1,double x2,double y2,double z2){
 	const double x01=x0-x1;const double y01=y0-y1;const double z01=z0-z1;
 	const double r01=sqrt(x01*x01+y01*y01+z01*z01);
 	const double x02=x0-x2;const double y02=y0-y2;const double z02=z0-z2;
 	const double r02=sqrt(x02*x02+y02*y02+z02*z02);
 	const double x12=x1-x2;const double y12=y1-y2;const double z12=z1-z2;
 	const double r12=sqrt(x12*x12+y12*y12+z12*z12);
-	const double miu=(r01-r02)/r12;
-	const double p1=1.5*miu+0.5*miu*miu*miu;
-	const double p2=1.5*p1+0.5*p1*p1*p1;
-	const double p3=1.5*p2+0.5*p2*p2*p2;
+	const double mu=(r01-r02)/r12;
+	const double p1=1.5*mu-0.5*mu*mu*mu;
+	const double p2=1.5*p1-0.5*p1*p1*p1;
+	const double p3=1.5*p2-0.5*p2*p2*p2;
 	return 0.5*(1-p3);
 }
 
@@ -128,7 +128,7 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 							const double xk=atoms[4*katom+1];
 							const double yk=atoms[4*katom+2];
 							const double zk=atoms[4*katom+3];
-							unnorm_becke_wj*=s_p_miu(x,y,z,xj,yj,zj,xk,yk,zk);
+							unnorm_becke_wj*=s_p_mu(x,y,z,xj,yj,zj,xk,yk,zk);
 						}
 						unnorm_becke_w_total+=unnorm_becke_wj;
 						if (iatom==jatom)
@@ -345,7 +345,7 @@ EigenMatrix VxcMatrix(double * aos,double * weights,double * vrs,long int ngrids
 	EigenMatrix vxc=EigenZero(nbasis,nbasis);
 	double vij;
 	for (int irow=0;irow<nbasis;irow++){
-		for (int jcol=0;jcol<irow;jcol++){
+		for (int jcol=0;jcol<=irow;jcol++){
 			iao_ranger=aos+irow*ngrids;
 			jao_ranger=aos+jcol*ngrids;
 			weight_ranger=weights;
