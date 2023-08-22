@@ -10,9 +10,12 @@ void UniformBoxGrid(const int natoms,double * atoms,const char * basisset,double
 
 void GetAoValues(const int natoms,double * atoms,const char * basisset,
                  double * xs,double * ys,double * zs,long int size,
-                 double * results);
+                 double * aos,
+                 double * ao1xs,double * ao1ys,double * ao1zs);
 
 void GetDensity(double * aos,long int ngrids,EigenMatrix D,double * density);
+
+void VectorAddition(double * as,double * bs,long int ngrids);
 
 double SumUp(double * ds,double * weights,long int ngrids);
 

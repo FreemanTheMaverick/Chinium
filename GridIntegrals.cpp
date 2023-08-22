@@ -207,7 +207,8 @@ void UniformBoxGrid(const int natoms,double * atoms,const char * basisset,double
 
 void GetAoValues(const int natoms,double * atoms,const char * basisset,
                  double * xs,double * ys,double * zs,long int ngrids,
-                 double * aos){ // ibasis*ngrids+jgrid
+                 double * aos,
+                 double * ao1xs,double * ao1ys,double * ao1zs){ // ibasis*ngrids+jgrid
 	__Basis_From_Atoms__
 	double xo,yo,zo,x,y,z,r2,a; // Basis function values;
 	double * x_ranger,* y_ranger,* z_ranger;
@@ -215,16 +216,17 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
 	int two_l_plus_one,nprims; // These in-loop variables had better be declared outside the loop. Tests showed that the codes as such are faster than those otherwise.
 	int ibasis=0;
 	for (const libint2::Shell & shell:obs){
+		two_l_plus_one=shell.size();
+		nprims=shell.nprim();
+		for (int iranger=0;iranger<two_l_plus_one;iranger++,ibasis++){
+			ao_rangers[iranger]=aos+ibasis*ngrids;
+		}
 		xo=shell.O[0];
 		yo=shell.O[1];
 		zo=shell.O[2];
 		x_ranger=xs;
 		y_ranger=ys;
 		z_ranger=zs;
-		two_l_plus_one=shell.size();
-		for (int iranger=0;iranger<two_l_plus_one;iranger++,ibasis++)
-			ao_rangers[iranger]=aos+ibasis*ngrids;
-		nprims=shell.nprim();
 		for (long int k=0;k<ngrids;++k){
 			x=*(x_ranger++)-xo; // Coordintes with the origin at the centre of the shell.
 			y=*(y_ranger++)-yo;
@@ -303,56 +305,49 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
 }
 
 void GetDensity(double * aos,long int ngrids,EigenMatrix D,double * ds){
-	double * i_ranger=aos; // ibasis*ngrids+jgrid
-	double * j_ranger=aos;
-	double * d_ranger=ds;
-	for (long int i=0;i<ngrids;i++)
-		*(d_ranger++)=0;
-	d_ranger=ds;
+	double * iao=aos;
+	double * jao=aos;
+	for (long int kgrid=0;kgrid<ngrids;kgrid++)
+		ds[kgrid]=0;
 	double Dij;
 	for (int ibasis=0;ibasis<D.cols();ibasis++){
-		for (int jbasis=0;jbasis<ibasis;jbasis++){
-			i_ranger=aos+ibasis*ngrids;
-			j_ranger=aos+jbasis*ngrids;
-			d_ranger=ds;
-			Dij=D(ibasis,jbasis);
-			for (long int igrid=0;igrid<ngrids;igrid++)
-				*(d_ranger++)+=2*Dij**(i_ranger++)**(j_ranger++);
-		}
-		i_ranger=aos+ibasis*ngrids;
-		j_ranger=i_ranger;
-		d_ranger=ds;
 		Dij=D(ibasis,ibasis);
-		for (long int igrid=0;igrid<ngrids;igrid++)
-			*(d_ranger++)+=Dij**(i_ranger++)**(j_ranger++);
+		iao=aos+ibasis*ngrids; // ibasis*ngrids+jgrid
+		for (long int kgrid=0;kgrid<ngrids;kgrid++)
+			ds[kgrid]+=Dij*iao[kgrid]*iao[kgrid];
+		for (int jbasis=0;jbasis<ibasis;jbasis++){
+			jao=aos+jbasis*ngrids;
+			Dij=D(ibasis,jbasis);
+			for (long int kgrid=0;kgrid<ngrids;kgrid++)
+				ds[kgrid]+=2*Dij*iao[kgrid]*jao[kgrid];
+		}
 	}
 }
 
-double SumUp(double * ds,double * weights,long int ngrids){
-	double * d_ranger=ds;
-	double * weight_ranger=weights;
+void VectorAddition(double * as,double * bs,long int ngrids){
+	for (long int igrid=0;igrid<ngrids;igrid++)
+		as[igrid]+=bs[igrid];
+}
+
+double SumUp(double * ds,double * ws,long int ngrids){
 	double n=0;
-	for (long int i=0;i<ngrids;i++)
-		n+=*(d_ranger++)**(weight_ranger++);
+	for (long int igrid=0;igrid<ngrids;igrid++)
+		n+=ds[igrid]*ws[igrid];
 	return n;
 }
 
 EigenMatrix VxcMatrix(double * aos,double * weights,double * vrs,long int ngrids,int nbasis){
-	double * iao_ranger;
-	double * jao_ranger;
-	double * weight_ranger;
-	double * v_ranger;
+	double * iao=aos;
+	double * jao=aos;
+	double vij=0;
 	EigenMatrix vxc=EigenZero(nbasis,nbasis);
-	double vij;
 	for (int irow=0;irow<nbasis;irow++){
+		iao=aos+irow*ngrids;
 		for (int jcol=0;jcol<=irow;jcol++){
-			iao_ranger=aos+irow*ngrids;
-			jao_ranger=aos+jcol*ngrids;
-			weight_ranger=weights;
-			v_ranger=vrs;
+			jao=aos+jcol*ngrids;
 			vij=0;
 			for (int kgrid=0;kgrid<ngrids;kgrid++)
-				vij+=*(iao_ranger++)**(jao_ranger++)**(weight_ranger++)**(v_ranger++);
+				vij+=iao[kgrid]*jao[kgrid]*weights[kgrid]*vrs[kgrid];
 			vxc(irow,jcol)=vij;
 			vxc(jcol,irow)=vij;
 		}

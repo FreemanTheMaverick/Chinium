@@ -30,21 +30,49 @@ int main(int argc,char *argv[]){
 	else if (guess.compare("sad")==0)
 		density=SuperpositionAtomicDensity(ne,natoms,atoms,basisset);
 
-	std::string grid=ReadGrid(argv[1],1);
 	long int ngrids=0;
 	double * xs=nullptr;
 	double * ys=nullptr;
 	double * zs=nullptr;
 	double * ws=nullptr;
-	double * gridaos=nullptr;
-	double * gridao1derivs=nullptr;
-	if (! grid.empty()){
+	std::string grid=ReadGrid(argv[1],1);
+	if (!grid.empty()){
 		ngrids=SphericalGridNumber(grid,natoms,atoms,1);
 		xs=new double[ngrids];
 		ys=new double[ngrids];
 		zs=new double[ngrids];
 		ws=new double[ngrids];
 		SphericalGrid(grid,natoms,atoms,xs,ys,zs,ws,1);
+	}
+
+	const std::string method=ReadMethod(argv[1],1);
+	int dfxid,dfcid;
+	double kscale;
+	char approx;
+	const std::string scf="";
+
+	double * gridaos=nullptr;
+	double * gridao1xs=nullptr;
+	double * gridao1ys=nullptr;
+	double * gridao1zs=nullptr;
+	if (method.compare("rhf")!=0 || scf.compare("rijcosx")!=0){ // Two job types require grids.
+		if (method.compare("rhf")!=0){
+			assert((void("DFT needs a grid to be set!"),! grid.empty()));
+			ReadDF(method,dfxid,dfcid,kscale,approx,1);
+			if (approx=='l') 
+				gridaos=new double[nbasis*ngrids];
+			else if (approx=='g'){
+				gridaos=new double[nbasis*ngrids];
+				gridao1xs=new double[nbasis*ngrids];
+				gridao1ys=new double[nbasis*ngrids];
+				gridao1zs=new double[nbasis*ngrids];
+			}else if (approx=='m'){;}
+		}else if (scf.compare("rijcosx")!=0){
+			assert((void("RIJCOSX needs a grid to be set!"),! grid.empty()));
+			if (gridaos==nullptr) gridaos=new double[nbasis*ngrids];
+		}
+		GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,
+		            gridaos,gridao1xs,gridao1ys,gridao1zs);
 	}
 
 	const EigenMatrix overlap=Overlap(natoms,atoms,basisset,1);
@@ -63,31 +91,19 @@ int main(int argc,char *argv[]){
 	EigenMatrix coefficients(nbasis,nbasis);
 
 	double energy=114514;
-	const std::string method=ReadMethod(argv[1],1);
 	if (method.compare("rhf")==0)
 		energy=RHF(ne,overlap,hcore,
 		           repulsion,indices,n2integrals,
 		           orbitalenergies,coefficients,density,
 		           nprocs,1);
-	else{
-		assert((void("DFT needs a grid to be set!"),ngrids>0));
-		int dfxid,dfcid;
-		double kscale;
-		char approx;
-		ReadDF(method,dfxid,dfcid,kscale,approx,1);
-		if (! gridaos){
-			gridaos=new double[nbasis*ngrids];
-			GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,gridaos);
-		}
-		if (! gridao1derivs && approx=='g'){
-			gridao1derivs=new double[nbasis*ngrids*3];
-		}
+	else
 		energy=RKS(ne,overlap,hcore,
 		           repulsion,indices,n2integrals,
-		           dfxid,dfcid,ngrids,gridaos,gridao1derivs,ws,
+		           dfxid,dfcid,ngrids,ws,
+		           gridaos,
+		           gridao1xs,gridao1ys,gridao1zs,
 		           orbitalenergies,coefficients,density,
 		           nprocs,1);
-	}
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
@@ -96,7 +112,9 @@ int main(int argc,char *argv[]){
 	delete [] zs;
 	delete [] ws;
 	delete [] gridaos;
-	delete [] gridao1derivs;
+	delete [] gridao1xs;
+	delete [] gridao1ys;
+	delete [] gridao1zs;
 	delete [] repulsion;
 	delete [] indices;
 

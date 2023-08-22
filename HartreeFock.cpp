@@ -89,12 +89,12 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 		GetDensity(gridaos,ngrids,2*density,ds);\
 		getEVxc(dfxid,ds,gs,ngrids,exs,vrs,vss);\
 		Vxc=VxcMatrix(gridaos,gridweights,vrs,ngrids,nbasis);\
-		exc=SumUp(exs,gridweights,ngrids);\
 		if (dfcid){\
 			getEVxc(dfcid,ds,gs,ngrids,ecs,vrs,vss);\
 			Vxc+=VxcMatrix(gridaos,gridweights,vrs,ngrids,nbasis);\
-			exc+=SumUp(ecs,gridweights,ngrids);\
 		}\
+		VectorAddition(exs,ecs,ngrids);\
+		exc=SumUp(exs,gridweights,ngrids);\
 		F+=Vxc;\
 	}\
 	G=4*(overlap*density*F-F*density*overlap); // Electronic gradient of energy with respect to nonredundant orbital rotational parameters. [F(D),D] instead of [F,D(F)].
@@ -128,7 +128,9 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 
 double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
             double * repulsion,short int * indices,long int n2integrals,
-            int dfxid,int dfcid,long int ngrids,double * gridaos,double * gridao1derivs,double * gridweights,
+            int dfxid,int dfcid,long int ngrids,double * gridweights,
+            double * gridaos,
+            double * gridao1xs,double * gridao1ys,double * gridao1zs,
             EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,
             const int nprocs,const bool output){
 	if (output){
@@ -274,7 +276,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 		}
 		iiteration++;
 	}while (abs(Es[0]-Es[1])>__scf_convergence_energy_threshold__ || pG.norm()>__scf_convergence_gradient_threshold__);
-	if (output) std::cout<<"| Done; Final RHF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
+	if (output) std::cout<<"| Done; Final SCF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
 	const double energy=Es[0];
 
 	delete [] Es;
@@ -309,7 +311,9 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,
            const int nprocs,const bool output){
 	return RKS(nele,overlap,hcore,
                     repulsion,indices,n2integrals,
-                    0,0,0,nullptr,nullptr,nullptr,
+                    0,0,0,nullptr,
+	            nullptr,
+	            nullptr,nullptr,nullptr,
                     orbitalenergies,coefficients,density,
                     nprocs,output);
 }
