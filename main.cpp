@@ -49,13 +49,13 @@ int main(int argc,char *argv[]){
 	int dfxid,dfcid;
 	double kscale;
 	char approx;
-	const std::string scf="";
+	const std::string scf="rijcosx";
 
 	double * gridaos=nullptr;
 	double * gridao1xs=nullptr;
 	double * gridao1ys=nullptr;
 	double * gridao1zs=nullptr;
-	if (method.compare("rhf")!=0 || scf.compare("rijcosx")!=0){ // Two job types require grids.
+	if (method.compare("rhf")!=0 || scf.compare("rijcosx")==0){ // Two job types require grids.
 		if (method.compare("rhf")!=0){
 			assert((void("DFT needs a grid to be set!"),! grid.empty()));
 			ReadDF(method,dfxid,dfcid,kscale,approx,1);
@@ -66,10 +66,19 @@ int main(int argc,char *argv[]){
 				gridao1xs=new double[nbasis*ngrids];
 				gridao1ys=new double[nbasis*ngrids];
 				gridao1zs=new double[nbasis*ngrids];
-			}else if (approx=='m'){;}
-		}else if (scf.compare("rijcosx")!=0){
+			}else if (approx=='m'){
+				gridaos=new double[nbasis*ngrids];
+				gridao1xs=new double[nbasis*ngrids];
+				gridao1ys=new double[nbasis*ngrids];
+				gridao1zs=new double[nbasis*ngrids];
+			}
+		}else if (scf.compare("rijcosx")==0){
 			assert((void("RIJCOSX needs a grid to be set!"),! grid.empty()));
 			if (gridaos==nullptr) gridaos=new double[nbasis*ngrids];
+				gridao1xs=new double[nbasis*ngrids];
+				gridao1ys=new double[nbasis*ngrids];
+				gridao1zs=new double[nbasis*ngrids];
+
 		}
 		GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,
 		            gridaos,gridao1xs,gridao1ys,gridao1zs);
@@ -106,6 +115,11 @@ int main(int argc,char *argv[]){
 		           nprocs,1);
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
+/*std::cout<<xs[10000]<<" ";
+std::cout<<ys[10000]<<" ";
+std::cout<<zs[10000]<<std::endl;
+double * cgs=new double[ngrids];
+GetContractedGradient(gridaos,gridao1xs,gridao1ys,gridao1zs,ngrids,2*density,cgs);*/
 
 	delete [] xs;
 	delete [] ys;
@@ -117,7 +131,6 @@ int main(int argc,char *argv[]){
 	delete [] gridao1zs;
 	delete [] repulsion;
 	delete [] indices;
-
 	std::cout<<"*** Chinium terminated normally ***"<<std::endl;
 	return 0;
 }

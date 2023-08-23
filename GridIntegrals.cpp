@@ -209,99 +209,272 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
                  double * xs,double * ys,double * zs,long int ngrids,
                  double * aos,
                  double * ao1xs,double * ao1ys,double * ao1zs){ // ibasis*ngrids+jgrid
-	__Basis_From_Atoms__
-	double xo,yo,zo,x,y,z,r2,a; // Basis function values;
-	double * x_ranger,* y_ranger,* z_ranger;
-	double * ao_rangers[16];
-	int two_l_plus_one,nprims; // These in-loop variables had better be declared outside the loop. Tests showed that the codes as such are faster than those otherwise.
-	int ibasis=0;
-	for (const libint2::Shell & shell:obs){
-		two_l_plus_one=shell.size();
-		nprims=shell.nprim();
-		for (int iranger=0;iranger<two_l_plus_one;iranger++,ibasis++){
-			ao_rangers[iranger]=aos+ibasis*ngrids;
-		}
-		xo=shell.O[0];
-		yo=shell.O[1];
-		zo=shell.O[2];
-		x_ranger=xs;
-		y_ranger=ys;
-		z_ranger=zs;
-		for (long int k=0;k<ngrids;++k){
-			x=*(x_ranger++)-xo; // Coordintes with the origin at the centre of the shell.
-			y=*(y_ranger++)-yo;
-			z=*(z_ranger++)-zo;
-			r2=x*x+y*y+z*z;
-			a=0;
-			for (int iprim=0;iprim<nprims;++iprim) // Looping over primitive gaussians.
-				a+=shell.contr[0].coeff[iprim]*std::exp(-shell.alpha[iprim]*r2); // Each primitive gaussian contributes to the radial parts of basis functions.
-			switch(two_l_plus_one){ // Basis function values are the products of the radial parts and the spherical harmonic parts. The following spherical harmonics are rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API. The normalization constants here differ from those from "Symmetries of Spherical Harmonics: applications to ambisonics" @ https://iaem.at/ambisonics/symposium2009/proceedings/ambisym09-chapman-shsymmetries.pdf/@@download/file/AmbiSym09_Chapman_SHSymmetries.pdf by a factor of sqrt(2l+1).
-				case 1: // S
-					*(ao_rangers[0]++)=a;
-					break;
-				case 3: // P
-					*(ao_rangers[0]++)=a*y;
-					*(ao_rangers[1]++)=a*z;
-					*(ao_rangers[2]++)=a*x;
-					break;
-				case 5: // D
-					*(ao_rangers[0]++)=a*x*y*sqrt(3);
-					*(ao_rangers[1]++)=a*y*z*sqrt(3);
-					*(ao_rangers[2]++)=a*(3*z*z-r2)/2;
-					*(ao_rangers[3]++)=a*x*z*sqrt(3);
-					*(ao_rangers[4]++)=a*(x*x-y*y)*sqrt(3)/2;
-					break;
-				case 7: // F
-					*(ao_rangers[0]++)=a*y*(3*x*x-y*y)*sqrt(10)/4;
-					*(ao_rangers[1]++)=a*x*y*z*sqrt(15);
-					*(ao_rangers[2]++)=a*y*(5*z*z-r2)*sqrt(6)/4;
-					*(ao_rangers[3]++)=a*(5*z*z*z-3*z*r2)/2;
-					*(ao_rangers[4]++)=a*x*(5*z*z-r2)*sqrt(6)/4;
-					*(ao_rangers[5]++)=a*(x*x-y*y)*z*sqrt(15)/2;
-					*(ao_rangers[6]++)=a*x*(x*x-3*y*y)*sqrt(10)/4;
-					break;
-				case 9: // G
-					*(ao_rangers[0]++)=a*x*y*(x*x-y*y)*sqrt(35)/2;
-					*(ao_rangers[1]++)=a*y*(3*x*x-y*y)*z*sqrt(70)/4;
-					*(ao_rangers[2]++)=a*x*y*(7*z*z-r2)*sqrt(5)/2;
-					*(ao_rangers[3]++)=a*y*(7*z*z*z-3*z*r2)*sqrt(10)/4;
-					*(ao_rangers[4]++)=a*(35*z*z*z*z-30*z*z*r2+3*r2*r2)/8;
-					*(ao_rangers[5]++)=a*x*(7*z*z*z-3*z*r2)*sqrt(10)/4;
-					*(ao_rangers[6]++)=a*(x*x-y*y)*(7*z*z-r2)*sqrt(5)/4;
-					*(ao_rangers[7]++)=a*x*(x*x-3*y*y)*z*sqrt(70)/4;
-					*(ao_rangers[8]++)=a*(x*x*(x*x-3*y*y)-y*y*(3*x*x-y*y))*sqrt(35)/8;
-					break;
-				case 11: // H
-					*(ao_rangers[0]++)=a*y*(5*x*x*x*x-10*x*x*y*y+y*y*y*y)*3*sqrt(14)/16;
-					*(ao_rangers[1]++)=a*x*y*z*(x*x-y*y)*3*sqrt(35)/2;
-					*(ao_rangers[2]++)=a*y*(y*y*y*y-2*x*x*y*y-3*x*x*x*x-8*y*y*z*z+24*x*x*z*z)*sqrt(70)/16;
-					*(ao_rangers[3]++)=a*x*y*z*(2*z*z-x*x-y*y)*sqrt(105)/2;
-					*(ao_rangers[4]++)=a*y*(x*x*x*x+2*x*x*y*y+y*y*y*y-12*x*x*z*z-12*y*y*z*z+8*z*z*z*z)*sqrt(15)/8;
-					*(ao_rangers[5]++)=a*z*(15*x*x*x*x+15*y*y*y*y+8*z*z*z*z+30*x*x*y*y-40*x*x*z*z-40*y*y*z*z)/8;
-					*(ao_rangers[6]++)=a*x*(x*x*x*x+2*x*x*y*y+y*y*y*y-12*x*x*z*z-12*y*y*z*z+8*z*z*z*z)*sqrt(15)/8;
-					*(ao_rangers[7]++)=a*z*(2*x*x*z*z-2*y*y*z*z-x*x*x*x+y*y*y*y)*sqrt(105)/4;
-					*(ao_rangers[8]++)=a*x*(2*x*x*y*y+8*x*x*z*z-24*y*y*z*z-x*x*x*x+3*y*y*y*y)*sqrt(70)/16;
-					*(ao_rangers[9]++)=a*z*(x*x*x*x-6*x*x*y*y+y*y*y*y)*3*sqrt(35)/8;
-					*(ao_rangers[10]++)=a*x*(x*x*x*x-10*x*x*y*y+5*y*y*y*y)*3*sqrt(14)/16;
-					break;
-				case 13: // I
-					*(ao_rangers[0]++)=a*x*y*(3*x*x*x*x-10*x*x*y*y+3*y*y*y*y)*sqrt(462)/16;
-					*(ao_rangers[1]++)=a*y*z*(5*x*x*x*x-10*x*x*y*y+y*y*y*y)*3*sqrt(154)/16;
-					*(ao_rangers[2]++)=a*x*y*(-x*x*x*x+y*y*y*y+10*x*x*z*z-10*y*y*z*z)*3*sqrt(7)/4;
-					*(ao_rangers[3]++)=a*y*z*(-9*x*x*x*x+3*y*y*y*y-6*x*x*y*y+24*x*x*z*z-8*y*y*z*z)*sqrt(210)/16;
-					*(ao_rangers[4]++)=a*x*y*(x*x*x*x+y*y*y*y+16*z*z*z*z+2*x*x*y*y-16*x*x*z*z-16*y*y*z*z)*sqrt(210)/16;
-					*(ao_rangers[5]++)=a*y*z*(5*x*x*x*x+5*y*y*y*y+8*z*z*z*z+10*x*x*y*y-20*x*x*z*z-20*y*y*z*z)*sqrt(21)/8;
-					*(ao_rangers[6]++)=a*(16*z*z*z*z*z*z-5*x*x*x*x*x*x-5*y*y*y*y*y*y-15*x*x*x*x*y*y+90*x*x*x*x*z*z+90*y*y*y*y*z*z-120*y*y*z*z*z*z-15*x*x*y*y*y*y-120*x*x*z*z*z*z+180*x*x*y*y*z*z)/16;
-					*(ao_rangers[7]++)=a*x*z*(5*x*x*x*x+5*y*y*y*y+8*z*z*z*z+10*x*x*y*y-20*x*x*z*z-20*y*y*z*z)*sqrt(21)/8;
-					*(ao_rangers[8]++)=a*(x*x*x*x*x*x-y*y*y*y*y*y+x*x*x*x*y*y-x*x*y*y*y*y-16*x*x*x*x*z*z+16*x*x*z*z*z*z+16*y*y*y*y*z*z-16*y*y*z*z*z*z)*sqrt(210)/32;
-					*(ao_rangers[9]++)=a*x*z*(-3*x*x*x*x+6*x*x*y*y+8*x*x*z*z-24*y*y*z*z+9*y*y*y*y)*sqrt(210)/16;
-					*(ao_rangers[10]++)=a*(-x*x*x*x*x*x+5*x*x*x*x*y*y+10*x*x*x*x*z*z+5*x*x*y*y*y*y+10*y*y*y*y*z*z-y*y*y*y*y*y-60*x*x*y*y*z*z)*3*sqrt(7)/16;
-					*(ao_rangers[11]++)=a*x*z*(x*x*x*x-10*x*x*y*y+5*y*y*y*y)*3*sqrt(154)/16;
-					*(ao_rangers[12]++)=a*(x*x*x*x*x*x-15*x*x*x*x*y*y+15*x*x*y*y*y*y-y*y*y*y*y*y)*sqrt(462)/32;
-					break;
-			}
-		}
-	}
+ __Basis_From_Atoms__
+ double xo,yo,zo,x,y,z,r2;
+ double a,apx,apy,apz; // Basis function values;
+ double * ao_rangers[16];
+ double * ao1x_rangers[16];
+ double * ao1y_rangers[16];
+ double * ao1z_rangers[16];
+ int two_l_plus_one,nprims; // These in-loop variables had better be declared outside the loop. Tests showed that the codes as such are faster than those otherwise.
+ int ibasis=0;
+ for (const libint2::Shell & shell:obs){
+  two_l_plus_one=shell.size();
+  nprims=shell.nprim();
+  for (int iranger=0;iranger<two_l_plus_one;iranger++,ibasis++){
+   ao_rangers[iranger]=aos+ibasis*ngrids;
+   if (ao1xs){
+    ao1x_rangers[iranger]=ao1xs+ibasis*ngrids;
+    ao1y_rangers[iranger]=ao1ys+ibasis*ngrids;
+    ao1z_rangers[iranger]=ao1zs+ibasis*ngrids;
+   }
+  }
+  xo=shell.O[0];
+  yo=shell.O[1];
+  zo=shell.O[2];
+  for (long int k=0;k<ngrids;++k){
+   x=xs[k]-xo; // Coordintes with the origin at the centre of the shell.
+   y=ys[k]-yo;
+   z=zs[k]-zo;
+   r2=x*x+y*y+z*z;
+   a=0;
+   apx=0;apy=0;apz=0;
+   for (int iprim=0;iprim<nprims;++iprim){ // Looping over primitive gaussians.
+    a+=shell.contr[0].coeff[iprim]*std::exp(-shell.alpha[iprim]*r2); // Each primitive gaussian contributes to the radial parts of basis functions.
+    if (ao1xs){
+     apx-=shell.contr[0].coeff[iprim]*2*shell.alpha[iprim]*x*std::exp(-shell.alpha[iprim]*r2);
+     apy-=shell.contr[0].coeff[iprim]*2*shell.alpha[iprim]*y*std::exp(-shell.alpha[iprim]*r2);
+     apz-=shell.contr[0].coeff[iprim]*2*shell.alpha[iprim]*z*std::exp(-shell.alpha[iprim]*r2);
+    }
+   }
+   switch(two_l_plus_one){ // Basis function values are the products of the radial parts and the spherical harmonic parts. The following spherical harmonics are rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API. The normalization constants here differ from those from "Symmetries of Spherical Harmonics: applications to ambisonics" @ https://iaem.at/ambisonics/symposium2009/proceedings/ambisym09-chapman-shsymmetries.pdf/@@download/file/AmbiSym09_Chapman_SHSymmetries.pdf apy a factor of sqrt(2l+1).
+    case 1: // S
+     ao_rangers[0][k]=a;
+     if (ao1xs){ // (uv)' = u'v + uv'
+      ao1x_rangers[0][k]=apx*ao_rangers[0][k]/a+a*0;
+      ao1y_rangers[0][k]=apy*ao_rangers[0][k]/a+a*0;
+      ao1z_rangers[0][k]=apz*ao_rangers[0][k]/a+a*0;
+     }
+     break;
+    case 3: // P
+     ao_rangers[0][k]=a*y;
+     ao_rangers[1][k]=a*z;
+     ao_rangers[2][k]=a*x;
+     if (ao1xs){
+      ao1x_rangers[0][k]=apx*ao_rangers[0][k]/a+a*0;
+      ao1y_rangers[0][k]=apy*ao_rangers[0][k]/a+a*1;
+      ao1z_rangers[0][k]=apz*ao_rangers[0][k]/a+a*0;
+      ao1x_rangers[1][k]=apx*ao_rangers[1][k]/a+a*0;
+      ao1y_rangers[1][k]=apy*ao_rangers[1][k]/a+a*0;
+      ao1z_rangers[1][k]=apz*ao_rangers[1][k]/a+a*1;
+      ao1x_rangers[2][k]=apx*ao_rangers[2][k]/a+a*1;
+      ao1y_rangers[2][k]=apy*ao_rangers[2][k]/a+a*0;
+      ao1z_rangers[2][k]=apz*ao_rangers[2][k]/a+a*0;
+     }
+     break;
+    case 5: // D
+     ao_rangers[0][k]=a*x*y*sqrt(3);
+     ao_rangers[1][k]=a*y*z*sqrt(3);
+     ao_rangers[2][k]=a*(3*z*z-r2)/2;
+     ao_rangers[3][k]=a*x*z*sqrt(3);
+     ao_rangers[4][k]=a*(x*x-y*y)*sqrt(3)/2;
+     if (ao1xs){
+      ao1x_rangers[0][k]=apx*ao_rangers[0][k]/a+a*sqrt(3)*y;
+      ao1y_rangers[0][k]=apy*ao_rangers[0][k]/a+a*sqrt(3)*x;
+      ao1z_rangers[0][k]=apz*ao_rangers[0][k]/a+a*0;
+      ao1x_rangers[1][k]=apx*ao_rangers[1][k]/a+a*0;
+      ao1y_rangers[1][k]=apy*ao_rangers[1][k]/a+a*sqrt(3)*z;
+      ao1z_rangers[1][k]=apz*ao_rangers[1][k]/a+a*sqrt(3)*y;
+      ao1x_rangers[2][k]=apx*ao_rangers[2][k]/a+a*( -x );
+      ao1y_rangers[2][k]=apy*ao_rangers[2][k]/a+a*( -y );
+      ao1z_rangers[2][k]=apz*ao_rangers[2][k]/a+a*2*z;
+      ao1x_rangers[3][k]=apx*ao_rangers[3][k]/a+a*sqrt(3)*z;
+      ao1y_rangers[3][k]=apy*ao_rangers[3][k]/a+a*0;
+      ao1z_rangers[3][k]=apz*ao_rangers[3][k]/a+a*sqrt(3)*x;
+      ao1x_rangers[4][k]=apx*ao_rangers[4][k]/a+a*sqrt(3)*x;
+      ao1y_rangers[4][k]=apy*ao_rangers[4][k]/a+a*( -sqrt(3)*y );
+      ao1z_rangers[4][k]=apz*ao_rangers[4][k]/a+a*0;
+     }
+     break;
+    case 7: // F
+     ao_rangers[0][k]=a*y*(3*x*x-y*y)*sqrt(10)/4;
+     ao_rangers[1][k]=a*x*y*z*sqrt(15);
+     ao_rangers[2][k]=a*y*(5*z*z-r2)*sqrt(6)/4;
+     ao_rangers[3][k]=a*(5*z*z*z-3*z*r2)/2;
+     ao_rangers[4][k]=a*x*(5*z*z-r2)*sqrt(6)/4;
+     ao_rangers[5][k]=a*(x*x-y*y)*z*sqrt(15)/2;
+     ao_rangers[6][k]=a*x*(x*x-3*y*y)*sqrt(10)/4;
+     if (ao1xs){
+      ao1x_rangers[0][k]=apx*ao_rangers[0][k]/a+a*3*sqrt(10)*x*y/2;
+      ao1y_rangers[0][k]=apy*ao_rangers[0][k]/a+a*3*sqrt(10)*(x*x - y*y)/4;
+      ao1z_rangers[0][k]=apz*ao_rangers[0][k]/a+a*0;
+      ao1x_rangers[1][k]=apx*ao_rangers[1][k]/a+a*sqrt(15)*y*z;
+      ao1y_rangers[1][k]=apy*ao_rangers[1][k]/a+a*sqrt(15)*x*z;
+      ao1z_rangers[1][k]=apz*ao_rangers[1][k]/a+a*sqrt(15)*x*y;
+      ao1x_rangers[2][k]=apx*ao_rangers[2][k]/a+a*( -sqrt(6)*x*y/2 );
+      ao1y_rangers[2][k]=apy*ao_rangers[2][k]/a+a*sqrt(6)*(-x*x - 3*y*y + 4*z*z)/4;
+      ao1z_rangers[2][k]=apz*ao_rangers[2][k]/a+a*2*sqrt(6)*y*z;
+      ao1x_rangers[3][k]=apx*ao_rangers[3][k]/a+a*( -3*x*z );
+      ao1y_rangers[3][k]=apy*ao_rangers[3][k]/a+a*( -3*y*z );
+      ao1z_rangers[3][k]=apz*ao_rangers[3][k]/a+a*( -3*x*x/2 - 3*y*y/2 + 3*z*z );
+      ao1x_rangers[4][k]=apx*ao_rangers[4][k]/a+a*sqrt(6)*(-3*x*x - y*y + 4*z*z)/4;
+      ao1y_rangers[4][k]=apy*ao_rangers[4][k]/a+a*( -sqrt(6)*x*y/2 );
+      ao1z_rangers[4][k]=apz*ao_rangers[4][k]/a+a*2*sqrt(6)*x*z;
+      ao1x_rangers[5][k]=apx*ao_rangers[5][k]/a+a*sqrt(15)*x*z;
+      ao1y_rangers[5][k]=apy*ao_rangers[5][k]/a+a*( -sqrt(15)*y*z );
+      ao1z_rangers[5][k]=apz*ao_rangers[5][k]/a+a*sqrt(15)*(x*x - y*y)/2;
+      ao1x_rangers[6][k]=apx*ao_rangers[6][k]/a+a*3*sqrt(10)*(x*x - y*y)/4;
+      ao1y_rangers[6][k]=apy*ao_rangers[6][k]/a+a*( -3*sqrt(10)*x*y/2 );
+      ao1z_rangers[6][k]=apz*ao_rangers[6][k]/a+a*0;
+     }
+     break;
+    case 9: // G
+     ao_rangers[0][k]=a*x*y*(x*x-y*y)*sqrt(35)/2;
+     ao_rangers[1][k]=a*y*(3*x*x-y*y)*z*sqrt(70)/4;
+     ao_rangers[2][k]=a*x*y*(7*z*z-r2)*sqrt(5)/2;
+     ao_rangers[3][k]=a*y*(7*z*z*z-3*z*r2)*sqrt(10)/4;
+     ao_rangers[4][k]=a*(35*z*z*z*z-30*z*z*r2+3*r2*r2)/8;
+     ao_rangers[5][k]=a*x*(7*z*z*z-3*z*r2)*sqrt(10)/4;
+     ao_rangers[6][k]=a*(x*x-y*y)*(7*z*z-r2)*sqrt(5)/4;
+     ao_rangers[7][k]=a*x*(x*x-3*y*y)*z*sqrt(70)/4;
+     ao_rangers[8][k]=a*(x*x*(x*x-3*y*y)-y*y*(3*x*x-y*y))*sqrt(35)/8;
+     if (ao1xs){
+      ao1x_rangers[0][k]=apx*ao_rangers[0][k]/a+a*sqrt(35)*y*(3*x*x - y*y)/2;
+      ao1y_rangers[0][k]=apy*ao_rangers[0][k]/a+a*sqrt(35)*x*(x*x - 3*y*y)/2;
+      ao1z_rangers[0][k]=apz*ao_rangers[0][k]/a+a*0;
+      ao1x_rangers[1][k]=apx*ao_rangers[1][k]/a+a*3*sqrt(70)*x*y*z/2;
+      ao1y_rangers[1][k]=apy*ao_rangers[1][k]/a+a*3*sqrt(70)*z*(x*x - y*y)/4;
+      ao1z_rangers[1][k]=apz*ao_rangers[1][k]/a+a*sqrt(70)*y*(3*x*x - y*y)/4;
+      ao1x_rangers[2][k]=apx*ao_rangers[2][k]/a+a*sqrt(5)*y*(-3*x*x - y*y + 6*z*z)/2;
+      ao1y_rangers[2][k]=apy*ao_rangers[2][k]/a+a*sqrt(5)*x*(-x*x - 3*y*y + 6*z*z)/2;
+      ao1z_rangers[2][k]=apz*ao_rangers[2][k]/a+a*6*sqrt(5)*x*y*z;
+      ao1x_rangers[3][k]=apx*ao_rangers[3][k]/a+a*( -3*sqrt(10)*x*y*z/2 );
+      ao1y_rangers[3][k]=apy*ao_rangers[3][k]/a+a*sqrt(10)*z*(-3*x*x - 9*y*y + 4*z*z)/4;
+      ao1z_rangers[3][k]=apz*ao_rangers[3][k]/a+a*3*sqrt(10)*y*(-x*x - y*y + 4*z*z)/4;
+      ao1x_rangers[4][k]=apx*ao_rangers[4][k]/a+a*3*x*(x*x + y*y - 4*z*z)/2;
+      ao1y_rangers[4][k]=apy*ao_rangers[4][k]/a+a*3*y*(x*x + y*y - 4*z*z)/2;
+      ao1z_rangers[4][k]=apz*ao_rangers[4][k]/a+a*2*z*(-3*x*x - 3*y*y + 2*z*z);
+      ao1x_rangers[5][k]=apx*ao_rangers[5][k]/a+a*sqrt(10)*z*(-9*x*x - 3*y*y + 4*z*z)/4;
+      ao1y_rangers[5][k]=apy*ao_rangers[5][k]/a+a*( -3*sqrt(10)*x*y*z/2 );
+      ao1z_rangers[5][k]=apz*ao_rangers[5][k]/a+a*3*sqrt(10)*x*(-x*x - y*y + 4*z*z)/4;
+      ao1x_rangers[6][k]=apx*ao_rangers[6][k]/a+a*sqrt(5)*x*(-x*x + 3*z*z);
+      ao1y_rangers[6][k]=apy*ao_rangers[6][k]/a+a*sqrt(5)*y*(y*y - 3*z*z);
+      ao1z_rangers[6][k]=apz*ao_rangers[6][k]/a+a*3*sqrt(5)*z*(x*x - y*y);
+      ao1x_rangers[7][k]=apx*ao_rangers[7][k]/a+a*3*sqrt(70)*z*(x*x - y*y)/4;
+      ao1y_rangers[7][k]=apy*ao_rangers[7][k]/a+a*( -3*sqrt(70)*x*y*z/2 );
+      ao1z_rangers[7][k]=apz*ao_rangers[7][k]/a+a*sqrt(70)*x*(x*x - 3*y*y)/4;
+      ao1x_rangers[8][k]=apx*ao_rangers[8][k]/a+a*sqrt(35)*x*(x*x - 3*y*y)/2;
+      ao1y_rangers[8][k]=apy*ao_rangers[8][k]/a+a*sqrt(35)*y*(-3*x*x + y*y)/2;
+      ao1z_rangers[8][k]=apz*ao_rangers[8][k]/a+a*0;
+     }
+     break;
+    case 11: // H
+     ao_rangers[0][k]=a*y*(5*x*x*x*x-10*x*x*y*y+y*y*y*y)*3*sqrt(14)/16;
+     ao_rangers[1][k]=a*x*y*z*(x*x-y*y)*3*sqrt(35)/2;
+     ao_rangers[2][k]=a*y*(y*y*y*y-2*x*x*y*y-3*x*x*x*x-8*y*y*z*z+24*x*x*z*z)*sqrt(70)/16;
+     ao_rangers[3][k]=a*x*y*z*(2*z*z-x*x-y*y)*sqrt(105)/2;
+     ao_rangers[4][k]=a*y*(x*x*x*x+2*x*x*y*y+y*y*y*y-12*x*x*z*z-12*y*y*z*z+8*z*z*z*z)*sqrt(15)/8;
+     ao_rangers[5][k]=a*z*(15*x*x*x*x+15*y*y*y*y+8*z*z*z*z+30*x*x*y*y-40*x*x*z*z-40*y*y*z*z)/8;
+     ao_rangers[6][k]=a*x*(x*x*x*x+2*x*x*y*y+y*y*y*y-12*x*x*z*z-12*y*y*z*z+8*z*z*z*z)*sqrt(15)/8;
+     ao_rangers[7][k]=a*z*(2*x*x*z*z-2*y*y*z*z-x*x*x*x+y*y*y*y)*sqrt(105)/4;
+     ao_rangers[8][k]=a*x*(2*x*x*y*y+8*x*x*z*z-24*y*y*z*z-x*x*x*x+3*y*y*y*y)*sqrt(70)/16;
+     ao_rangers[9][k]=a*z*(x*x*x*x-6*x*x*y*y+y*y*y*y)*3*sqrt(35)/8;
+     ao_rangers[10][k]=a*x*(x*x*x*x-10*x*x*y*y+5*y*y*y*y)*3*sqrt(14)/16;
+     if (ao1xs){
+      ao1x_rangers[0][k]=apx*ao_rangers[0][k]/a+a*15*sqrt(14)*x*y*(x*x - y*y)/4;
+      ao1y_rangers[0][k]=apy*ao_rangers[0][k]/a+a*15*sqrt(14)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
+      ao1z_rangers[0][k]=apz*ao_rangers[0][k]/a+a*0;
+      ao1x_rangers[1][k]=apx*ao_rangers[1][k]/a+a*3*sqrt(35)*y*z*(3*x*x - y*y)/2;
+      ao1y_rangers[1][k]=apy*ao_rangers[1][k]/a+a*3*sqrt(35)*x*z*(x*x - 3*y*y)/2;
+      ao1z_rangers[1][k]=apz*ao_rangers[1][k]/a+a*3*sqrt(35)*x*y*(x*x - y*y)/2;
+      ao1x_rangers[2][k]=apx*ao_rangers[2][k]/a+a*sqrt(70)*x*y*(-3*x*x - y*y + 12*z*z)/4;
+      ao1y_rangers[2][k]=apy*ao_rangers[2][k]/a+a*sqrt(70)*(-3*x*x*x*x - 6*x*x*y*y + 24*x*x*z*z + 5*y*y*y*y - 24*y*y*z*z)/16;
+      ao1z_rangers[2][k]=apz*ao_rangers[2][k]/a+a*sqrt(70)*y*z*(3*x*x - y*y);
+      ao1x_rangers[3][k]=apx*ao_rangers[3][k]/a+a*sqrt(105)*y*z*(-3*x*x - y*y + 2*z*z)/2;
+      ao1y_rangers[3][k]=apy*ao_rangers[3][k]/a+a*sqrt(105)*x*z*(-x*x - 3*y*y + 2*z*z)/2;
+      ao1z_rangers[3][k]=apz*ao_rangers[3][k]/a+a*sqrt(105)*x*y*(-x*x - y*y + 6*z*z)/2;
+      ao1x_rangers[4][k]=apx*ao_rangers[4][k]/a+a*sqrt(15)*x*y*(x*x + y*y - 6*z*z)/2;
+      ao1y_rangers[4][k]=apy*ao_rangers[4][k]/a+a*sqrt(15)*(x*x*x*x + 6*x*x*y*y - 12*x*x*z*z + 5*y*y*y*y - 36*y*y*z*z + 8*z*z*z*z)/8;
+      ao1z_rangers[4][k]=apz*ao_rangers[4][k]/a+a*sqrt(15)*y*z*(-3*x*x - 3*y*y + 4*z*z);
+      ao1x_rangers[5][k]=apx*ao_rangers[5][k]/a+a*5*x*z*(3*x*x + 3*y*y - 4*z*z)/2;
+      ao1y_rangers[5][k]=apy*ao_rangers[5][k]/a+a*5*y*z*(3*x*x + 3*y*y - 4*z*z)/2;
+      ao1z_rangers[5][k]=apz*ao_rangers[5][k]/a+a*( 15*x*x*x*x/8 + 15*x*x*y*y/4 - 15*x*x*z*z + 15*y*y*y*y/8 - 15*y*y*z*z + 5*z*z*z*z );
+      ao1x_rangers[6][k]=apx*ao_rangers[6][k]/a+a*sqrt(15)*(5*x*x*x*x + 6*x*x*y*y - 36*x*x*z*z + y*y*y*y - 12*y*y*z*z + 8*z*z*z*z)/8;
+      ao1y_rangers[6][k]=apy*ao_rangers[6][k]/a+a*sqrt(15)*x*y*(x*x + y*y - 6*z*z)/2;
+      ao1z_rangers[6][k]=apz*ao_rangers[6][k]/a+a*sqrt(15)*x*z*(-3*x*x - 3*y*y + 4*z*z);
+      ao1x_rangers[7][k]=apx*ao_rangers[7][k]/a+a*sqrt(105)*x*z*(-x*x + z*z);
+      ao1y_rangers[7][k]=apy*ao_rangers[7][k]/a+a*sqrt(105)*y*z*(y*y - z*z);
+      ao1z_rangers[7][k]=apz*ao_rangers[7][k]/a+a*sqrt(105)*(-x*x*x*x + 6*x*x*z*z + y*y*y*y - 6*y*y*z*z)/4;
+      ao1x_rangers[8][k]=apx*ao_rangers[8][k]/a+a*sqrt(70)*(-5*x*x*x*x + 6*x*x*y*y + 24*x*x*z*z + 3*y*y*y*y - 24*y*y*z*z)/16;
+      ao1y_rangers[8][k]=apy*ao_rangers[8][k]/a+a*sqrt(70)*x*y*(x*x + 3*y*y - 12*z*z)/4;
+      ao1z_rangers[8][k]=apz*ao_rangers[8][k]/a+a*sqrt(70)*x*z*(x*x - 3*y*y);
+      ao1x_rangers[9][k]=apx*ao_rangers[9][k]/a+a*3*sqrt(35)*x*z*(x*x - 3*y*y)/2;
+      ao1y_rangers[9][k]=apy*ao_rangers[9][k]/a+a*3*sqrt(35)*y*z*(-3*x*x + y*y)/2;
+      ao1z_rangers[9][k]=apz*ao_rangers[9][k]/a+a*3*sqrt(35)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/8;
+      ao1x_rangers[10][k]=apx*ao_rangers[10][k]/a+a*15*sqrt(14)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
+      ao1y_rangers[10][k]=apy*ao_rangers[10][k]/a+a*15*sqrt(14)*x*y*(-x*x + y*y)/4;
+      ao1z_rangers[10][k]=apz*ao_rangers[10][k]/a+a*0;
+     }
+     break;
+    case 13: // I
+     ao_rangers[0][k]=a*x*y*(3*x*x*x*x-10*x*x*y*y+3*y*y*y*y)*sqrt(462)/16;
+     ao_rangers[1][k]=a*y*z*(5*x*x*x*x-10*x*x*y*y+y*y*y*y)*3*sqrt(154)/16;
+     ao_rangers[2][k]=a*x*y*(-x*x*x*x+y*y*y*y+10*x*x*z*z-10*y*y*z*z)*3*sqrt(7)/4;
+     ao_rangers[3][k]=a*y*z*(-9*x*x*x*x+3*y*y*y*y-6*x*x*y*y+24*x*x*z*z-8*y*y*z*z)*sqrt(210)/16;
+     ao_rangers[4][k]=a*x*y*(x*x*x*x+y*y*y*y+16*z*z*z*z+2*x*x*y*y-16*x*x*z*z-16*y*y*z*z)*sqrt(210)/16;
+     ao_rangers[5][k]=a*y*z*(5*x*x*x*x+5*y*y*y*y+8*z*z*z*z+10*x*x*y*y-20*x*x*z*z-20*y*y*z*z)*sqrt(21)/8;
+     ao_rangers[6][k]=a*(16*z*z*z*z*z*z-5*x*x*x*x*x*x-5*y*y*y*y*y*y-15*x*x*x*x*y*y+90*x*x*x*x*z*z+90*y*y*y*y*z*z-120*y*y*z*z*z*z-15*x*x*y*y*y*y-120*x*x*z*z*z*z+180*x*x*y*y*z*z)/16;
+     ao_rangers[7][k]=a*x*z*(5*x*x*x*x+5*y*y*y*y+8*z*z*z*z+10*x*x*y*y-20*x*x*z*z-20*y*y*z*z)*sqrt(21)/8;
+     ao_rangers[8][k]=a*(x*x*x*x*x*x-y*y*y*y*y*y+x*x*x*x*y*y-x*x*y*y*y*y-16*x*x*x*x*z*z+16*x*x*z*z*z*z+16*y*y*y*y*z*z-16*y*y*z*z*z*z)*sqrt(210)/32;
+     ao_rangers[9][k]=a*x*z*(-3*x*x*x*x+6*x*x*y*y+8*x*x*z*z-24*y*y*z*z+9*y*y*y*y)*sqrt(210)/16;
+     ao_rangers[10][k]=a*(-x*x*x*x*x*x+5*x*x*x*x*y*y+10*x*x*x*x*z*z+5*x*x*y*y*y*y+10*y*y*y*y*z*z-y*y*y*y*y*y-60*x*x*y*y*z*z)*3*sqrt(7)/16;
+     ao_rangers[11][k]=a*x*z*(x*x*x*x-10*x*x*y*y+5*y*y*y*y)*3*sqrt(154)/16;
+     ao_rangers[12][k]=a*(x*x*x*x*x*x-15*x*x*x*x*y*y+15*x*x*y*y*y*y-y*y*y*y*y*y)*sqrt(462)/32;
+     if (ao1xs){
+      ao1x_rangers[0][k]=apx*ao_rangers[0][k]/a+a*3*sqrt(462)*y*(5*x*x*x*x - 10*x*x*y*y + y*y*y*y)/16;
+      ao1y_rangers[0][k]=apy*ao_rangers[0][k]/a+a*3*sqrt(462)*x*(x*x*x*x - 10*x*x*y*y + 5*y*y*y*y)/16;
+      ao1z_rangers[0][k]=apz*ao_rangers[0][k]/a+a*0;
+      ao1x_rangers[1][k]=apx*ao_rangers[1][k]/a+a*15*sqrt(154)*x*y*z*(x*x - y*y)/4;
+      ao1y_rangers[1][k]=apy*ao_rangers[1][k]/a+a*15*sqrt(154)*z*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
+      ao1z_rangers[1][k]=apz*ao_rangers[1][k]/a+a*3*sqrt(154)*y*(5*x*x*x*x - 10*x*x*y*y + y*y*y*y)/16;
+      ao1x_rangers[2][k]=apx*ao_rangers[2][k]/a+a*3*sqrt(7)*y*(-5*x*x*x*x + 30*x*x*z*z + y*y*y*y - 10*y*y*z*z)/4;
+      ao1y_rangers[2][k]=apy*ao_rangers[2][k]/a+a*3*sqrt(7)*x*(-x*x*x*x + 10*x*x*z*z + 5*y*y*y*y - 30*y*y*z*z)/4;
+      ao1z_rangers[2][k]=apz*ao_rangers[2][k]/a+a*15*sqrt(7)*x*y*z*(x*x - y*y);
+      ao1x_rangers[3][k]=apx*ao_rangers[3][k]/a+a*3*sqrt(210)*x*y*z*(-3*x*x - y*y + 4*z*z)/4;
+      ao1y_rangers[3][k]=apy*ao_rangers[3][k]/a+a*3*sqrt(210)*z*(-3*x*x*x*x - 6*x*x*y*y + 8*x*x*z*z + 5*y*y*y*y - 8*y*y*z*z)/16;
+      ao1z_rangers[3][k]=apz*ao_rangers[3][k]/a+a*3*sqrt(210)*y*(-3*x*x*x*x - 2*x*x*y*y + 24*x*x*z*z + y*y*y*y - 8*y*y*z*z)/16;
+      ao1x_rangers[4][k]=apx*ao_rangers[4][k]/a+a*sqrt(210)*y*(5*x*x*x*x + 6*x*x*y*y - 48*x*x*z*z + y*y*y*y - 16*y*y*z*z + 16*z*z*z*z)/16;
+      ao1y_rangers[4][k]=apy*ao_rangers[4][k]/a+a*sqrt(210)*x*(x*x*x*x + 6*x*x*y*y - 16*x*x*z*z + 5*y*y*y*y - 48*y*y*z*z + 16*z*z*z*z)/16;
+      ao1z_rangers[4][k]=apz*ao_rangers[4][k]/a+a*2*sqrt(210)*x*y*z*(-x*x - y*y + 2*z*z);
+      ao1x_rangers[5][k]=apx*ao_rangers[5][k]/a+a*5*sqrt(21)*x*y*z*(x*x + y*y - 2*z*z)/2;
+      ao1y_rangers[5][k]=apy*ao_rangers[5][k]/a+a*sqrt(21)*z*(5*x*x*x*x + 30*x*x*y*y - 20*x*x*z*z + 25*y*y*y*y - 60*y*y*z*z + 8*z*z*z*z)/8;
+      ao1z_rangers[5][k]=apz*ao_rangers[5][k]/a+a*5*sqrt(21)*y*(x*x*x*x + 2*x*x*y*y - 12*x*x*z*z + y*y*y*y - 12*y*y*z*z + 8*z*z*z*z)/8;
+      ao1x_rangers[6][k]=apx*ao_rangers[6][k]/a+a*15*x*(-x*x*x*x - 2*x*x*y*y + 12*x*x*z*z - y*y*y*y + 12*y*y*z*z - 8*z*z*z*z)/8;
+      ao1y_rangers[6][k]=apy*ao_rangers[6][k]/a+a*15*y*(-x*x*x*x - 2*x*x*y*y + 12*x*x*z*z - y*y*y*y + 12*y*y*z*z - 8*z*z*z*z)/8;
+      ao1z_rangers[6][k]=apz*ao_rangers[6][k]/a+a*3*z*(15*x*x*x*x + 30*x*x*y*y - 40*x*x*z*z + 15*y*y*y*y - 40*y*y*z*z + 8*z*z*z*z)/4;
+      ao1x_rangers[7][k]=apx*ao_rangers[7][k]/a+a*sqrt(21)*z*(25*x*x*x*x + 30*x*x*y*y - 60*x*x*z*z + 5*y*y*y*y - 20*y*y*z*z + 8*z*z*z*z)/8;
+      ao1y_rangers[7][k]=apy*ao_rangers[7][k]/a+a*5*sqrt(21)*x*y*z*(x*x + y*y - 2*z*z)/2;
+      ao1z_rangers[7][k]=apz*ao_rangers[7][k]/a+a*5*sqrt(21)*x*(x*x*x*x + 2*x*x*y*y - 12*x*x*z*z + y*y*y*y - 12*y*y*z*z + 8*z*z*z*z)/8;
+      ao1x_rangers[8][k]=apx*ao_rangers[8][k]/a+a*sqrt(210)*x*(3*x*x*x*x + 2*x*x*y*y - 32*x*x*z*z - y*y*y*y + 16*z*z*z*z)/16;
+      ao1y_rangers[8][k]=apy*ao_rangers[8][k]/a+a*sqrt(210)*y*(x*x*x*x - 2*x*x*y*y - 3*y*y*y*y + 32*y*y*z*z - 16*z*z*z*z)/16;
+      ao1z_rangers[8][k]=apz*ao_rangers[8][k]/a+a*sqrt(210)*z*(-x*x*x*x + 2*x*x*z*z + y*y*y*y - 2*y*y*z*z);
+      ao1x_rangers[9][k]=apx*ao_rangers[9][k]/a+a*3*sqrt(210)*z*(-5*x*x*x*x + 6*x*x*y*y + 8*x*x*z*z + 3*y*y*y*y - 8*y*y*z*z)/16;
+      ao1y_rangers[9][k]=apy*ao_rangers[9][k]/a+a*3*sqrt(210)*x*y*z*(x*x + 3*y*y - 4*z*z)/4;
+      ao1z_rangers[9][k]=apz*ao_rangers[9][k]/a+a*3*sqrt(210)*x*(-x*x*x*x + 2*x*x*y*y + 8*x*x*z*z + 3*y*y*y*y - 24*y*y*z*z)/16;
+      ao1x_rangers[10][k]=apx*ao_rangers[10][k]/a+a*3*sqrt(7)*x*(-3*x*x*x*x + 10*x*x*y*y + 20*x*x*z*z + 5*y*y*y*y - 60*y*y*z*z)/8;
+      ao1y_rangers[10][k]=apy*ao_rangers[10][k]/a+a*3*sqrt(7)*y*(5*x*x*x*x + 10*x*x*y*y - 60*x*x*z*z - 3*y*y*y*y + 20*y*y*z*z)/8;
+      ao1z_rangers[10][k]=apz*ao_rangers[10][k]/a+a*15*sqrt(7)*z*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/4;
+      ao1x_rangers[11][k]=apx*ao_rangers[11][k]/a+a*15*sqrt(154)*z*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
+      ao1y_rangers[11][k]=apy*ao_rangers[11][k]/a+a*15*sqrt(154)*x*y*z*(-x*x + y*y)/4;
+      ao1z_rangers[11][k]=apz*ao_rangers[11][k]/a+a*3*sqrt(154)*x*(x*x*x*x - 10*x*x*y*y + 5*y*y*y*y)/16;
+      ao1x_rangers[12][k]=apx*ao_rangers[12][k]/a+a*3*sqrt(462)*x*(x*x*x*x - 10*x*x*y*y + 5*y*y*y*y)/16;
+      ao1y_rangers[12][k]=apy*ao_rangers[12][k]/a+a*3*sqrt(462)*y*(-5*x*x*x*x + 10*x*x*y*y - y*y*y*y)/16;
+      ao1z_rangers[12][k]=apz*ao_rangers[12][k]/a+a*0;
+     }
+     break;
+   }
+  }
+ }
 }
 
 void GetDensity(double * aos,long int ngrids,EigenMatrix D,double * ds){
@@ -322,6 +495,56 @@ void GetDensity(double * aos,long int ngrids,EigenMatrix D,double * ds){
 				ds[kgrid]+=2*Dij*iao[kgrid]*jao[kgrid];
 		}
 	}
+}
+
+void GetContractedGradient(double * aos,double * ao1xs,double * ao1ys,double * ao1zs,long int ngrids,EigenMatrix D,double * cgs){
+	double * d1xs=new double[ngrids];
+	double * d1ys=new double[ngrids];
+	double * d1zs=new double[ngrids];
+	double * iao=aos;
+	double * jao=aos;
+	double * ix=ao1xs;
+	double * jx=ao1xs;
+	double * iy=ao1ys;
+	double * jy=ao1ys;
+	double * iz=ao1zs;
+	double * jz=ao1zs;
+	for (long int kgrid=0;kgrid<ngrids;kgrid++){
+		d1xs[kgrid]=0;
+		d1ys[kgrid]=0;
+		d1zs[kgrid]=0;
+	}
+	double Dij;
+	for (int ibasis=0;ibasis<D.cols();ibasis++){
+		Dij=D(ibasis,ibasis);
+		iao=aos+ibasis*ngrids; // ibasis*ngrids+jgrid
+		ix=ao1xs+ibasis*ngrids;
+		iy=ao1ys+ibasis*ngrids;
+		iz=ao1zs+ibasis*ngrids;
+		for (long int kgrid=0;kgrid<ngrids;kgrid++){
+			d1xs[kgrid]+=2*Dij*ix[kgrid]*iao[kgrid];
+			d1ys[kgrid]+=2*Dij*iy[kgrid]*iao[kgrid];
+			d1zs[kgrid]+=2*Dij*iz[kgrid]*iao[kgrid];
+		}
+		for (int jbasis=0;jbasis<ibasis;jbasis++){
+			Dij=D(ibasis,jbasis);
+			jao=aos+jbasis*ngrids;
+			jx=ao1xs+jbasis*ngrids;
+			jy=ao1ys+jbasis*ngrids;
+			jz=ao1zs+jbasis*ngrids;
+			for (long int kgrid=0;kgrid<ngrids;kgrid++){
+				d1xs[kgrid]+=2*Dij*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid]);
+				d1ys[kgrid]+=2*Dij*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid]);
+				d1zs[kgrid]+=2*Dij*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid]);
+			}
+		}
+	}
+	//std::cout<<d1xs[10000]<<" "<<d1ys[10000]<<" "<<d1zs[10000]<<std::endl;
+	for (long int igrid=0;igrid<ngrids;igrid++)
+		cgs[igrid]=d1xs[igrid]*d1xs[igrid]+d1ys[igrid]*d1ys[igrid]+d1zs[igrid]*d1zs[igrid];
+	delete [] d1xs;
+	delete [] d1ys;
+	delete [] d1zs;
 }
 
 void VectorAddition(double * as,double * bs,long int ngrids){

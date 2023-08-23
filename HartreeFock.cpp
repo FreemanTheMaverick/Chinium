@@ -87,13 +87,15 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	F=hcore+GMatrix(repulsion,indices,n2integrals,density,kscale,nprocs); /* Fock matrix. */\
 	if (dfxid){\
 		GetDensity(gridaos,ngrids,2*density,ds);\
-		getEVxc(dfxid,ds,gs,ngrids,exs,vrs,vss);\
+		if (gridao1xs)\
+			GetContractedGradient(gridaos,gridao1xs,gridao1ys,gridao1zs,ngrids,2*density,cgs);\
+		getEVxc(dfxid,ds,cgs,ngrids,exs,vrs,vss);\
 		Vxc=VxcMatrix(gridaos,gridweights,vrs,ngrids,nbasis);\
-		if (dfcid){\
-			getEVxc(dfcid,ds,gs,ngrids,ecs,vrs,vss);\
+		if (dfcid && dfxid!=dfcid){\
+			getEVxc(dfcid,ds,cgs,ngrids,ecs,vrs,vss);\
 			Vxc+=VxcMatrix(gridaos,gridweights,vrs,ngrids,nbasis);\
+			VectorAddition(exs,ecs,ngrids);\
 		}\
-		VectorAddition(exs,ecs,ngrids);\
 		exc=SumUp(exs,gridweights,ngrids);\
 		F+=Vxc;\
 	}\
@@ -154,7 +156,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	int xkind,ckind,xfamily,cfamily;
 	double exc=0;
 	double * ds=new double[ngrids];
-	double * gs=new double[ngrids*3];
+	double * cgs=new double[ngrids];
 	double * exs=new double[ngrids];
 	double * ecs=new double[ngrids];
 	double * vrs=new double[ngrids];
@@ -291,7 +293,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	}
 
 	delete [] ds;
-	delete [] gs;
+	delete [] cgs;
 	delete [] exs;
 	delete [] ecs;
 	delete [] vrs;

@@ -15,6 +15,8 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
 
 void GetDensity(double * aos,long int ngrids,EigenMatrix D,double * density);
 
+void GetContractedGradient(double * aos,double * ao1xs,double * ao1ys,double * ao1zs,long int ngrids,EigenMatrix D,double * cgs);
+
 void VectorAddition(double * as,double * bs,long int ngrids);
 
 double SumUp(double * ds,double * weights,long int ngrids);
