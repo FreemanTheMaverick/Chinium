@@ -87,16 +87,22 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	F=hcore+GMatrix(repulsion,indices,n2integrals,density,kscale,nprocs); /* Fock matrix. */\
 	if (dfxid){\
 		GetDensity(gridaos,ngrids,2*density,ds);\
-		if (gridao1xs)\
-			GetContractedGradient(gridaos,gridao1xs,gridao1ys,gridao1zs,ngrids,2*density,cgs);\
-		getEVxc(dfxid,ds,cgs,ngrids,exs,vrs,vss);\
-		Vxc=VxcMatrix(gridaos,gridweights,vrs,ngrids,nbasis);\
-		if (dfcid && dfxid!=dfcid){\
-			getEVxc(dfcid,ds,cgs,ngrids,ecs,vrs,vss);\
-			Vxc+=VxcMatrix(gridaos,gridweights,vrs,ngrids,nbasis);\
-			VectorAddition(exs,ecs,ngrids);\
+		if (gridao1xs){\
+			GetDensityGradient(gridaos,gridao1xs,gridao1ys,gridao1zs,ngrids,2*density,d1xs,d1ys,d1zs);\
+			GetContractedGradient(d1xs,d1ys,d1zs,ngrids,cgs);\
 		}\
-		exc=SumUp(exs,gridweights,ngrids);\
+		getEVxc(dfxid,ds,cgs,ngrids,exs,vrxs,vsxs);\
+		if (dfcid && dfxid!=dfcid){\
+			getEVxc(dfcid,ds,cgs,ngrids,ecs,vrcs,vscs);\
+			VectorAddition(exs,ecs,ngrids);\
+			VectorAddition(vrxs,vrcs,ngrids);\
+			VectorAddition(vsxs,vscs,ngrids);\
+		}\
+		Exc=SumUp(exs,gridweights,ngrids);\
+		Vxc=VxcMatrix(gridaos,vrxs,\
+                              d1xs,d1ys,d1zs,\
+                              gridao1xs,gridao1ys,gridao1zs,vsxs,\
+                              gridweights,ngrids,nbasis);\
 		F+=Vxc;\
 	}\
 	G=4*(overlap*density*F-F*density*overlap); // Electronic gradient of energy with respect to nonredundant orbital rotational parameters. [F(D),D] instead of [F,D(F)].
@@ -130,7 +136,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 
 double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
             double * repulsion,short int * indices,long int n2integrals,
-            int dfxid,int dfcid,long int ngrids,double * gridweights,
+            int dfxid,int dfcid,int ngrids,double * gridweights,
             double * gridaos,
             double * gridao1xs,double * gridao1ys,double * gridao1zs,
             EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,
@@ -154,19 +160,24 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	EigenMatrix F,G;
 	EigenMatrix Vxc=EigenZero(nbasis,nbasis);
 	int xkind,ckind,xfamily,cfamily;
-	double exc=0;
-	double * ds=new double[ngrids];
-	double * cgs=new double[ngrids];
-	double * exs=new double[ngrids];
-	double * ecs=new double[ngrids];
-	double * vrs=new double[ngrids];
-	double * vss=new double[ngrids];
+	double Exc=0;
+	double * ds=new double[ngrids]();
+	double * d1xs=new double[ngrids]();
+	double * d1ys=new double[ngrids]();
+	double * d1zs=new double[ngrids]();
+	double * cgs=new double[ngrids]();
+	double * exs=new double[ngrids]();
+	double * ecs=new double[ngrids]();
+	double * vrxs=new double[ngrids]();
+	double * vrcs=new double[ngrids]();
+	double * vsxs=new double[ngrids]();
+	double * vscs=new double[ngrids]();
 
 	// Initial Fock matrix
 	double kscale=1;
 	if (dfxid){
 		char rubbish[64];
-		if(dfcid!=0) XCInfo(dfcid,rubbish,ckind,cfamily,kscale);
+		if(dfcid) XCInfo(dfcid,rubbish,ckind,cfamily,kscale);
 		XCInfo(dfxid,rubbish,xkind,xfamily,kscale);
 	}
 	__Density_2_Fock__
@@ -265,7 +276,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 
 		// Iteration information output
 		const EigenMatrix Iamgoingtobeanobellaureate=density*(hcore+F-Vxc); // Intermediate matrix.
-		PushDoubleQueue(Iamgoingtobeanobellaureate.trace()+exc,Es,__diis_space_size__); // Updating energy.
+		PushDoubleQueue(Iamgoingtobeanobellaureate.trace()+Exc,Es,__diis_space_size__); // Updating energy.
 		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
 		if (output){
 			std::cout.setf(std::ios::fixed);
@@ -296,8 +307,10 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	delete [] cgs;
 	delete [] exs;
 	delete [] ecs;
-	delete [] vrs;
-	delete [] vss;
+	delete [] vrxs;
+	delete [] vrcs;
+	delete [] vsxs;
+	delete [] vscs;
 
 	delete [] Fs;
 	delete [] Gs;

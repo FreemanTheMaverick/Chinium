@@ -12,8 +12,8 @@
 #include "Libint2.h"
 #include "sphere_lebedev_rule.hpp"
 
-long int SphericalGridNumber(std::string grid,const int natoms,double * atoms,const bool output){
-	long int ngrids=0;
+int SphericalGridNumber(std::string grid,const int natoms,double * atoms,const bool output){
+	int ngrids=0;
 	__Z_2_Name__
 	for (int iatom=0;iatom<natoms;iatom++){
 		int ngroups;
@@ -206,7 +206,7 @@ void UniformBoxGrid(const int natoms,double * atoms,const char * basisset,double
 }
 
 void GetAoValues(const int natoms,double * atoms,const char * basisset,
-                 double * xs,double * ys,double * zs,long int ngrids,
+                 double * xs,double * ys,double * zs,int ngrids,
                  double * aos,
                  double * ao1xs,double * ao1ys,double * ao1zs){ // ibasis*ngrids+jgrid
  __Basis_From_Atoms__
@@ -232,7 +232,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
   xo=shell.O[0];
   yo=shell.O[1];
   zo=shell.O[2];
-  for (long int k=0;k<ngrids;++k){
+  for (int k=0;k<ngrids;++k){
    x=xs[k]-xo; // Coordintes with the origin at the centre of the shell.
    y=ys[k]-yo;
    z=zs[k]-zo;
@@ -477,10 +477,10 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
  }
 }
 
-void GetDensity(double * aos,long int ngrids,EigenMatrix D,double * ds){
+void GetDensity(double * aos,int ngrids,EigenMatrix D,double * ds){
 	double * iao=aos;
 	double * jao=aos;
-	for (long int kgrid=0;kgrid<ngrids;kgrid++)
+	for (int kgrid=0;kgrid<ngrids;kgrid++)
 		ds[kgrid]=0;
 	double Dij;
 	for (int ibasis=0;ibasis<D.cols();ibasis++){
@@ -491,16 +491,13 @@ void GetDensity(double * aos,long int ngrids,EigenMatrix D,double * ds){
 		for (int jbasis=0;jbasis<ibasis;jbasis++){
 			jao=aos+jbasis*ngrids;
 			Dij=D(ibasis,jbasis);
-			for (long int kgrid=0;kgrid<ngrids;kgrid++)
+			for (int kgrid=0;kgrid<ngrids;kgrid++)
 				ds[kgrid]+=2*Dij*iao[kgrid]*jao[kgrid];
 		}
 	}
 }
 
-void GetContractedGradient(double * aos,double * ao1xs,double * ao1ys,double * ao1zs,long int ngrids,EigenMatrix D,double * cgs){
-	double * d1xs=new double[ngrids];
-	double * d1ys=new double[ngrids];
-	double * d1zs=new double[ngrids];
+void GetDensityGradient(double * aos,double * ao1xs,double * ao1ys,double * ao1zs,int ngrids,EigenMatrix D,double * d1xs,double * d1ys,double * d1zs){
 	double * iao=aos;
 	double * jao=aos;
 	double * ix=ao1xs;
@@ -509,19 +506,19 @@ void GetContractedGradient(double * aos,double * ao1xs,double * ao1ys,double * a
 	double * jy=ao1ys;
 	double * iz=ao1zs;
 	double * jz=ao1zs;
-	for (long int kgrid=0;kgrid<ngrids;kgrid++){
-		d1xs[kgrid]=0;
-		d1ys[kgrid]=0;
-		d1zs[kgrid]=0;
-	}
 	double Dij;
+	for (int igrid=0;igrid<ngrids;igrid++){
+		d1xs[igrid]=0;
+		d1ys[igrid]=0;
+		d1zs[igrid]=0;
+	}
 	for (int ibasis=0;ibasis<D.cols();ibasis++){
 		Dij=D(ibasis,ibasis);
 		iao=aos+ibasis*ngrids; // ibasis*ngrids+jgrid
 		ix=ao1xs+ibasis*ngrids;
 		iy=ao1ys+ibasis*ngrids;
 		iz=ao1zs+ibasis*ngrids;
-		for (long int kgrid=0;kgrid<ngrids;kgrid++){
+		for (int kgrid=0;kgrid<ngrids;kgrid++){
 			d1xs[kgrid]+=2*Dij*ix[kgrid]*iao[kgrid];
 			d1ys[kgrid]+=2*Dij*iy[kgrid]*iao[kgrid];
 			d1zs[kgrid]+=2*Dij*iz[kgrid]*iao[kgrid];
@@ -539,41 +536,61 @@ void GetContractedGradient(double * aos,double * ao1xs,double * ao1ys,double * a
 			}
 		}
 	}
-	//std::cout<<d1xs[10000]<<" "<<d1ys[10000]<<" "<<d1zs[10000]<<std::endl;
-	for (long int igrid=0;igrid<ngrids;igrid++)
-		cgs[igrid]=d1xs[igrid]*d1xs[igrid]+d1ys[igrid]*d1ys[igrid]+d1zs[igrid]*d1zs[igrid];
-	delete [] d1xs;
-	delete [] d1ys;
-	delete [] d1zs;
 }
 
-void VectorAddition(double * as,double * bs,long int ngrids){
-	for (long int igrid=0;igrid<ngrids;igrid++)
+void GetContractedGradient(double * d1xs,double * d1ys,double * d1zs,int ngrids,double * cgs){
+	for (int igrid=0;igrid<ngrids;igrid++)
+		cgs[igrid]=d1xs[igrid]*d1xs[igrid]+d1ys[igrid]*d1ys[igrid]+d1zs[igrid]*d1zs[igrid];
+}
+
+void VectorAddition(double * as,double * bs,int ngrids){
+	for (int igrid=0;igrid<ngrids;igrid++)
 		as[igrid]+=bs[igrid];
 }
 
-double SumUp(double * ds,double * ws,long int ngrids){
+double SumUp(double * ds,double * ws,int ngrids){
 	double n=0;
-	for (long int igrid=0;igrid<ngrids;igrid++)
+	for (int igrid=0;igrid<ngrids;igrid++)
 		n+=ds[igrid]*ws[igrid];
 	return n;
 }
 
-EigenMatrix VxcMatrix(double * aos,double * weights,double * vrs,long int ngrids,int nbasis){
+EigenMatrix VxcMatrix(double * aos,double * vrs,
+                      double * d1xs,double * d1ys,double * d1zs,
+                      double * ao1xs,double * ao1ys,double * ao1zs,double * vss,
+                      double * ws,int ngrids,int nbasis){
 	double * iao=aos;
 	double * jao=aos;
-	double vij=0;
-	EigenMatrix vxc=EigenZero(nbasis,nbasis);
+	double * ix=ao1xs;
+	double * jx=ao1xs;
+	double * iy=ao1ys;
+	double * jy=ao1ys;
+	double * iz=ao1zs;
+	double * jz=ao1zs;
+	EigenMatrix Vxc=EigenZero(nbasis,nbasis);
 	for (int irow=0;irow<nbasis;irow++){
 		iao=aos+irow*ngrids;
+		ix=ao1xs+irow*ngrids;
+		iy=ao1ys+irow*ngrids;
+		iz=ao1zs+irow*ngrids;
 		for (int jcol=0;jcol<=irow;jcol++){
 			jao=aos+jcol*ngrids;
-			vij=0;
-			for (int kgrid=0;kgrid<ngrids;kgrid++)
-				vij+=iao[kgrid]*jao[kgrid]*weights[kgrid]*vrs[kgrid];
-			vxc(irow,jcol)=vij;
-			vxc(jcol,irow)=vij;
+			jx=ao1xs+jcol*ngrids;
+			jy=ao1ys+jcol*ngrids;
+			jz=ao1zs+jcol*ngrids;
+			double vij=0;
+			for (int kgrid=0;kgrid<ngrids;kgrid++){
+				if (ao1xs){
+					vij+=ws[kgrid]*(vrs[kgrid]*iao[kgrid]*jao[kgrid]
+					    +2*vss[kgrid]*(d1xs[kgrid]*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid])
+					                  +d1ys[kgrid]*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid])
+					                  +d1zs[kgrid]*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid])));
+				}else
+					vij+=ws[kgrid]*vrs[kgrid]*iao[kgrid]*jao[kgrid];
+			}
+			Vxc(irow,jcol)=vij;
+			Vxc(jcol,irow)=vij;
 		}
 	}
-	return vxc;
+	return Vxc;
 }

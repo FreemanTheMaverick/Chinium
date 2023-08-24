@@ -1,4 +1,5 @@
 #include <Eigen/Dense>
+#include <cmath>
 #include <string>
 #include <cassert>
 #include <iostream>
@@ -30,7 +31,7 @@ int main(int argc,char *argv[]){
 	else if (guess.compare("sad")==0)
 		density=SuperpositionAtomicDensity(ne,natoms,atoms,basisset);
 
-	long int ngrids=0;
+	int ngrids=0;
 	double * xs=nullptr;
 	double * ys=nullptr;
 	double * zs=nullptr;
@@ -46,7 +47,8 @@ int main(int argc,char *argv[]){
 	}
 
 	const std::string method=ReadMethod(argv[1],1);
-	int dfxid,dfcid;
+	int dfxid=0;
+	int dfcid=0;
 	double kscale;
 	char approx;
 	const std::string scf="rijcosx";
@@ -59,19 +61,14 @@ int main(int argc,char *argv[]){
 		if (method.compare("rhf")!=0){
 			assert((void("DFT needs a grid to be set!"),! grid.empty()));
 			ReadDF(method,dfxid,dfcid,kscale,approx,1);
-			if (approx=='l') 
+			if (approx=='l' || approx=='g' || approx=='m') 
 				gridaos=new double[nbasis*ngrids];
-			else if (approx=='g'){
-				gridaos=new double[nbasis*ngrids];
-				gridao1xs=new double[nbasis*ngrids];
-				gridao1ys=new double[nbasis*ngrids];
-				gridao1zs=new double[nbasis*ngrids];
-			}else if (approx=='m'){
-				gridaos=new double[nbasis*ngrids];
+			if (approx=='g' || approx=='m'){
 				gridao1xs=new double[nbasis*ngrids];
 				gridao1ys=new double[nbasis*ngrids];
 				gridao1zs=new double[nbasis*ngrids];
 			}
+			if (approx=='m'){;}
 		}else if (scf.compare("rijcosx")==0){
 			assert((void("RIJCOSX needs a grid to be set!"),! grid.empty()));
 			if (gridaos==nullptr) gridaos=new double[nbasis*ngrids];
@@ -82,6 +79,16 @@ int main(int argc,char *argv[]){
 		}
 		GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,
 		            gridaos,gridao1xs,gridao1ys,gridao1zs);
+		for (long int i=0;i<nbasis*ngrids;i++){
+			if (approx=='l' || approx=='g' || approx=='m' || scf.compare("rijcosx")==0) 
+				if (isnan(gridaos[i])) gridaos[i]=0;
+			if (approx=='g' || approx=='m'){
+				if (isnan(gridao1xs[i])) gridao1xs[i]=0;
+				if (isnan(gridao1ys[i])) gridao1ys[i]=0;
+				if (isnan(gridao1zs[i])) gridao1zs[i]=0;
+			}
+			if (approx=='m'){;}
+		}
 	}
 
 	const EigenMatrix overlap=Overlap(natoms,atoms,basisset,1);
@@ -115,11 +122,6 @@ int main(int argc,char *argv[]){
 		           nprocs,1);
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
-/*std::cout<<xs[10000]<<" ";
-std::cout<<ys[10000]<<" ";
-std::cout<<zs[10000]<<std::endl;
-double * cgs=new double[ngrids];
-GetContractedGradient(gridaos,gridao1xs,gridao1ys,gridao1zs,ngrids,2*density,cgs);*/
 
 	delete [] xs;
 	delete [] ys;

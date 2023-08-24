@@ -71,7 +71,7 @@ void ReadDF(std::string df,int & x,int & c,double & hf,char & approx,const bool 
 	}
 }
 
-void getEVxc(int id,double * ds,double * cgs,long int ngrids,double * es,double * vrs,double * vss){
+void getEVxc(int id,double * ds,double * cgs,int ngrids,double * es,double * vrs,double * vss){
         xc_func_type func;
         xc_func_init(&func,id,XC_UNPOLARIZED);
 	switch(func.info->family){
