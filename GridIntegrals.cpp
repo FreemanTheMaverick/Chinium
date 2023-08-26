@@ -215,10 +215,12 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
  double tmp,tmp1,tmp2;
  double A,Ax,Ay,Az,Axx,Ayy,Azz; // Basis function values;
  A=Ax=Ay=Az=Axx=Ayy=Azz=0;
+ double ao2xx=0;double ao2yy=0;double ao2zz=0;
  double * ao_rangers[16];
  double * ao1x_rangers[16];
  double * ao1y_rangers[16];
  double * ao1z_rangers[16];
+ double * ao2_rangers[16];
  double Q[16]={0};
  double Qx[16]={0};
  double Qy[16]={0};
@@ -237,6 +239,8 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
     ao1x_rangers[iranger]=ao1xs+ibasis*ngrids;
     ao1y_rangers[iranger]=ao1ys+ibasis*ngrids;
     ao1z_rangers[iranger]=ao1zs+ibasis*ngrids;
+    if (ao2s)
+     ao2_rangers[iranger]=ao2s+ibasis*ngrids;
    }
   }
   xo=shell.O[0];
@@ -347,6 +351,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
        Qxx[4]=sqrt(3);
        Qyy[4]=-sqrt(3);
        Qzz[4]=0;
+      }
      }
      break;
     case 7: // F
