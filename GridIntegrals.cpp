@@ -208,9 +208,11 @@ void UniformBoxGrid(const int natoms,double * atoms,const char * basisset,double
 void GetAoValues(const int natoms,double * atoms,const char * basisset,
                  double * xs,double * ys,double * zs,int ngrids,
                  double * aos,
-                 double * ao1xs,double * ao1ys,double * ao1zs){ // ibasis*ngrids+jgrid
+                 double * ao1xs,double * ao1ys,double * ao1zs,
+                 double * ao2s){ // ibasis*ngrids+jgrid
  __Basis_From_Atoms__
  double xo,yo,zo,x,y,z,r2;
+ double tmp,tmp1,tmp2;
  double A,Ax,Ay,Az,Axx,Ayy,Azz; // Basis function values;
  A=Ax=Ay=Az=Axx=Ayy=Azz=0;
  double * ao_rangers[16];
@@ -245,16 +247,26 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
    y=ys[k]-yo;
    z=zs[k]-zo;
    r2=x*x+y*y+z*z;
-   A=0;Az=0;Azz=0;
+   tmp=tmp1=tmp2=0;
+   A=Az=Azz=0;
    for (int iprim=0;iprim<nprims;++iprim){ // Looping over primitive gaussians.
-    A+=shell.contr[0].coeff[iprim]*std::exp(-shell.alpha[iprim]*r2); // Each primitive gaussian contributes to the radial parts of basis functions.
-    if (ao1xs)
-     Az-=shell.contr[0].coeff[iprim]*shell.alpha[iprim]*std::exp(-shell.alpha[iprim]*r2);
+    tmp=shell.contr[0].coeff[iprim]*std::exp(-shell.alpha[iprim]*r2);
+    A+=tmp; // Each primitive gaussian contributes to the radial parts of basis functions.
+    if (ao1xs){
+     tmp1+=tmp*shell.alpha[iprim];
+     if (ao2s)
+      tmp2+=tmp*shell.alpha[iprim]*shell.alpha[iprim];
+    }
    }
    if (ao1xs){
-    Ax=2*x*Az;
-    Ay=2*y*Az;
-    Az=2*z*Az;
+    Ax=-2*x*tmp1;
+    Ay=-2*y*tmp1;
+    Az=-2*z*tmp1;
+    if (ao2s){
+     Axx=-2*tmp1+4*tmp2*x;
+     Ayy=-2*tmp1+4*tmp2*y;
+     Azz=-2*tmp1+4*tmp2*z;
+    }
    }
    switch(two_l_plus_one){ // Basis function values are the products of the radial parts and the spherical harmonic parts. The following spherical harmonics are rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API. The normalization constants here differ from those from "Symmetries of Spherical Harmonics: applications to ambisonics" @ https://iaem.at/ambisonics/symposium2009/proceedings/ambisym09-chapman-shsymmetries.pdf/@@download/file/AmbiSym09_Chapman_SHSymmetries.pdf apy a factor of sqrt(2l+1).
     case 1: // S
@@ -263,6 +275,11 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[0]=0;
       Qy[0]=0;
       Qz[0]=0;
+      if (ao2s){
+       Qxx[0]=0;
+       Qyy[0]=0;
+       Qzz[0]=0;
+      }
      }
      break;
     case 3: // P
@@ -279,6 +296,17 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[2]=1;
       Qy[2]=0;
       Qz[2]=0;
+      if (ao2s){
+       Qxx[0]=0;
+       Qyy[0]=0;
+       Qzz[0]=0;
+       Qxx[1]=0;
+       Qyy[1]=0;
+       Qzz[1]=0;
+       Qxx[2]=0;
+       Qyy[2]=0;
+       Qzz[2]=0;
+      }
      }
      break;
     case 5: // D
@@ -303,6 +331,22 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[4]=sqrt(3)*x;
       Qy[4]=( -sqrt(3)*y );
       Qz[4]=0;
+      if (ao2s){
+       Qxx[0]=0;
+       Qyy[0]=0;
+       Qzz[0]=0;
+       Qxx[1]=0;
+       Qyy[1]=0;
+       Qzz[1]=0;
+       Qxx[2]=-1;
+       Qyy[2]=-1;
+       Qzz[2]=2;
+       Qxx[3]=0;
+       Qyy[3]=0;
+       Qzz[3]=0;
+       Qxx[4]=sqrt(3);
+       Qyy[4]=-sqrt(3);
+       Qzz[4]=0;
      }
      break;
     case 7: // F
@@ -335,6 +379,29 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[6]=3*sqrt(10)*(x*x - y*y)/4;
       Qy[6]=( -3*sqrt(10)*x*y/2 );
       Qz[6]=0;
+      if (ao2s){
+       Qxx[0]=3*sqrt(10)*y/2;
+       Qyy[0]=-3*sqrt(10)*y/2;
+       Qzz[0]=0;
+       Qxx[1]=0;
+       Qyy[1]=0;
+       Qzz[1]=0;
+       Qxx[2]=-sqrt(6)*y/2;
+       Qyy[2]=-3*sqrt(6)*y/2;
+       Qzz[2]=2*sqrt(6)*y;
+       Qxx[3]=-3*z;
+       Qyy[3]=-3*z;
+       Qzz[3]=6*z;
+       Qxx[4]=-3*sqrt(6)*x/2;
+       Qyy[4]=-sqrt(6)*x/2;
+       Qzz[4]=2*sqrt(6)*x;
+       Qxx[5]=sqrt(15)*z;
+       Qyy[5]=-sqrt(15)*z;
+       Qzz[5]=0;
+       Qxx[6]=3*sqrt(10)*x/2;
+       Qyy[6]=-3*sqrt(10)*x/2;
+       Qzz[6]=0;
+      }
      }
      break;
     case 9: // G
@@ -375,6 +442,35 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[8]=sqrt(35)*x*(x*x - 3*y*y)/2;
       Qy[8]=sqrt(35)*y*(-3*x*x + y*y)/2;
       Qz[8]=0;
+      if (ao2s){
+       Qxx[0]=3*sqrt(35)*x*y;
+       Qyy[0]=-3*sqrt(35)*x*y;
+       Qzz[0]=0;
+       Qxx[1]=3*sqrt(70)*y*z/2;
+       Qyy[1]=-3*sqrt(70)*y*z/2;
+       Qzz[1]=0;
+       Qxx[2]=-3*sqrt(5)*x*y;
+       Qyy[2]=-3*sqrt(5)*x*y;
+       Qzz[2]=6*sqrt(5)*x*y;
+       Qxx[3]=-3*sqrt(10)*y*z/2;
+       Qyy[3]=-9*sqrt(10)*y*z/2;
+       Qzz[3]=6*sqrt(10)*y*z;
+       Qxx[4]=9*x*x/2 + 3*y*y/2 - 6*z*z;
+       Qyy[4]=3*x*x/2 + 9*y*y/2 - 6*z*z;
+       Qzz[4]=-6*x*x - 6*y*y + 12*z*z;
+       Qxx[5]=-9*sqrt(10)*x*z/2;
+       Qyy[5]=-3*sqrt(10)*x*z/2;
+       Qzz[5]=6*sqrt(10)*x*z;
+       Qxx[6]=3*sqrt(5)*(-x*x + z*z);
+       Qyy[6]=3*sqrt(5)*(y*y - z*z);
+       Qzz[6]=3*sqrt(5)*(x*x - y*y);
+       Qxx[7]=3*sqrt(70)*x*z/2;
+       Qyy[7]=-3*sqrt(70)*x*z/2;
+       Qzz[7]=0;
+       Qxx[8]=3*sqrt(35)*(x*x - y*y)/2;
+       Qyy[8]=3*sqrt(35)*(-x*x + y*y)/2;
+       Qzz[8]=0;
+      }
      }
      break;
     case 11: // H
@@ -423,6 +519,41 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[10]=15*sqrt(14)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
       Qy[10]=15*sqrt(14)*x*y*(-x*x + y*y)/4;
       Qz[10]=0;
+      if (ao2s){
+       Qxx[0]=15*sqrt(14)*y*(3*x*x - y*y)/4;
+       Qyy[0]=15*sqrt(14)*y*(-3*x*x + y*y)/4;
+       Qzz[0]=0;
+       Qxx[1]=9*sqrt(35)*x*y*z;
+       Qyy[1]=-9*sqrt(35)*x*y*z;
+       Qzz[1]=0;
+       Qxx[2]=sqrt(70)*y*(-9*x*x - y*y + 12*z*z)/4;
+       Qyy[2]=sqrt(70)*y*(-3*x*x + 5*y*y - 12*z*z)/4;
+       Qzz[2]=sqrt(70)*y*(3*x*x - y*y);
+       Qxx[3]=-3*sqrt(105)*x*y*z;
+       Qyy[3]=-3*sqrt(105)*x*y*z;
+       Qzz[3]=6*sqrt(105)*x*y*z;
+       Qxx[4]=sqrt(15)*y*(3*x*x + y*y - 6*z*z)/2;
+       Qyy[4]=sqrt(15)*y*(3*x*x + 5*y*y - 18*z*z)/2;
+       Qzz[4]=3*sqrt(15)*y*(-x*x - y*y + 4*z*z);
+       Qxx[5]=5*z*(9*x*x + 3*y*y - 4*z*z)/2;
+       Qyy[5]=5*z*(3*x*x + 9*y*y - 4*z*z)/2;
+       Qzz[5]=10*z*(-3*x*x - 3*y*y + 2*z*z);
+       Qxx[6]=sqrt(15)*x*(5*x*x + 3*y*y - 18*z*z)/2;
+       Qyy[6]=sqrt(15)*x*(x*x + 3*y*y - 6*z*z)/2;
+       Qzz[6]=3*sqrt(15)*x*(-x*x - y*y + 4*z*z);
+       Qxx[7]=sqrt(105)*z*(-3*x*x + z*z);
+       Qyy[7]=sqrt(105)*z*(3*y*y - z*z);
+       Qzz[7]=3*sqrt(105)*z*(x*x - y*y);
+       Qxx[8]=sqrt(70)*x*(-5*x*x + 3*y*y + 12*z*z)/4;
+       Qyy[8]=sqrt(70)*x*(x*x + 9*y*y - 12*z*z)/4;
+       Qzz[8]=sqrt(70)*x*(x*x - 3*y*y);
+       Qxx[9]=9*sqrt(35)*z*(x*x - y*y)/2;
+       Qyy[9]=9*sqrt(35)*z*(-x*x + y*y)/2;
+       Qzz[9]=0;
+       Qxx[10]=15*sqrt(14)*x*(x*x - 3*y*y)/4;
+       Qyy[10]=15*sqrt(14)*x*(-x*x + 3*y*y)/4;
+       Qzz[10]=0;
+      }
      }
      break;
     case 13: // I
@@ -479,6 +610,47 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[12]=3*sqrt(462)*x*(x*x*x*x - 10*x*x*y*y + 5*y*y*y*y)/16;
       Qy[12]=3*sqrt(462)*y*(-5*x*x*x*x + 10*x*x*y*y - y*y*y*y)/16;
       Qz[12]=0;
+      if (ao2s){
+       Qx[0]=15*sqrt(462)*x*y*(x*x - y*y)/4;
+       Qy[0]=15*sqrt(462)*x*y*(-x*x + y*y)/4;
+       Qz[0]=0;
+       Qx[1]=15*sqrt(154)*y*z*(3*x*x - y*y)/4;
+       Qy[1]=15*sqrt(154)*y*z*(-3*x*x + y*y)/4;
+       Qz[1]=0;
+       Qx[2]=15*sqrt(7)*x*y*(-x*x + 3*z*z);
+       Qy[2]=15*sqrt(7)*x*y*(y*y - 3*z*z);
+       Qz[2]=15*sqrt(7)*x*y*(x*x - y*y);
+       Qx[3]=3*sqrt(210)*y*z*(-9*x*x - y*y + 4*z*z)/4;
+       Qy[3]=3*sqrt(210)*y*z*(-3*x*x + 5*y*y - 4*z*z)/4;
+       Qz[3]=3*sqrt(210)*y*z*(3*x*x - y*y);
+       Qx[4]=sqrt(210)*x*y*(5*x*x + 3*y*y - 24*z*z)/4;
+       Qy[4]=sqrt(210)*x*y*(3*x*x + 5*y*y - 24*z*z)/4;
+       Qz[4]=2*sqrt(210)*x*y*(-x*x - y*y + 6*z*z);
+       Qx[5]=5*sqrt(21)*y*z*(3*x*x + y*y - 2*z*z)/2;
+       Qy[5]=5*sqrt(21)*y*z*(3*x*x + 5*y*y - 6*z*z)/2;
+       Qz[5]=5*sqrt(21)*y*z*(-3*x*x - 3*y*y + 4*z*z);
+       Qx[6]=-75*x*x*x*x/8 - 45*x*x*y*y/4 + 135*x*x*z*z/2 - 15*y*y*y*y/8 + 45*y*y*z*z/2 - 15*z*z*z*z;
+       Qy[6]=-15*x*x*x*x/8 - 45*x*x*y*y/4 + 45*x*x*z*z/2 - 75*y*y*y*y/8 + 135*y*y*z*z/2 - 15*z*z*z*z;
+       Qz[6]=45*x*x*x*x/4 + 45*x*x*y*y/2 - 90*x*x*z*z + 45*y*y*y*y/4 - 90*y*y*z*z + 30*z*z*z*z;
+       Qx[7]=5*sqrt(21)*x*z*(5*x*x + 3*y*y - 6*z*z)/2;
+       Qy[7]=5*sqrt(21)*x*z*(x*x + 3*y*y - 2*z*z)/2;
+       Qz[7]=5*sqrt(21)*x*z*(-3*x*x - 3*y*y + 4*z*z);
+       Qx[8]=sqrt(210)*(15*x*x*x*x + 6*x*x*y*y - 96*x*x*z*z - y*y*y*y + 16*z*z*z*z)/16;
+       Qy[8]=sqrt(210)*(x*x*x*x - 6*x*x*y*y - 15*y*y*y*y + 96*y*y*z*z - 16*z*z*z*z)/16;
+       Qz[8]=sqrt(210)*(-x*x*x*x + 6*x*x*z*z + y*y*y*y - 6*y*y*z*z);
+       Qx[9]=3*sqrt(210)*x*z*(-5*x*x + 3*y*y + 4*z*z)/4;
+       Qy[9]=3*sqrt(210)*x*z*(x*x + 9*y*y - 4*z*z)/4;
+       Qz[9]=3*sqrt(210)*x*z*(x*x - 3*y*y);
+       Qx[10]=15*sqrt(7)*(-3*x*x*x*x + 6*x*x*y*y + 12*x*x*z*z + y*y*y*y - 12*y*y*z*z)/8;
+       Qy[10]=15*sqrt(7)*(x*x*x*x + 6*x*x*y*y - 12*x*x*z*z - 3*y*y*y*y + 12*y*y*z*z)/8;
+       Qz[10]=15*sqrt(7)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/4;
+       Qx[11]=15*sqrt(154)*x*z*(x*x - 3*y*y)/4;
+       Qy[11]=15*sqrt(154)*x*z*(-x*x + 3*y*y)/4;
+       Qz[11]=0;
+       Qx[12]=15*sqrt(462)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
+       Qy[12]=15*sqrt(462)*(-x*x*x*x + 6*x*x*y*y - y*y*y*y)/16;
+       Qz[12]=0;
+      }
      }
      break;
    }
@@ -488,12 +660,12 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
      ao1x_rangers[i][k]=Ax*Q[i]+A*Qx[i];
      ao1y_rangers[i][k]=Ay*Q[i]+A*Qy[i];
      ao1z_rangers[i][k]=Az*Q[i]+A*Qz[i];
-     /*if (ao2s){
-      ao1xx=Axx*Q[i]+Ax*Qx[i]+A*Qxx[i];
-      ao1yy=Ayy*Q[i]+Ay*Qy[i]+A*Qyy[i];
-      ao1zz=Azz*Q[i]+Az*Qz[i]+A*Qzz[i];
-      ao2_rangers[i][k]=ao1xx+ao1yy+ao1zz;
-     }*/
+     if (ao2s){
+      ao2xx=Axx*Q[i]+Ax*Qx[i]+A*Qxx[i];
+      ao2yy=Ayy*Q[i]+Ay*Qy[i]+A*Qyy[i];
+      ao2zz=Azz*Q[i]+Az*Qz[i]+A*Qzz[i];
+      ao2_rangers[i][k]=ao2xx+ao2yy+ao2zz;
+     }
     }
    }
   }

@@ -11,7 +11,8 @@ void UniformBoxGrid(const int natoms,double * atoms,const char * basisset,double
 void GetAoValues(const int natoms,double * atoms,const char * basisset,
                  double * xs,double * ys,double * zs,int ngrids,
                  double * aos,
-                 double * ao1xs,double * ao1ys,double * ao1zs);
+                 double * ao1xs,double * ao1ys,double * ao1zs,
+                 double * ao2s);
 
 void GetDensity(double * aos,int ngrids,EigenMatrix D,double * density);
 

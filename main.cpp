@@ -6,6 +6,7 @@
 #include "Aliases.h"
 #include "Gateway.h"
 #include "AtomicIntegrals.h"
+#include "AtoIntGradients.h"
 #include "HartreeFock.h"
 #include "InitialGuess.h"
 #include "GridIntegrals.h"
@@ -57,6 +58,7 @@ int main(int argc,char *argv[]){
 	double * gridao1xs=nullptr;
 	double * gridao1ys=nullptr;
 	double * gridao1zs=nullptr;
+	double * gridao2s=nullptr;
 	if (method.compare("rhf")!=0 || scf.compare("rijcosx")==0){ // Two job types require grids.
 		if (method.compare("rhf")!=0){
 			assert((void("DFT needs a grid to be set!"),! grid.empty()));
@@ -68,7 +70,8 @@ int main(int argc,char *argv[]){
 				gridao1ys=new double[nbasis*ngrids];
 				gridao1zs=new double[nbasis*ngrids];
 			}
-			if (approx=='m'){;}
+			if (approx=='m')
+				gridao2s=new double[nbasis*ngrids];
 		}else if (scf.compare("rijcosx")==0){
 			assert((void("RIJCOSX needs a grid to be set!"),! grid.empty()));
 			if (gridaos==nullptr) gridaos=new double[nbasis*ngrids];
@@ -78,7 +81,7 @@ int main(int argc,char *argv[]){
 
 		}
 		GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,
-		            gridaos,gridao1xs,gridao1ys,gridao1zs);
+		            gridaos,gridao1xs,gridao1ys,gridao1zs,gridao2s);
 		for (long int i=0;i<nbasis*ngrids;i++){
 			if (approx=='l' || approx=='g' || approx=='m' || scf.compare("rijcosx")==0) 
 				if (isnan(gridaos[i])) gridaos[i]=0;
@@ -87,7 +90,8 @@ int main(int argc,char *argv[]){
 				if (isnan(gridao1ys[i])) gridao1ys[i]=0;
 				if (isnan(gridao1zs[i])) gridao1zs[i]=0;
 			}
-			if (approx=='m'){;}
+			if (approx=='m')
+				if (isnan(gridao2s[i])) gridao2s[i]=0;
 		}
 	}
 
@@ -122,7 +126,12 @@ int main(int argc,char *argv[]){
 		           nprocs,1);
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
-
+/*EigenMatrix * ogs=new EigenMatrix[3*natoms];
+OvlGrads(natoms,atoms,basisset,'o',ogs,1);
+for (int i=0;i<natoms*3;i++){
+std::cout<<i<<std::endl;
+std::cout<<ogs[i]<<std::endl;
+}*/
 	delete [] xs;
 	delete [] ys;
 	delete [] zs;
