@@ -86,11 +86,11 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 #define __Density_2_Fock__\
 	F=hcore+GMatrix(repulsion,indices,n2integrals,density,kscale,nprocs); /* Fock matrix. */\
 	if (dfxid){\
-		GetDensity(gridaos,ngrids,2*density,ds);\
-		if (gridao1xs){\
-			GetDensityGradient(gridaos,gridao1xs,gridao1ys,gridao1zs,ngrids,2*density,d1xs,d1ys,d1zs);\
-			GetContractedGradient(d1xs,d1ys,d1zs,ngrids,cgs);\
-		}\
+		GetDensity(gridaos,\
+		           gridao1xs,gridao1ys,gridao1zs,\
+		           ngrids,2*density,\
+		           ds,\
+		           d1xs,d1ys,d1zs,cgs);\
 		getEVxc(dfxid,ds,cgs,ngrids,exs,vrxs,vsxs);\
 		if (dfcid && dfxid!=dfcid){\
 			getEVxc(dfcid,ds,cgs,ngrids,ecs,vrcs,vscs);\
@@ -99,11 +99,11 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 			VectorAddition(vsxs,vscs,ngrids);\
 		}\
 		Exc=SumUp(exs,gridweights,ngrids);\
-		Vxc=VxcMatrix(gridaos,vrxs,\
+		Fxc=FxcMatrix(gridaos,vrxs,\
                               d1xs,d1ys,d1zs,\
                               gridao1xs,gridao1ys,gridao1zs,vsxs,\
                               gridweights,ngrids,nbasis);\
-		F+=Vxc;\
+		F+=Fxc;\
 	}\
 	G=4*(overlap*density*F-F*density*overlap); // Electronic gradient of energy with respect to nonredundant orbital rotational parameters. [F(D),D] instead of [F,D(F)].
 
@@ -158,7 +158,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	const EigenMatrix U=eigensolver.eigenvectors();
 	const EigenMatrix X=U*sinversesqrt*U.transpose();
 	EigenMatrix F,G;
-	EigenMatrix Vxc=EigenZero(nbasis,nbasis);
+	EigenMatrix Fxc=EigenZero(nbasis,nbasis);
 	int xkind,ckind,xfamily,cfamily;
 	double Exc=0;
 	double * ds=new double[ngrids]();
@@ -275,7 +275,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 		if (update=='d'){__Fock_2_Density__} // Some techniques update Fock matrix. To complete the iteration, we obtain density matrix from it.
 
 		// Iteration information output
-		const EigenMatrix Iamgoingtobeanobellaureate=density*(hcore+F-Vxc); // Intermediate matrix.
+		const EigenMatrix Iamgoingtobeanobellaureate=density*(hcore+F-Fxc); // Intermediate matrix.
 		PushDoubleQueue(Iamgoingtobeanobellaureate.trace()+Exc,Es,__diis_space_size__); // Updating energy.
 		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
 		if (output){

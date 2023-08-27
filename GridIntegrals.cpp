@@ -677,27 +677,11 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
  }
 }
 
-void GetDensity(double * aos,int ngrids,EigenMatrix D,double * ds){
-	double * iao=aos;
-	double * jao=aos;
-	for (int kgrid=0;kgrid<ngrids;kgrid++)
-		ds[kgrid]=0;
-	double Dij;
-	for (int ibasis=0;ibasis<D.cols();ibasis++){
-		Dij=D(ibasis,ibasis);
-		iao=aos+ibasis*ngrids; // ibasis*ngrids+jgrid
-		for (long int kgrid=0;kgrid<ngrids;kgrid++)
-			ds[kgrid]+=Dij*iao[kgrid]*iao[kgrid];
-		for (int jbasis=0;jbasis<ibasis;jbasis++){
-			jao=aos+jbasis*ngrids;
-			Dij=D(ibasis,jbasis);
-			for (int kgrid=0;kgrid<ngrids;kgrid++)
-				ds[kgrid]+=2*Dij*iao[kgrid]*jao[kgrid];
-		}
-	}
-}
-
-void GetDensityGradient(double * aos,double * ao1xs,double * ao1ys,double * ao1zs,int ngrids,EigenMatrix D,double * d1xs,double * d1ys,double * d1zs){
+void GetDensity(double * aos,
+                double * ao1xs,double * ao1ys,double * ao1zs,
+                int ngrids,EigenMatrix D,
+                double * ds,
+                double * d1xs,double * d1ys,double * d1zs,double * cgs){
 	double * iao=aos;
 	double * jao=aos;
 	double * ix=ao1xs;
@@ -707,18 +691,24 @@ void GetDensityGradient(double * aos,double * ao1xs,double * ao1ys,double * ao1z
 	double * iz=ao1zs;
 	double * jz=ao1zs;
 	double Dij;
-	for (int igrid=0;igrid<ngrids;igrid++){
-		d1xs[igrid]=0;
-		d1ys[igrid]=0;
-		d1zs[igrid]=0;
+        for (int kgrid=0;kgrid<ngrids;kgrid++){
+                ds[kgrid]=0;
+		if (! ao1xs) continue;
+		d1xs[kgrid]=0;
+		d1ys[kgrid]=0;
+		d1zs[kgrid]=0;
 	}
 	for (int ibasis=0;ibasis<D.cols();ibasis++){
 		Dij=D(ibasis,ibasis);
 		iao=aos+ibasis*ngrids; // ibasis*ngrids+jgrid
-		ix=ao1xs+ibasis*ngrids;
-		iy=ao1ys+ibasis*ngrids;
-		iz=ao1zs+ibasis*ngrids;
+		if (ao1xs){
+			ix=ao1xs+ibasis*ngrids;
+			iy=ao1ys+ibasis*ngrids;
+			iz=ao1zs+ibasis*ngrids;
+		}
 		for (int kgrid=0;kgrid<ngrids;kgrid++){
+			ds[kgrid]+=Dij*iao[kgrid]*iao[kgrid];
+			if (! ao1xs) continue;
 			d1xs[kgrid]+=2*Dij*ix[kgrid]*iao[kgrid];
 			d1ys[kgrid]+=2*Dij*iy[kgrid]*iao[kgrid];
 			d1zs[kgrid]+=2*Dij*iz[kgrid]*iao[kgrid];
@@ -726,21 +716,23 @@ void GetDensityGradient(double * aos,double * ao1xs,double * ao1ys,double * ao1z
 		for (int jbasis=0;jbasis<ibasis;jbasis++){
 			Dij=D(ibasis,jbasis);
 			jao=aos+jbasis*ngrids;
-			jx=ao1xs+jbasis*ngrids;
-			jy=ao1ys+jbasis*ngrids;
-			jz=ao1zs+jbasis*ngrids;
+			if (ao1xs){
+				jx=ao1xs+jbasis*ngrids;
+				jy=ao1ys+jbasis*ngrids;
+				jz=ao1zs+jbasis*ngrids;
+			}
 			for (long int kgrid=0;kgrid<ngrids;kgrid++){
+				ds[kgrid]+=2*Dij*iao[kgrid]*jao[kgrid];
+				if (! ao1xs) continue;
 				d1xs[kgrid]+=2*Dij*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid]);
 				d1ys[kgrid]+=2*Dij*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid]);
 				d1zs[kgrid]+=2*Dij*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid]);
 			}
 		}
 	}
-}
-
-void GetContractedGradient(double * d1xs,double * d1ys,double * d1zs,int ngrids,double * cgs){
-	for (int igrid=0;igrid<ngrids;igrid++)
-		cgs[igrid]=d1xs[igrid]*d1xs[igrid]+d1ys[igrid]*d1ys[igrid]+d1zs[igrid]*d1zs[igrid];
+	if (ao1xs)
+		for (int igrid=0;igrid<ngrids;igrid++)
+			cgs[igrid]=d1xs[igrid]*d1xs[igrid]+d1ys[igrid]*d1ys[igrid]+d1zs[igrid]*d1zs[igrid];
 }
 
 void VectorAddition(double * as,double * bs,int ngrids){
@@ -755,7 +747,7 @@ double SumUp(double * ds,double * ws,int ngrids){
 	return n;
 }
 
-EigenMatrix VxcMatrix(double * aos,double * vrs,
+EigenMatrix FxcMatrix(double * aos,double * vrs,
                       double * d1xs,double * d1ys,double * d1zs,
                       double * ao1xs,double * ao1ys,double * ao1zs,double * vss,
                       double * ws,int ngrids,int nbasis){
@@ -767,30 +759,34 @@ EigenMatrix VxcMatrix(double * aos,double * vrs,
 	double * jy=ao1ys;
 	double * iz=ao1zs;
 	double * jz=ao1zs;
-	EigenMatrix Vxc=EigenZero(nbasis,nbasis);
+	EigenMatrix Fxc=EigenZero(nbasis,nbasis);
 	for (int irow=0;irow<nbasis;irow++){
 		iao=aos+irow*ngrids;
-		ix=ao1xs+irow*ngrids;
-		iy=ao1ys+irow*ngrids;
-		iz=ao1zs+irow*ngrids;
+		if (ao1xs){
+			ix=ao1xs+irow*ngrids;
+			iy=ao1ys+irow*ngrids;
+			iz=ao1zs+irow*ngrids;
+		}
 		for (int jcol=0;jcol<=irow;jcol++){
 			jao=aos+jcol*ngrids;
-			jx=ao1xs+jcol*ngrids;
-			jy=ao1ys+jcol*ngrids;
-			jz=ao1zs+jcol*ngrids;
-			double vij=0;
+			if (ao1xs){
+				jx=ao1xs+jcol*ngrids;
+				jy=ao1ys+jcol*ngrids;
+				jz=ao1zs+jcol*ngrids;
+			}
+			double fij=0;
 			for (int kgrid=0;kgrid<ngrids;kgrid++){
 				if (ao1xs){
-					vij+=ws[kgrid]*(vrs[kgrid]*iao[kgrid]*jao[kgrid]
+					fij+=ws[kgrid]*(vrs[kgrid]*iao[kgrid]*jao[kgrid]
 					    +2*vss[kgrid]*(d1xs[kgrid]*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid])
 					                  +d1ys[kgrid]*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid])
 					                  +d1zs[kgrid]*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid])));
 				}else
-					vij+=ws[kgrid]*vrs[kgrid]*iao[kgrid]*jao[kgrid];
+					fij+=ws[kgrid]*vrs[kgrid]*iao[kgrid]*jao[kgrid];
 			}
-			Vxc(irow,jcol)=vij;
-			Vxc(jcol,irow)=vij;
+			Fxc(irow,jcol)=fij;
+			Fxc(jcol,irow)=fij;
 		}
 	}
-	return Vxc;
+	return Fxc;
 }

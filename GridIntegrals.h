@@ -14,17 +14,17 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
                  double * ao1xs,double * ao1ys,double * ao1zs,
                  double * ao2s);
 
-void GetDensity(double * aos,int ngrids,EigenMatrix D,double * density);
-
-void GetDensityGradient(double * aos,double * ao1xs,double * ao1ys,double * ao1zs,int ngrids,EigenMatrix D,double * d1xs,double * d1ys,double * d1zs);
-
-void GetContractedGradient(double * d1xs,double * d1ys,double * d1zs,int ngrids,double * cgs);
+void GetDensity(double * aos,
+                double * ao1xs,double * ao1ys,double * ao1zs,
+                int ngrids,EigenMatrix D,
+                double * ds,
+                double * d1xs,double * d1ys,double * d1zs,double * cgs);
 
 void VectorAddition(double * as,double * bs,int ngrids);
 
 double SumUp(double * ds,double * weights,int ngrids);
 
-EigenMatrix VxcMatrix(double * aos,double * vrs,
+EigenMatrix FxcMatrix(double * aos,double * vrs,
                       double * d1xs,double * d1ys,double * d1zs,
                       double * ao1xs,double * ao1ys,double * ao1zs,double * vss,
                       double * ws,int ngrids,int nbasis);
