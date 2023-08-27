@@ -71,7 +71,7 @@ void ReadDF(std::string df,int & x,int & c,double & hf,char & approx,const bool 
 	}
 }
 
-void getEVxc(int id,double * ds,double * cgs,int ngrids,double * es,double * vrs,double * vss){
+void getEVxc(int id,double * ds,double * cgs,double * d2s,double * ts,int ngrids,double * es,double * vrs,double * vss,double * vls,double * vts){
         xc_func_type func;
         xc_func_init(&func,id,XC_UNPOLARIZED);
 	switch(func.info->family){
@@ -81,6 +81,10 @@ void getEVxc(int id,double * ds,double * cgs,int ngrids,double * es,double * vrs
 		case XC_FAMILY_GGA:
 		case XC_FAMILY_HYB_GGA:
 			xc_gga_exc_vxc(&func,ngrids,ds,cgs,es,vrs,vss);
+			break;
+		case XC_FAMILY_MGGA:
+		case XC_FAMILY_HYB_MGGA:
+			xc_mgga_exc_vxc(&func,ngrids,ds,cgs,d2s,ts,es,vrs,vss,vls,vts);
 			break;
 	}
 	xc_func_end(&func);

@@ -679,9 +679,11 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
 
 void GetDensity(double * aos,
                 double * ao1xs,double * ao1ys,double * ao1zs,
+                double * ao2s,
                 int ngrids,EigenMatrix D,
                 double * ds,
-                double * d1xs,double * d1ys,double * d1zs,double * cgs){
+                double * d1xs,double * d1ys,double * d1zs,double * cgs,
+                double * d2s,double * ts){
 	double * iao=aos;
 	double * jao=aos;
 	double * ix=ao1xs;
@@ -690,6 +692,8 @@ void GetDensity(double * aos,
 	double * jy=ao1ys;
 	double * iz=ao1zs;
 	double * jz=ao1zs;
+	double * iao2=ao2s;
+	double * jao2=ao2s;
 	double Dij;
         for (int kgrid=0;kgrid<ngrids;kgrid++){
                 ds[kgrid]=0;
@@ -697,6 +701,9 @@ void GetDensity(double * aos,
 		d1xs[kgrid]=0;
 		d1ys[kgrid]=0;
 		d1zs[kgrid]=0;
+		if (! ao2s) continue;
+		d2s[kgrid]=0;
+		ts[kgrid]=0;
 	}
 	for (int ibasis=0;ibasis<D.cols();ibasis++){
 		Dij=D(ibasis,ibasis);
@@ -705,6 +712,7 @@ void GetDensity(double * aos,
 			ix=ao1xs+ibasis*ngrids;
 			iy=ao1ys+ibasis*ngrids;
 			iz=ao1zs+ibasis*ngrids;
+			if (ao2s) iao2=ao2s+ibasis*ngrids;
 		}
 		for (int kgrid=0;kgrid<ngrids;kgrid++){
 			ds[kgrid]+=Dij*iao[kgrid]*iao[kgrid];
@@ -712,6 +720,9 @@ void GetDensity(double * aos,
 			d1xs[kgrid]+=2*Dij*ix[kgrid]*iao[kgrid];
 			d1ys[kgrid]+=2*Dij*iy[kgrid]*iao[kgrid];
 			d1zs[kgrid]+=2*Dij*iz[kgrid]*iao[kgrid];
+			if (! ao2s) continue;
+			ts[kgrid]+=0.5*Dij*(ix[kgrid]*ix[kgrid]+iy[kgrid]*iy[kgrid]+iz[kgrid]*iz[kgrid]);
+			d2s[kgrid]+=2*Dij*iao[kgrid]*iao2[kgrid];
 		}
 		for (int jbasis=0;jbasis<ibasis;jbasis++){
 			Dij=D(ibasis,jbasis);
@@ -720,6 +731,7 @@ void GetDensity(double * aos,
 				jx=ao1xs+jbasis*ngrids;
 				jy=ao1ys+jbasis*ngrids;
 				jz=ao1zs+jbasis*ngrids;
+				if (ao2s) jao2=ao2s+jbasis*ngrids;
 			}
 			for (long int kgrid=0;kgrid<ngrids;kgrid++){
 				ds[kgrid]+=2*Dij*iao[kgrid]*jao[kgrid];
@@ -727,12 +739,18 @@ void GetDensity(double * aos,
 				d1xs[kgrid]+=2*Dij*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid]);
 				d1ys[kgrid]+=2*Dij*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid]);
 				d1zs[kgrid]+=2*Dij*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid]);
+				if (! ao2s) continue;
+				ts[kgrid]+=Dij*(ix[kgrid]*jx[kgrid]+iy[kgrid]*jy[kgrid]+iz[kgrid]*jz[kgrid]);
+				d2s[kgrid]+=2*Dij*(iao[kgrid]*jao2[kgrid]+iao2[kgrid]*jao[kgrid]);
 			}
 		}
 	}
-	if (ao1xs)
-		for (int igrid=0;igrid<ngrids;igrid++)
+	for (int igrid=0;igrid<ngrids;igrid++){
+		if (ao1xs)
 			cgs[igrid]=d1xs[igrid]*d1xs[igrid]+d1ys[igrid]*d1ys[igrid]+d1zs[igrid]*d1zs[igrid];
+		if (ao2s)
+			d2s[igrid]+=4*ts[igrid];
+	}
 }
 
 void VectorAddition(double * as,double * bs,int ngrids){
@@ -750,6 +768,8 @@ double SumUp(double * ds,double * ws,int ngrids){
 EigenMatrix FxcMatrix(double * aos,double * vrs,
                       double * d1xs,double * d1ys,double * d1zs,
                       double * ao1xs,double * ao1ys,double * ao1zs,double * vss,
+                      double * d2s,double * ts,
+                      double * ao2s,double * vls,double * vts,
                       double * ws,int ngrids,int nbasis){
 	double * iao=aos;
 	double * jao=aos;
@@ -759,6 +779,8 @@ EigenMatrix FxcMatrix(double * aos,double * vrs,
 	double * jy=ao1ys;
 	double * iz=ao1zs;
 	double * jz=ao1zs;
+	double * iao2=ao2s;
+	double * jao2=ao2s;
 	EigenMatrix Fxc=EigenZero(nbasis,nbasis);
 	for (int irow=0;irow<nbasis;irow++){
 		iao=aos+irow*ngrids;
@@ -766,6 +788,7 @@ EigenMatrix FxcMatrix(double * aos,double * vrs,
 			ix=ao1xs+irow*ngrids;
 			iy=ao1ys+irow*ngrids;
 			iz=ao1zs+irow*ngrids;
+			if (ao2s) iao2=ao2s+irow*ngrids;
 		}
 		for (int jcol=0;jcol<=irow;jcol++){
 			jao=aos+jcol*ngrids;
@@ -773,17 +796,25 @@ EigenMatrix FxcMatrix(double * aos,double * vrs,
 				jx=ao1xs+jcol*ngrids;
 				jy=ao1ys+jcol*ngrids;
 				jz=ao1zs+jcol*ngrids;
+				if (ao2s) jao2=ao2s+jcol*ngrids;
 			}
 			double fij=0;
 			for (int kgrid=0;kgrid<ngrids;kgrid++){
-				if (ao1xs){
+				if (! ao1xs && ! ao2s)
+					fij+=ws[kgrid]*vrs[kgrid]*iao[kgrid]*jao[kgrid];
+				else if (ao1xs && ! ao2s)
 					fij+=ws[kgrid]*(vrs[kgrid]*iao[kgrid]*jao[kgrid]
 					    +2*vss[kgrid]*(d1xs[kgrid]*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid])
 					                  +d1ys[kgrid]*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid])
 					                  +d1zs[kgrid]*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid])));
-				}else
-					fij+=ws[kgrid]*vrs[kgrid]*iao[kgrid]*jao[kgrid];
-			}
+				else if (ao1xs && ao2s)
+					fij+=ws[kgrid]*(vrs[kgrid]*iao[kgrid]*jao[kgrid]
+					    +2*vss[kgrid]*(d1xs[kgrid]*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid])
+					                  +d1ys[kgrid]*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid])
+					                  +d1zs[kgrid]*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid]))
+					    +(0.5*vts[kgrid]+2*vls[kgrid])*(ix[kgrid]*jx[kgrid]+iy[kgrid]*jy[kgrid]+iz[kgrid]*jz[kgrid])
+					    +vls[kgrid]*(iao[kgrid]*jao2[kgrid]+iao2[kgrid]*jao[kgrid]));
+}
 			Fxc(irow,jcol)=fij;
 			Fxc(jcol,irow)=fij;
 		}

@@ -88,20 +88,26 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	if (dfxid){\
 		GetDensity(gridaos,\
 		           gridao1xs,gridao1ys,gridao1zs,\
+		           gridao2s,\
 		           ngrids,2*density,\
 		           ds,\
-		           d1xs,d1ys,d1zs,cgs);\
-		getEVxc(dfxid,ds,cgs,ngrids,exs,vrxs,vsxs);\
+		           d1xs,d1ys,d1zs,cgs,\
+		           d2s,ts);\
+		getEVxc(dfxid,ds,cgs,d2s,ts,ngrids,exs,vrxs,vsxs,vlxs,vtxs);\
 		if (dfcid && dfxid!=dfcid){\
-			getEVxc(dfcid,ds,cgs,ngrids,ecs,vrcs,vscs);\
+			getEVxc(dfcid,ds,cgs,d2s,ts,ngrids,ecs,vrcs,vscs,vlcs,vtcs);\
 			VectorAddition(exs,ecs,ngrids);\
 			VectorAddition(vrxs,vrcs,ngrids);\
 			VectorAddition(vsxs,vscs,ngrids);\
+			VectorAddition(vlxs,vlcs,ngrids);\
+			VectorAddition(vtxs,vtcs,ngrids);\
 		}\
 		Exc=SumUp(exs,gridweights,ngrids);\
 		Fxc=FxcMatrix(gridaos,vrxs,\
                               d1xs,d1ys,d1zs,\
                               gridao1xs,gridao1ys,gridao1zs,vsxs,\
+		              d2s,ts,\
+		              gridao2s,vlxs,vtxs,\
                               gridweights,ngrids,nbasis);\
 		F+=Fxc;\
 	}\
@@ -139,6 +145,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
             int dfxid,int dfcid,int ngrids,double * gridweights,
             double * gridaos,
             double * gridao1xs,double * gridao1ys,double * gridao1zs,
+            double * gridao2s,
             EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,
             const int nprocs,const bool output){
 	if (output){
@@ -165,6 +172,8 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	double * d1xs=new double[ngrids]();
 	double * d1ys=new double[ngrids]();
 	double * d1zs=new double[ngrids]();
+	double * d2s=new double[ngrids]();
+	double * ts=new double[ngrids]();
 	double * cgs=new double[ngrids]();
 	double * exs=new double[ngrids]();
 	double * ecs=new double[ngrids]();
@@ -172,6 +181,10 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	double * vrcs=new double[ngrids]();
 	double * vsxs=new double[ngrids]();
 	double * vscs=new double[ngrids]();
+	double * vlxs=new double[ngrids]();
+	double * vlcs=new double[ngrids]();
+	double * vtxs=new double[ngrids]();
+	double * vtcs=new double[ngrids]();
 
 	// Initial Fock matrix
 	double kscale=1;
@@ -292,7 +305,24 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	if (output) std::cout<<"| Done; Final SCF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
 	const double energy=Es[0];
 
-	delete [] Es;
+	delete [] ds;
+	delete [] d1xs;
+	delete [] d1ys;
+	delete [] d1zs;
+	delete [] d2s;
+	delete [] ts;
+	delete [] cgs;
+	delete [] exs;
+	delete [] ecs;
+	delete [] vrxs;
+	delete [] vrcs;
+	delete [] vsxs;
+	delete [] vscs;
+	delete [] vlxs;
+	delete [] vlcs;
+	delete [] vtxs;
+	delete [] vtcs;
+
 	for (int i=0;i<__diis_space_size__;i++){
 		Fs[i].resize(0,0);
 		Gs[i].resize(0,0);
@@ -302,16 +332,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 		pGs[i].resize(0);
 		pXs[i].resize(0);
 	}
-
-	delete [] ds;
-	delete [] cgs;
-	delete [] exs;
-	delete [] ecs;
-	delete [] vrxs;
-	delete [] vrcs;
-	delete [] vsxs;
-	delete [] vscs;
-
+	delete [] Es;
 	delete [] Fs;
 	delete [] Gs;
 	delete [] Ds;
@@ -329,6 +350,7 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,
                     0,0,0,nullptr,
 	            nullptr,
 	            nullptr,nullptr,nullptr,
+	            nullptr,
                     orbitalenergies,coefficients,density,
                     nprocs,output);
 }

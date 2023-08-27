@@ -122,6 +122,7 @@ int main(int argc,char *argv[]){
 		           dfxid,dfcid,ngrids,ws,
 		           gridaos,
 		           gridao1xs,gridao1ys,gridao1zs,
+		           gridao2s,
 		           orbitalenergies,coefficients,density,
 		           nprocs,1);
 
@@ -140,6 +141,7 @@ std::cout<<ogs[i]<<std::endl;
 	delete [] gridao1xs;
 	delete [] gridao1ys;
 	delete [] gridao1zs;
+	delete [] gridao2s;
 	delete [] repulsion;
 	delete [] indices;
 	std::cout<<"*** Chinium terminated normally ***"<<std::endl;
