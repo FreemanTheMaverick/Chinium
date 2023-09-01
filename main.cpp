@@ -5,12 +5,14 @@
 #include <iostream>
 #include "Aliases.h"
 #include "Gateway.h"
+#include "NuclearRepulsion.h"
 #include "AtomicIntegrals.h"
 #include "AtoIntGradients.h"
 #include "HartreeFock.h"
 #include "InitialGuess.h"
 #include "GridIntegrals.h"
 #include "DensityFunctional.h"
+#include "HFGradient.h"
 
 int main(int argc,char *argv[]){
 
@@ -24,6 +26,7 @@ int main(int argc,char *argv[]){
 	const int nbasis=nBasis(natoms,atoms,basisset,1);
 	nOneElectronIntegrals(natoms,atoms,basisset,1);
 	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms,1);
+	int derivative=ReadDerivative(argv[1],1);
 
 	const std::string guess=ReadGuess(argv[1],1);
 	EigenMatrix density;
@@ -107,8 +110,9 @@ int main(int argc,char *argv[]){
 	short int * indices=new short int[n2integrals*5];
 	Repulsion(natoms,atoms,basisset,nshellquartets,repulsiondiag,repulsion,indices,nprocs,1);
 
-	EigenVector orbitalenergies(nbasis);
 	EigenMatrix coefficients(nbasis,nbasis);
+	EigenVector orbitalenergies(nbasis);
+	EigenVector occs(nbasis);occs.setZero();
 
 	double energy=114514;
 	if (method.compare("rhf")==0)
@@ -127,12 +131,31 @@ int main(int argc,char *argv[]){
 		           nprocs,1);
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
-/*EigenMatrix * ogs=new EigenMatrix[3*natoms];
-OvlGrads(natoms,atoms,basisset,'o',ogs,1);
-for (int i=0;i<natoms*3;i++){
-std::cout<<i<<std::endl;
-std::cout<<ogs[i]<<std::endl;
-}*/
+
+	if (derivative>0){
+		EigenMatrix * ovlgrads=new EigenMatrix[3*natoms];
+		EigenMatrix * kntgrads=new EigenMatrix[3*natoms];
+		EigenMatrix * nclgrads=new EigenMatrix[3*natoms];
+		EigenMatrix * hcoregrads=new EigenMatrix[3*natoms];
+		OvlGrads(natoms,atoms,basisset,ovlgrads,1);
+		KntGrads(natoms,atoms,basisset,kntgrads,1);
+		NclGrads(natoms,atoms,basisset,nclgrads,1);
+		for (int iatom=0;iatom<natoms*3;iatom++)
+			hcoregrads[iatom]=kntgrads[iatom]+nclgrads[iatom];
+		for (int i=0;i<ne/2;i++)
+			occs[i]=1;
+		const EigenMatrix nrg=NRG(natoms,atoms,1);
+		const EigenMatrix rhfg=RHFG(natoms,atoms,basisset,
+		                           ovlgrads,hcoregrads,
+		                           coefficients,orbitalenergies,occs,
+		                           1,1);
+		const EigenMatrix g=nrg+rhfg;
+		std::cout<<"Total gradient:"<<std::endl;
+		__Z_2_Name__
+		for (int iatom=0;iatom<natoms;iatom++)
+			std::cout<<"| "<<Z2Name[(int)atoms[4*iatom]]<<" "<<g.row(iatom)<<std::endl;
+	}
+
 	delete [] xs;
 	delete [] ys;
 	delete [] zs;

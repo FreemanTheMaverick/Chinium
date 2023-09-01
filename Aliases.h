@@ -22,4 +22,4 @@
 #define __Basis_From_Atoms__\
 	const std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);\
 	libint2::BasisSet obs(basisset,libint2atoms);\
-	obs.set_pure(true);
+	obs.set_pure(1);

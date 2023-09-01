@@ -1,5 +1,3 @@
-double NuclearRepulsion(const int natoms,double * atoms,const bool output);
-
 int nBasis(const int natoms,double * atoms,const char * basisset,const bool output);
 
 int nOneElectronIntegrals(const int natoms,double * atoms,const char * basisset,const bool output);

@@ -159,11 +159,12 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 	eigensolver.compute(overlap);
 	const EigenMatrix s=eigensolver.eigenvalues();
-	EigenMatrix sinversesqrt=Eigen::MatrixXd::Zero(nbasis,nbasis);
+	EigenMatrix sinversesqrt=EigenZero(nbasis,nbasis);
 	for (int i=0;i<nbasis;i++)
 		sinversesqrt(i,i)=1/sqrt(s(i,0));
 	const EigenMatrix U=eigensolver.eigenvectors();
 	const EigenMatrix X=U*sinversesqrt*U.transpose();
+
 	EigenMatrix F,G;
 	EigenMatrix Fxc=EigenZero(nbasis,nbasis);
 	int xkind,ckind,xfamily,cfamily;

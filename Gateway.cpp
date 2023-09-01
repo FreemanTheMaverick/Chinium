@@ -27,7 +27,7 @@ int ReadXYZ(char * inp,double * atoms,const bool output){
 				double x;ss>>x;atoms[4*iatom+1]=x*__angstrom2bohr__;
 				double y;ss>>y;atoms[4*iatom+2]=y*__angstrom2bohr__;
 				double z;ss>>z;atoms[4*iatom+3]=z*__angstrom2bohr__;
-				if (output) std::cout<<" "<<iatom<<" "<<Name2Z[elementname]<<" "<<elementname<<" "<<x*__angstrom2bohr__<<" "<<y*__angstrom2bohr__<<" "<<z*__angstrom2bohr__<<std::endl;
+				if (output) std::cout<<"| "<<iatom<<" "<<Name2Z[elementname]<<" "<<elementname<<" "<<x*__angstrom2bohr__<<" "<<y*__angstrom2bohr__<<" "<<z*__angstrom2bohr__<<std::endl;
 			}
 		}
 	}
@@ -160,6 +160,24 @@ std::string ReadMethod(char * inp,const bool output){
 	else if (output) std::cout<<"Computational method ... RHF"<<std::endl;
 	return method;
 }
+
+int ReadDerivative(char * inp,const bool output){
+	std::ifstream file(inp);
+	std::string thisline;
+	bool found=0;
+	double order=0;
+	while (getline(file,thisline) && ! found){
+		if (thisline.compare("derivative")==0){
+			found=1;
+			getline(file,thisline);
+			std::stringstream ss(thisline);
+			ss>>order;
+		}
+	}
+	if (output) std::cout<<"Order of nuclear derivatives ... "<<order<<std::endl;
+	return order;
+}
+
 
 /*
 int main(int argc,char *argv[]){

@@ -11,3 +11,5 @@ std::string ReadGuess(char * inp,const bool output);
 std::string ReadGrid(char * inp,const bool output);
 
 std::string ReadMethod(char * inp,const bool output);
+
+int ReadDerivative(char * inp,const bool output);

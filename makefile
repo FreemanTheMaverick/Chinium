@@ -2,7 +2,7 @@ CXX=g++
 # The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
 EIGEN3=/home/yzhangnn/eigen3/include/eigen3
 # The path where you can find "include/", "lib/" and "share/".
-LIBINT2=/home/yzhangnn/libint_2.7.2
+LIBINT2=/home/yzhangnn/scratch/libint_2.7.2
 # The path where you can find "include/" and "lib64/".
 OSQP=/home/yzhangnn/osqp_0.6.3
 # The path where you can fine "bin/", "include/" and "lib/".
@@ -19,14 +19,17 @@ GridLib='-D__Grid_library_path__="$(PWD)/Grids/"'
 
 .PHONY: all, clean
 
-all: main Gateway InitialGuess Libint2 AtomicIntegrals AtoIntGradients HartreeFock Optimization OSQP LinearAlgebra GridIntegrals DensityFunctional Lebedev
-	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o AtoIntGradients.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
+all: main Gateway NuclearRepulsion InitialGuess Libint2 AtomicIntegrals AtoIntGradients HartreeFock Optimization OSQP LinearAlgebra GridIntegrals DensityFunctional Lebedev HFGradient
+	$(CXX) -o Chinium main.o Gateway.o NuclearRepulsion.o InitialGuess.o Libint2.o AtomicIntegrals.o AtoIntGradients.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o HFGradient.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
 
 main: main.cpp
 	$(CXX) main.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 Gateway: Gateway.cpp
 	$(CXX) Gateway.cpp -c $(GeneralFlags) $(DFLib) $(GridLib)
+
+NuclearRepulsion: NuclearRepulsion.cpp
+	$(CXX) NuclearRepulsion.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 InitialGuess: InitialGuess.cpp
 	$(CXX) InitialGuess.cpp -c $(GeneralFlags) $(EIGEN3Flags)
@@ -61,8 +64,11 @@ DensityFunctional: DensityFunctional.cpp
 Lebedev: sphere_lebedev_rule.cpp
 	$(CXX) sphere_lebedev_rule.cpp -c $(GeneralFlags)
 
+HFGradient: HFGradient.cpp
+	$(CXX) HFGradient.cpp -c -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags)
+
 LD:
-	$(CXX) -o Chinium main.o Gateway.o InitialGuess.o Libint2.o AtomicIntegrals.o AtoIntGradients.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
+	$(CXX) -o Chinium main.o Gateway.o NuclearRepulsion.o InitialGuess.o Libint2.o AtomicIntegrals.o AtoIntGradients.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o HFGradient.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
 
 
 ld: DensityFunctional.o

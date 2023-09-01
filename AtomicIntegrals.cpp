@@ -9,26 +9,6 @@
 
 #define __integral_threshold__ -1.e-12
 
-double NuclearRepulsion(const int natoms,double * atoms,const bool output){
-	double nuclearrepulsion=0;
-	for (int iatom=0;iatom<natoms;iatom++){
-		const double Zi=atoms[iatom*4];
-		const double xi=atoms[iatom*4+1];
-		const double yi=atoms[iatom*4+2];
-		const double zi=atoms[iatom*4+3];
-		for (int jatom=0;jatom<iatom;jatom++){
-			const double Zj=atoms[jatom*4];
-			const double xj=atoms[jatom*4+1];
-			const double yj=atoms[jatom*4+2];
-			const double zj=atoms[jatom*4+3];
-			const double dij=sqrt((xi-xj)*(xi-xj)+(yi-yj)*(yi-yj)+(zi-zj)*(zi-zj));
-			nuclearrepulsion=nuclearrepulsion+Zi*Zj/dij;
-		}
-	}
-	if (output) std::cout<<"Nuclear repulsion energy ... "<<nuclearrepulsion<<" a.u."<<std::endl;
-	return nuclearrepulsion;
-}
-
 int nBasis(const int natoms,double * atoms,const char * basisset,const bool output){ // Size of basis set.
 	__Basis_From_Atoms__
 	int n=nBasis_from_obs(obs);
