@@ -17,6 +17,7 @@
 int main(int argc,char *argv[]){
 
 	std::cout<<"*** Chinium started ***"<<std::endl;
+	assert(("Running Chinium requires an input file!" && argc>1));
 	const int nprocs=ReadNProcs(argv[1],1);
 	double atoms[10000];
 	const int natoms=ReadXYZ(argv[1],atoms,1);
@@ -27,13 +28,6 @@ int main(int argc,char *argv[]){
 	nOneElectronIntegrals(natoms,atoms,basisset,1);
 	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms,1);
 	int derivative=ReadDerivative(argv[1],1);
-
-	const std::string guess=ReadGuess(argv[1],1);
-	EigenMatrix density;
-	if (guess.compare("core")==0)
-		density=CoreHamiltonian(natoms,atoms,basisset);
-	else if (guess.compare("sad")==0)
-		density=SuperpositionAtomicDensity(ne,natoms,atoms,basisset);
 
 	int ngrids=0;
 	double * xs=nullptr;
@@ -56,15 +50,16 @@ int main(int argc,char *argv[]){
 	double kscale;
 	char approx;
 	const std::string scf="rijcosx";
+	const std::string guess=ReadGuess(argv[1],1);
 
 	double * gridaos=nullptr;
 	double * gridao1xs=nullptr;
 	double * gridao1ys=nullptr;
 	double * gridao1zs=nullptr;
 	double * gridao2s=nullptr;
-	if (method.compare("rhf")!=0 || scf.compare("rijcosx")==0){ // Two job types require grids.
+	if (method.compare("rhf")!=0 || scf.compare("rijcosx")==0 || guess.compare("sap")==0){ // Three job types require grids.
 		if (method.compare("rhf")!=0){
-			assert((void("DFT needs a grid to be set!"),! grid.empty()));
+			assert("DFT needs a grid to be set!" && ! grid.empty());
 			ReadDF(method,dfxid,dfcid,kscale,approx,1);
 			if (approx=='l' || approx=='g' || approx=='m') 
 				gridaos=new double[nbasis*ngrids];
@@ -76,13 +71,13 @@ int main(int argc,char *argv[]){
 			if (approx=='m')
 				gridao2s=new double[nbasis*ngrids];
 		}else if (scf.compare("rijcosx")==0){
-			assert((void("RIJCOSX needs a grid to be set!"),! grid.empty()));
+			assert(("RIJCOSX needs a grid to be set!" && ! grid.empty()));
 			if (gridaos==nullptr) gridaos=new double[nbasis*ngrids];
-				gridao1xs=new double[nbasis*ngrids];
-				gridao1ys=new double[nbasis*ngrids];
-				gridao1zs=new double[nbasis*ngrids];
-
+		}else if (guess.compare("sap")==0){
+			assert(("SAP needs a grid to be set!" && ! grid.empty()));
+			if (gridaos==nullptr) gridaos=new double[nbasis*ngrids];
 		}
+
 		GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,
 		            gridaos,gridao1xs,gridao1ys,gridao1zs,gridao2s);
 		for (long int i=0;i<nbasis*ngrids;i++){
@@ -104,6 +99,15 @@ int main(int argc,char *argv[]){
 	const EigenMatrix hcore=kinetic+nuclear;
 	const EigenMatrix repulsiondiag=RepulsionDiag(natoms,atoms,basisset,1);
 
+	EigenMatrix density,fock;
+	if (guess.compare("core")==0)
+		density=CoreHamiltonian(natoms,atoms,basisset);
+	else if (guess.compare("sad")==0)
+		density=SuperpositionAtomicDensity(natoms,atoms,basisset);
+	else if (guess.compare("sap")==0)
+		fock=hcore+SuperpositionAtomicPotential(natoms,atoms,nbasis,
+                                                        xs,ys,zs,ws,ngrids,gridaos);
+
 	int nshellquartets;
 	const long int n2integrals=nTwoElectronIntegrals(natoms,atoms,basisset,repulsiondiag,nshellquartets,1);
 	double * repulsion=new double[n2integrals];
@@ -118,7 +122,8 @@ int main(int argc,char *argv[]){
 	if (method.compare("rhf")==0)
 		energy=RHF(ne,overlap,hcore,
 		           repulsion,indices,n2integrals,
-		           orbitalenergies,coefficients,density,
+		           orbitalenergies,coefficients,
+		           density,fock,
 		           nprocs,1);
 	else
 		energy=RKS(ne,overlap,hcore,
@@ -127,7 +132,8 @@ int main(int argc,char *argv[]){
 		           gridaos,
 		           gridao1xs,gridao1ys,gridao1zs,
 		           gridao2s,
-		           orbitalenergies,coefficients,density,
+		           orbitalenergies,coefficients,
+		           density,fock,
 		           nprocs,1);
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;

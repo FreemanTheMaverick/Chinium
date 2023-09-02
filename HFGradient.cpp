@@ -72,6 +72,7 @@ EigenMatrix RHFG(const int natoms,double * atoms,const char * basisset,
 					const short int bf4_first=shell2bf[s4];
 					const short int n4=obs[s4].size();
 					engine.compute(obs[s1],obs[s2],obs[s3],obs[s4]);
+					if (! buf_vec[0]) continue;
 					__Loop_Over_XYZ_2__(atom1,0)
 					__Loop_Over_XYZ_2__(atom2,1)
 					__Loop_Over_XYZ_2__(atom3,2)

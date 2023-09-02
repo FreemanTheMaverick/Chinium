@@ -8,14 +8,15 @@ OSQP=/home/yzhangnn/osqp_0.6.3
 # The path where you can fine "bin/", "include/" and "lib/".
 LIBXC=/home/yzhangnn/libxc_6.2.2
 
-GeneralFlags=-Wall -O3
-EIGEN3Flags=-I$(EIGEN3) -mavx2
-LIBINT2Flags=-I$(LIBINT2)/include -L$(LIBINT2)/lib -lint2
-OSQPFlags=-I$(OSQP)/include/osqp -L$(OSQP)/lib64 -losqpstatic
-LIBXCFlags=-I$(LIBXC)/include -L$(LIBXC)/lib -lxc
+GeneralFlags=-O3 -Wall -Wextra -Wpedantic
+EIGEN3Flags=-isystem $(EIGEN3) -mavx2
+LIBINT2Flags=-isystem $(LIBINT2)/include -L$(LIBINT2)/lib -lint2
+OSQPFlags=-isystem $(OSQP)/include/osqp -L$(OSQP)/lib64 -losqpstatic
+LIBXCFlags=-isystem $(LIBXC)/include -L$(LIBXC)/lib -lxc
 
 DFLib='-D__DF_library_path__="$(PWD)/DensityFunctionals/"'
 GridLib='-D__Grid_library_path__="$(PWD)/Grids/"'
+SAPLib='-D__SAP_library_path__="$(PWD)/SAP/"'
 
 .PHONY: all, clean
 
@@ -32,7 +33,7 @@ NuclearRepulsion: NuclearRepulsion.cpp
 	$(CXX) NuclearRepulsion.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 InitialGuess: InitialGuess.cpp
-	$(CXX) InitialGuess.cpp -c $(GeneralFlags) $(EIGEN3Flags)
+	$(CXX) InitialGuess.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(SAPLib)
 
 Libint2: Libint2.cpp
 	$(CXX) Libint2.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags)

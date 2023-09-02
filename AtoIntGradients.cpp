@@ -10,7 +10,7 @@
 #define __Loop_Over_XYZ__(iatom,position){\
 	for (short int f1=0,f12=0;f1!=n1;f1++){\
 		const short int bf1=bf1_first+f1;\
-		for (short int f2=0;f2!=n2;f2++,f12++,iint++){\
+		for (short int f2=0;f2!=n2;f2++,f12++){\
 			const short int bf2=bf2_first+f2;\
 			if (bf2<=bf1){\
 				gs[3*(iatom)+0](bf1,bf2)+=buf_vec[3*(position)+0][f12];\
@@ -55,7 +55,6 @@ void OneEleDeris(const int natoms,double * atoms,const char * basisset,char type
 			const short int bf2_first=shell2bf[s2];
 			const short int n2=obs[s2].size();
 			engine.compute(obs[s1],obs[s2]);
-int iint=0;
 			__Loop_Over_XYZ__(atom1,0)
 			__Loop_Over_XYZ__(atom2,1)
 			if (operator_==libint2::Operator::nuclear)

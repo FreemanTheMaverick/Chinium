@@ -29,6 +29,5 @@ double SumUp(double * ds,double * weights,int ngrids);
 EigenMatrix FxcMatrix(double * aos,double * vrs,
                       double * d1xs,double * d1ys,double * d1zs,
                       double * ao1xs,double * ao1ys,double * ao1zs,double * vss,
-                      double * d2s,double * ts,
                       double * ao2s,double * vls,double * vts,
                       double * ws,int ngrids,int nbasis);

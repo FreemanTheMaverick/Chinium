@@ -20,9 +20,21 @@
 #define __trah_start_iter__ 50
 #define __scf_convergence_energy_threshold__ 1.e-8
 #define __scf_convergence_gradient_threshold__ 1.e-5
+#define __density_purification_niterations__ 1024
+#define __density_purification_threshold__ 1.e-12
 
-EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix density,double kscale,const int nprocs){
-	int nbasis=density.cols();
+void PurifyDensity(EigenMatrix overlap,EigenMatrix & D){
+	const int nbasis=D.rows();
+	EigenMatrix error=EigenOne(nbasis,nbasis)*114514;
+	for (int i=0;i<__density_purification_niterations__ && error.norm()>__density_purification_threshold__;i++){
+		D=3*D*overlap*D-2*D*overlap*D*overlap*D;
+		error=D*overlap*D*overlap-D*overlap;
+	}
+	assert(("Density matrix purification failed. Please change to another initial guess." && error.norm()<__density_purification_threshold__));
+}
+
+EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix D,double kscale,const int nprocs){
+	int nbasis=D.cols();
 	omp_set_num_threads(nprocs);
 	long int nintsperthread_fewer=n2integrals/nprocs;
 	int ntimes_fewer=nprocs-n2integrals+nintsperthread_fewer*nprocs; // How many integrals a thread will handle. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to handle (a) integrals, x, and that to compute (a+1) integrals, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of integrals and threads respectively.
@@ -53,13 +65,13 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 			c=*(indicesranger++);
 			d=*(indicesranger++); // Moving the ranger pointer to the right, where the degeneracy factor is located.
 			deg_value=*(indicesranger++)**(repulsionranger++); // Moving the ranger pointer to the right, where the next integral is located.
-			(*thisrawj)(a,b)+=density(c,d)*deg_value;
-			(*thisrawj)(c,d)+=density(a,b)*deg_value;
+			(*thisrawj)(a,b)+=D(c,d)*deg_value;
+			(*thisrawj)(c,d)+=D(a,b)*deg_value;
 			if (kscale>0){
-				(*thisrawk)(a,c)+=density(b,d)*deg_value;
-				(*thisrawk)(b,d)+=density(a,c)*deg_value;
-				(*thisrawk)(a,d)+=density(b,c)*deg_value;
-				(*thisrawk)(b,c)+=density(a,d)*deg_value;
+				(*thisrawk)(a,c)+=D(b,d)*deg_value;
+				(*thisrawk)(b,d)+=D(a,c)*deg_value;
+				(*thisrawk)(a,d)+=D(b,c)*deg_value;
+				(*thisrawk)(b,c)+=D(a,d)*deg_value;
 			}
 		}
 	}
@@ -84,12 +96,12 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 }
 
 #define __Density_2_Fock__\
-	F=hcore+GMatrix(repulsion,indices,n2integrals,density,kscale,nprocs); /* Fock matrix. */\
+	F=hcore+GMatrix(repulsion,indices,n2integrals,D,kscale,nprocs); /* Fock matrix. */\
 	if (dfxid){\
 		GetDensity(gridaos,\
 		           gridao1xs,gridao1ys,gridao1zs,\
 		           gridao2s,\
-		           ngrids,2*density,\
+		           ngrids,2*D,\
 		           ds,\
 		           d1xs,d1ys,d1zs,cgs,\
 		           d2s,ts);\
@@ -106,12 +118,11 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 		Fxc=FxcMatrix(gridaos,vrxs,\
                               d1xs,d1ys,d1zs,\
                               gridao1xs,gridao1ys,gridao1zs,vsxs,\
-		              d2s,ts,\
 		              gridao2s,vlxs,vtxs,\
                               gridweights,ngrids,nbasis);\
 		F+=Fxc;\
 	}\
-	G=4*(overlap*density*F-F*density*overlap); // Electronic gradient of energy with respect to nonredundant orbital rotational parameters. [F(D),D] instead of [F,D(F)].
+	G=4*(overlap*D*F-F*D*overlap); // Electronic gradient of energy with respect to nonredundant orbital rotational parameters. [F(D),D] instead of [F,D(F)].
 
 #define __Fock_2_Density__\
 	const EigenMatrix Fprime=X.transpose()*F*X;\
@@ -120,7 +131,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	const EigenMatrix Cprime=eigensolver.eigenvectors();\
 	coefficients=X*Cprime;\
 	const EigenMatrix C_occ=coefficients.leftCols(nocc);\
-	density=C_occ*C_occ.transpose();
+	D=C_occ*C_occ.transpose();
 
 #define __Loop_Over_OV__\
 	for (int o=0,i=0;o<nocc;o++)\
@@ -146,7 +157,8 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
             double * gridaos,
             double * gridao1xs,double * gridao1ys,double * gridao1zs,
             double * gridao2s,
-            EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,
+            EigenVector & orbitalenergies,EigenMatrix & coefficients,
+            EigenMatrix & D,EigenMatrix & F,
             const int nprocs,const bool output){
 	if (output){
 		if (dfxid) std::cout<<"Restricted Kohn-Sham ..."<<std::endl;
@@ -165,7 +177,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	const EigenMatrix U=eigensolver.eigenvectors();
 	const EigenMatrix X=U*sinversesqrt*U.transpose();
 
-	EigenMatrix F,G;
+	EigenMatrix G=EigenZero(nbasis,nbasis);
 	EigenMatrix Fxc=EigenZero(nbasis,nbasis);
 	int xkind,ckind,xfamily,cfamily;
 	double Exc=0;
@@ -187,14 +199,16 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	double * vtxs=new double[ngrids]();
 	double * vtcs=new double[ngrids]();
 
-	// Initial Fock matrix
+	// Initial guess
 	double kscale=1;
 	if (dfxid){
 		char rubbish[64];
 		if(dfcid) XCInfo(dfcid,rubbish,ckind,cfamily,kscale);
 		XCInfo(dfxid,rubbish,xkind,xfamily,kscale);
 	}
-	__Density_2_Fock__
+	if (D.rows()){
+		__Density_2_Fock__
+	}else if (F.rows()){;}
 	char update='f';
 	int iiteration=0;
 
@@ -206,7 +220,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	for (int i=0;i<__diis_space_size__;i++){
 		Fs[i]=F;
 		Gs[i]=G;
-		Ds[i]=density;
+		Ds[i]=D;
 		Es[i]=114514;
 	}
 	double error2norm=-889464; // |e|^2=Sigma_ij(c_i*c_j*e_i*e_j)
@@ -265,7 +279,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 			}
 			coefficients=firstcoefficients*(EigenOne(nbasis,nbasis)+A+0.5*A*A+0.16666666666666666667*A*A*A+0.04166666666666666667*A*A*A*A);
 			const EigenMatrix C_occ=coefficients.leftCols(nocc);
-			density=C_occ*C_occ.transpose();
+			D=C_occ*C_occ.transpose();
 			nlbfgs++;
 		}else{
 			if (output) std::cout<<"fock_update = naive  ";
@@ -279,7 +293,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 		__Density_2_Fock__
 		PushMatrixQueue(F,Fs,__diis_space_size__); // Updating Fock matrix.
 		PushMatrixQueue(sinversesqrt.transpose()*G*sinversesqrt,Gs,__diis_space_size__); // Updating gradient. I don't know why sinversesqrt is important, but its existence accelerates convergence.
-		PushMatrixQueue(density,Ds,__diis_space_size__); // Updating atomic density matrix.
+		PushMatrixQueue(D,Ds,__diis_space_size__); // Updating atomic density matrix.
 
 		const EigenMatrix Fmo=coefficients.transpose()*F*coefficients;
 		__Loop_Over_OV__ pG(i)=-4*Fmo(o,v);
@@ -289,7 +303,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 		if (update=='d'){__Fock_2_Density__} // Some techniques update Fock matrix. To complete the iteration, we obtain density matrix from it.
 
 		// Iteration information output
-		const EigenMatrix Iamgoingtobeanobellaureate=density*(hcore+F-Fxc); // Intermediate matrix.
+		const EigenMatrix Iamgoingtobeanobellaureate=D*(hcore+F-Fxc); // Intermediate matrix.
 		PushDoubleQueue(Iamgoingtobeanobellaureate.trace()+Exc,Es,__diis_space_size__); // Updating energy.
 		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
 		if (output){
@@ -344,7 +358,8 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 
 double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,
            double * repulsion,short int * indices,long int n2integrals,
-           EigenVector & orbitalenergies,EigenMatrix & coefficients,EigenMatrix & density,
+           EigenVector & orbitalenergies,EigenMatrix & coefficients,
+           EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output){
 	return RKS(nele,overlap,hcore,
                     repulsion,indices,n2integrals,
@@ -352,7 +367,8 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	            nullptr,
 	            nullptr,nullptr,nullptr,
 	            nullptr,
-                    orbitalenergies,coefficients,density,
+                    orbitalenergies,coefficients,
+	            D,F,
                     nprocs,output);
 }
 

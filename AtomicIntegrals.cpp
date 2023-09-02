@@ -242,10 +242,10 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 	omp_set_num_threads(nprocs);
 	long int nsqperthread_fewer=nshellquartets/nprocs; // How many shell quartets a thread will compute. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to compute a quartets, x, and that to compute (a+1) quartets, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of quartes and threads respectively.
 	int ntimes_fewer=nprocs-nshellquartets+nsqperthread_fewer*nprocs;
-	long int nsqperthread[nprocs]; // The number of shell quartets each thread is to compute.
-	long int isqfirstperthread[nprocs]; // The index of the first shell quartet each thread is to compute.
-	long int nbfperthread[nprocs]; // The number of basis function quartet each thread is to compute.
-	long int ibffirstperthread[nprocs]; // The index of the first basis function quartet each thread is to compute.
+	long int * nsqperthread=new long int[nprocs]; // The number of shell quartets each thread is to compute.
+	long int * isqfirstperthread=new long int[nprocs]; // The index of the first shell quartet each thread is to compute.
+	long int * nbfperthread=new long int[nprocs]; // The number of basis function quartet each thread is to compute.
+	long int * ibffirstperthread=new long int[nprocs]; // The index of the first basis function quartet each thread is to compute.
 	for (int iproc=0;iproc<nprocs;iproc++){
 		nsqperthread[iproc]=iproc<ntimes_fewer?nsqperthread_fewer:(nsqperthread_fewer+1);
 		isqfirstperthread[iproc]=iproc==0?0:(isqfirstperthread[iproc-1]+nsqperthread[iproc-1]);
@@ -326,6 +326,10 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 	}
 	libint2::finalize();
 	delete [] shellquartets;
+	delete [] nsqperthread;
+	delete [] isqfirstperthread;
+	delete [] nbfperthread;
+	delete [] ibffirstperthread;
 	time_t end=time(0);
 	if (output) std::cout<<"done "<<end-start<<" s"<<std::endl;
 }

@@ -1,0 +1,29 @@
+nprocs
+1
+
+xyz
+3
+O    0    0.       0.
+H    0    -0.757   0.587
+H    0    0.757    0.587
+
+charge
+0
+
+spin
+1
+
+guess
+core
+
+grid
+sg-1
+
+method
+rhf
+
+basis
+cc-pvqz
+
+derivative
+1

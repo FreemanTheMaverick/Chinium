@@ -109,6 +109,8 @@ std::string ReadGuess(char * inp,const bool output){
 		std::cout<<"Initial guessed density matrix ... Core"<<std::endl;
 	else if (guess.compare("sad")==0 && output)
 		std::cout<<"Initial guessed density matrix ... SAD"<<std::endl;
+	else if (guess.compare("sap")==0 && output)
+		std::cout<<"Initial guessed fock matrix ... SAP"<<std::endl;
 	else if (output)
 		std::cout<<"Initial guessed density matrix ... taken from '"<<guess<<"'"<<std::endl;
 	return guess;
@@ -130,7 +132,7 @@ std::string ReadGrid(char * inp,const bool output){
 	if (!grid.empty()){
 		std::string filename=std::string(__Grid_library_path__)+grid;
 		std::ifstream gridfile(filename);
-		assert((void("Cannot find the grid folder in " __Grid_library_path__),gridfile.good()));
+		assert(("Cannot find the grid folder in " __Grid_library_path__ && gridfile.good()));
 
 		if (output)
 			std::cout<<"Grid ... "<<grid<<" found in "<<std::string(__Grid_library_path__)<<std::endl;
@@ -154,7 +156,7 @@ std::string ReadMethod(char * inp,const bool output){
 	if (method!="rhf"){
 		std::string filename=std::string(__DF_library_path__)+method+".df";
 		std::ifstream dffile(filename);
-		assert((void("Cannot find the DF file in " __DF_library_path__),dffile.good()));
+		assert("Cannot find the DF file in " __DF_library_path__ && dffile.good());
 		if (output) std::cout<<"Computational method ... "<<method<<" found in "<<std::string(__DF_library_path__)<<std::endl;
 	}
 	else if (output) std::cout<<"Computational method ... RHF"<<std::endl;

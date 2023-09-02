@@ -18,7 +18,7 @@ int SphericalGridNumber(std::string grid,const int natoms,double * atoms,const b
 	for (int iatom=0;iatom<natoms;iatom++){
 		int ngroups;
 		std::ifstream gridfile(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
-		assert((void("Missing element grid files"),gridfile.good()));
+		assert((void("Missing element grid file"),gridfile.good()));
 		std::string thisline;
 		getline(gridfile,thisline);
 		std::stringstream ss_(thisline);
@@ -61,7 +61,7 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 	__Z_2_Name__
 	for (int iatom=0;iatom<natoms;iatom++){
 		std::ifstream gridfile(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
-		assert((void("Not enough element grid files in " __Grid_library_path__),gridfile.good()));
+		assert(("Missing element grid file in" __Grid_library_path__ && gridfile.good()));
 		std::string thisline;
 		getline(gridfile,thisline);
 		std::stringstream ss_(thisline);
@@ -768,7 +768,6 @@ double SumUp(double * ds,double * ws,int ngrids){
 EigenMatrix FxcMatrix(double * aos,double * vrs,
                       double * d1xs,double * d1ys,double * d1zs,
                       double * ao1xs,double * ao1ys,double * ao1zs,double * vss,
-                      double * d2s,double * ts,
                       double * ao2s,double * vls,double * vts,
                       double * ws,int ngrids,int nbasis){
 	double * iao=aos;
