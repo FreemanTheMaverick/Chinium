@@ -1,0 +1,1 @@
+SAP as initial guess taken from [susilehtola/erkale](https://github.com/susilehtola/erkale) as explained in [Lehtola S, Blockhuys F, Van Alsenoy C. An Overview of Self-Consistent Field Calculations Within Finite Basis Sets. Molecules. 2020 Mar 8;25(5):1218.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7179435/). Many thanks to Susi Lehtola's elucidation!
