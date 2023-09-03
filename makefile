@@ -5,7 +5,7 @@ EIGEN3=/home/yzhangnn/eigen3/include/eigen3
 LIBINT2=/home/yzhangnn/scratch/libint_2.7.2
 # The path where you can find "include/" and "lib64/".
 OSQP=/home/yzhangnn/osqp_0.6.3
-# The path where you can fine "bin/", "include/" and "lib/".
+# The path where you can find "bin/", "include/" and "lib/".
 LIBXC=/home/yzhangnn/libxc_6.2.2
 
 GeneralFlags=-O3 -Wall -Wextra -Wpedantic
@@ -18,7 +18,7 @@ DFLib='-D__DF_library_path__="$(PWD)/DensityFunctionals/"'
 GridLib='-D__Grid_library_path__="$(PWD)/Grids/"'
 SAPLib='-D__SAP_library_path__="$(PWD)/SAP/"'
 
-.PHONY: all, clean
+.PHONY: all
 
 all: main Gateway NuclearRepulsion InitialGuess Libint2 AtomicIntegrals AtoIntGradients HartreeFock Optimization OSQP LinearAlgebra GridIntegrals DensityFunctional Lebedev HFGradient
 	$(CXX) -o Chinium main.o Gateway.o NuclearRepulsion.o InitialGuess.o Libint2.o AtomicIntegrals.o AtoIntGradients.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o HFGradient.o -fopenmp $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)

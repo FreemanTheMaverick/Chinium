@@ -206,9 +206,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 		if(dfcid) XCInfo(dfcid,rubbish,ckind,cfamily,kscale);
 		XCInfo(dfxid,rubbish,xkind,xfamily,kscale);
 	}
-	if (D.rows()){
-		__Density_2_Fock__
-	}else if (F.rows()){;}
+	if (D.rows()){__Density_2_Fock__}
 	char update='f';
 	int iiteration=0;
 

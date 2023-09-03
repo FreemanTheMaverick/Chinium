@@ -106,7 +106,7 @@ std::string ReadGuess(char * inp,const bool output){
 		}
 	}
 	if (guess.compare("core")==0 && output)
-		std::cout<<"Initial guessed density matrix ... Core"<<std::endl;
+		std::cout<<"Initial guessed fock matrix ... Core"<<std::endl;
 	else if (guess.compare("sad")==0 && output)
 		std::cout<<"Initial guessed density matrix ... SAD"<<std::endl;
 	else if (guess.compare("sap")==0 && output)

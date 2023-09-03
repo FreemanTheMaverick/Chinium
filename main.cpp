@@ -101,7 +101,7 @@ int main(int argc,char *argv[]){
 
 	EigenMatrix density,fock;
 	if (guess.compare("core")==0)
-		density=CoreHamiltonian(natoms,atoms,basisset);
+		fock=hcore;
 	else if (guess.compare("sad")==0)
 		density=SuperpositionAtomicDensity(natoms,atoms,basisset);
 	else if (guess.compare("sap")==0)

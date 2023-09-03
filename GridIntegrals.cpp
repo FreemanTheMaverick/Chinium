@@ -18,7 +18,7 @@ int SphericalGridNumber(std::string grid,const int natoms,double * atoms,const b
 	for (int iatom=0;iatom<natoms;iatom++){
 		int ngroups;
 		std::ifstream gridfile(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
-		assert((void("Missing element grid file"),gridfile.good()));
+		assert(("Missing element grid file" && gridfile.good()));
 		std::string thisline;
 		getline(gridfile,thisline);
 		std::stringstream ss_(thisline);
@@ -96,7 +96,7 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 				const double ii=i+1;
 				return 2*pow(R,3)*(nshells_total+1)*pow(ii,5)/pow(nshells_total+1-ii,7);
 			};
-		}else assert((void("Unrecognized radial formula!"),0));
+		}else assert(("Unrecognized radial formula!" && 0));
 		int ishell_total=0;
 		for (int igroup=0;igroup<ngroups;igroup++){
 			getline(gridfile,thisline);
@@ -272,7 +272,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
      Azz=-2*tmp1+4*tmp2*z;
     }
    }
-   switch(two_l_plus_one){ // Basis function values are the products of the radial parts and the spherical harmonic parts. The following spherical harmonics are rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API. The normalization constants here differ from those from "Symmetries of Spherical Harmonics: applications to ambisonics" @ https://iaem.at/ambisonics/symposium2009/proceedings/ambisym09-chapman-shsymmetries.pdf/@@download/file/AmbiSym09_Chapman_SHSymmetries.pdf by a factor of sqrt(2l+1).
+   switch(two_l_plus_one){ // Basis function values are the products of the radial parts and the spherical harmonic parts. The following spherical harmonics are rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API. The normalization constants here differ from those in "Symmetries of Spherical Harmonics: applications to ambisonics" @ https://iaem.at/ambisonics/symposium2009/proceedings/ambisym09-chapman-shsymmetries.pdf/@@download/file/AmbiSym09_Chapman_SHSymmetries.pdf by a factor of sqrt(2l+1).
     case 1: // S
      Q[0]=1;
      if (ao1xs){ // (uv)' = u'v + uv'

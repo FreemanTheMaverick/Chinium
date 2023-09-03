@@ -11,13 +11,9 @@
 #include "HartreeFock.h"
 #include "GridIntegrals.h"
 
-EigenMatrix CoreHamiltonian(const int natoms,double * atoms,const char * basisset){
-	const int nbasis=nBasis(natoms,atoms,basisset,0);
-	return EigenZero(nbasis,nbasis);
-}
-
 EigenMatrix SuperpositionAtomicDensity(const int natoms,double * atoms,const char * basisset){
-	EigenMatrix density=CoreHamiltonian(natoms,atoms,basisset); // Initializing the density matrix.
+	const int nbasis=nBasis(natoms,atoms,basisset,0);
+	EigenMatrix density=EigenZero(nbasis,nbasis); // Initializing the density matrix.
 	std::map<int,std::vector<int>> unique_atoms; // A map to store all unique atoms and their leading basis functions' indices.
 	int ibasis=0; // The leading basis function's index.
 	for (int iatom=0;iatom<natoms;iatom++){
