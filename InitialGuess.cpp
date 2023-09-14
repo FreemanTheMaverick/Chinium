@@ -65,7 +65,7 @@ EigenMatrix SuperpositionAtomicPotential(const int natoms,double * atoms,int nba
 		const double atomy=atoms[iatom*4+2];
 		const double atomz=atoms[iatom*4+3];
 		std::ifstream sapfile(std::string(__SAP_library_path__)+"/v_"+atomname+".dat");
-		assert(("Missing element SAP file in" __SAP_library_path__ && sapfile.good()));
+		assert("Missing element SAP file in" __SAP_library_path__ && sapfile.good());
 		double Rs[__nlines__];
 		double Zs[__nlines__];
 		for (int iline=0;iline<__nlines__;iline++){

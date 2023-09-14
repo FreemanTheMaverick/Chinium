@@ -18,7 +18,7 @@ int SphericalGridNumber(std::string grid,const int natoms,double * atoms,const b
 	for (int iatom=0;iatom<natoms;iatom++){
 		int ngroups;
 		std::ifstream gridfile(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
-		assert(("Missing element grid file" && gridfile.good()));
+		assert("Missing element grid file" && gridfile.good());
 		std::string thisline;
 		getline(gridfile,thisline);
 		std::stringstream ss_(thisline);
@@ -61,7 +61,7 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 	__Z_2_Name__
 	for (int iatom=0;iatom<natoms;iatom++){
 		std::ifstream gridfile(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
-		assert(("Missing element grid file in" __Grid_library_path__ && gridfile.good()));
+		assert("Missing element grid file in" __Grid_library_path__ && gridfile.good());
 		std::string thisline;
 		getline(gridfile,thisline);
 		std::stringstream ss_(thisline);
@@ -96,7 +96,7 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 				const double ii=i+1;
 				return 2*pow(R,3)*(nshells_total+1)*pow(ii,5)/pow(nshells_total+1-ii,7);
 			};
-		}else assert(("Unrecognized radial formula!" && 0));
+		}else assert("Unrecognized radial formula!" && 0);
 		int ishell_total=0;
 		for (int igroup=0;igroup<ngroups;igroup++){
 			getline(gridfile,thisline);
@@ -209,7 +209,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
                  double * xs,double * ys,double * zs,int ngrids,
                  double * aos,
                  double * ao1xs,double * ao1ys,double * ao1zs,
-                 double * ao2s){ // ibasis*ngrids+jgrid
+                 double * ao2ls){ // ibasis*ngrids+jgrid
  __Basis_From_Atoms__
  double xo,yo,zo,x,y,z,r2;
  double tmp,tmp1,tmp2;
@@ -220,7 +220,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
  double * ao1x_rangers[16];
  double * ao1y_rangers[16];
  double * ao1z_rangers[16];
- double * ao2_rangers[16];
+ double * ao2l_rangers[16];
  double Q[16]={0};
  double Qx[16]={0};
  double Qy[16]={0};
@@ -239,8 +239,8 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
     ao1x_rangers[iranger]=ao1xs+ibasis*ngrids;
     ao1y_rangers[iranger]=ao1ys+ibasis*ngrids;
     ao1z_rangers[iranger]=ao1zs+ibasis*ngrids;
-    if (ao2s)
-     ao2_rangers[iranger]=ao2s+ibasis*ngrids;
+    if (ao2ls)
+     ao2l_rangers[iranger]=ao2ls+ibasis*ngrids;
    }
   }
   xo=shell.O[0];
@@ -258,7 +258,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
     A+=tmp; // Each primitive gaussian contributes to the radial parts of basis functions.
     if (ao1xs){
      tmp1+=tmp*shell.alpha[iprim];
-     if (ao2s)
+     if (ao2ls)
       tmp2+=tmp*shell.alpha[iprim]*shell.alpha[iprim];
     }
    }
@@ -266,7 +266,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
     Ax=-2*x*tmp1;
     Ay=-2*y*tmp1;
     Az=-2*z*tmp1;
-    if (ao2s){
+    if (ao2ls){
      Axx=-2*tmp1+4*tmp2*x;
      Ayy=-2*tmp1+4*tmp2*y;
      Azz=-2*tmp1+4*tmp2*z;
@@ -279,7 +279,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[0]=0;
       Qy[0]=0;
       Qz[0]=0;
-      if (ao2s){
+      if (ao2ls){
        Qxx[0]=0;
        Qyy[0]=0;
        Qzz[0]=0;
@@ -300,7 +300,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[2]=1;
       Qy[2]=0;
       Qz[2]=0;
-      if (ao2s){
+      if (ao2ls){
        Qxx[0]=0;
        Qyy[0]=0;
        Qzz[0]=0;
@@ -335,7 +335,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[4]=sqrt(3)*x;
       Qy[4]=( -sqrt(3)*y );
       Qz[4]=0;
-      if (ao2s){
+      if (ao2ls){
        Qxx[0]=0;
        Qyy[0]=0;
        Qzz[0]=0;
@@ -384,7 +384,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[6]=3*sqrt(10)*(x*x - y*y)/4;
       Qy[6]=( -3*sqrt(10)*x*y/2 );
       Qz[6]=0;
-      if (ao2s){
+      if (ao2ls){
        Qxx[0]=3*sqrt(10)*y/2;
        Qyy[0]=-3*sqrt(10)*y/2;
        Qzz[0]=0;
@@ -447,7 +447,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[8]=sqrt(35)*x*(x*x - 3*y*y)/2;
       Qy[8]=sqrt(35)*y*(-3*x*x + y*y)/2;
       Qz[8]=0;
-      if (ao2s){
+      if (ao2ls){
        Qxx[0]=3*sqrt(35)*x*y;
        Qyy[0]=-3*sqrt(35)*x*y;
        Qzz[0]=0;
@@ -524,7 +524,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[10]=15*sqrt(14)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
       Qy[10]=15*sqrt(14)*x*y*(-x*x + y*y)/4;
       Qz[10]=0;
-      if (ao2s){
+      if (ao2ls){
        Qxx[0]=15*sqrt(14)*y*(3*x*x - y*y)/4;
        Qyy[0]=15*sqrt(14)*y*(-3*x*x + y*y)/4;
        Qzz[0]=0;
@@ -615,7 +615,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[12]=3*sqrt(462)*x*(x*x*x*x - 10*x*x*y*y + 5*y*y*y*y)/16;
       Qy[12]=3*sqrt(462)*y*(-5*x*x*x*x + 10*x*x*y*y - y*y*y*y)/16;
       Qz[12]=0;
-      if (ao2s){
+      if (ao2ls){
        Qx[0]=15*sqrt(462)*x*y*(x*x - y*y)/4;
        Qy[0]=15*sqrt(462)*x*y*(-x*x + y*y)/4;
        Qz[0]=0;
@@ -665,11 +665,11 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
      ao1x_rangers[i][k]=Ax*Q[i]+A*Qx[i];
      ao1y_rangers[i][k]=Ay*Q[i]+A*Qy[i];
      ao1z_rangers[i][k]=Az*Q[i]+A*Qz[i];
-     if (ao2s){
+     if (ao2ls){
       ao2xx=Axx*Q[i]+Ax*Qx[i]+A*Qxx[i];
       ao2yy=Ayy*Q[i]+Ay*Qy[i]+A*Qyy[i];
       ao2zz=Azz*Q[i]+Az*Qz[i]+A*Qzz[i];
-      ao2_rangers[i][k]=ao2xx+ao2yy+ao2zz;
+      ao2l_rangers[i][k]=ao2xx+ao2yy+ao2zz;
      }
     }
    }
@@ -679,7 +679,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
 
 void GetDensity(double * aos,
                 double * ao1xs,double * ao1ys,double * ao1zs,
-                double * ao2s,
+                double * ao2ls,
                 int ngrids,EigenMatrix D,
                 double * ds,
                 double * d1xs,double * d1ys,double * d1zs,double * cgs,
@@ -692,8 +692,8 @@ void GetDensity(double * aos,
 	double * jy=ao1ys;
 	double * iz=ao1zs;
 	double * jz=ao1zs;
-	double * iao2=ao2s;
-	double * jao2=ao2s;
+	double * iao2=ao2ls;
+	double * jao2=ao2ls;
 	double Dij;
         for (int kgrid=0;kgrid<ngrids;kgrid++){
                 ds[kgrid]=0;
@@ -701,7 +701,7 @@ void GetDensity(double * aos,
 		d1xs[kgrid]=0;
 		d1ys[kgrid]=0;
 		d1zs[kgrid]=0;
-		if (! ao2s) continue;
+		if (! ao2ls) continue;
 		d2s[kgrid]=0;
 		ts[kgrid]=0;
 	}
@@ -712,7 +712,7 @@ void GetDensity(double * aos,
 			ix=ao1xs+ibasis*ngrids;
 			iy=ao1ys+ibasis*ngrids;
 			iz=ao1zs+ibasis*ngrids;
-			if (ao2s) iao2=ao2s+ibasis*ngrids;
+			if (ao2ls) iao2=ao2ls+ibasis*ngrids;
 		}
 		for (int kgrid=0;kgrid<ngrids;kgrid++){
 			ds[kgrid]+=Dij*iao[kgrid]*iao[kgrid];
@@ -720,7 +720,7 @@ void GetDensity(double * aos,
 			d1xs[kgrid]+=2*Dij*ix[kgrid]*iao[kgrid];
 			d1ys[kgrid]+=2*Dij*iy[kgrid]*iao[kgrid];
 			d1zs[kgrid]+=2*Dij*iz[kgrid]*iao[kgrid];
-			if (! ao2s) continue;
+			if (! ao2ls) continue;
 			ts[kgrid]+=0.5*Dij*(ix[kgrid]*ix[kgrid]+iy[kgrid]*iy[kgrid]+iz[kgrid]*iz[kgrid]);
 			d2s[kgrid]+=2*Dij*iao[kgrid]*iao2[kgrid];
 		}
@@ -731,7 +731,7 @@ void GetDensity(double * aos,
 				jx=ao1xs+jbasis*ngrids;
 				jy=ao1ys+jbasis*ngrids;
 				jz=ao1zs+jbasis*ngrids;
-				if (ao2s) jao2=ao2s+jbasis*ngrids;
+				if (ao2ls) jao2=ao2ls+jbasis*ngrids;
 			}
 			for (long int kgrid=0;kgrid<ngrids;kgrid++){
 				ds[kgrid]+=2*Dij*iao[kgrid]*jao[kgrid];
@@ -739,7 +739,7 @@ void GetDensity(double * aos,
 				d1xs[kgrid]+=2*Dij*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid]);
 				d1ys[kgrid]+=2*Dij*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid]);
 				d1zs[kgrid]+=2*Dij*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid]);
-				if (! ao2s) continue;
+				if (! ao2ls) continue;
 				ts[kgrid]+=Dij*(ix[kgrid]*jx[kgrid]+iy[kgrid]*jy[kgrid]+iz[kgrid]*jz[kgrid]);
 				d2s[kgrid]+=2*Dij*(iao[kgrid]*jao2[kgrid]+iao2[kgrid]*jao[kgrid]);
 			}
@@ -748,7 +748,7 @@ void GetDensity(double * aos,
 	for (int igrid=0;igrid<ngrids;igrid++){
 		if (ao1xs)
 			cgs[igrid]=d1xs[igrid]*d1xs[igrid]+d1ys[igrid]*d1ys[igrid]+d1zs[igrid]*d1zs[igrid];
-		if (ao2s)
+		if (ao2ls)
 			d2s[igrid]+=4*ts[igrid];
 	}
 }
@@ -768,7 +768,7 @@ double SumUp(double * ds,double * ws,int ngrids){
 EigenMatrix FxcMatrix(double * aos,double * vrs,
                       double * d1xs,double * d1ys,double * d1zs,
                       double * ao1xs,double * ao1ys,double * ao1zs,double * vss,
-                      double * ao2s,double * vls,double * vts,
+                      double * ao2ls,double * vls,double * vts,
                       double * ws,int ngrids,int nbasis){
 	double * iao=aos;
 	double * jao=aos;
@@ -778,8 +778,8 @@ EigenMatrix FxcMatrix(double * aos,double * vrs,
 	double * jy=ao1ys;
 	double * iz=ao1zs;
 	double * jz=ao1zs;
-	double * iao2=ao2s;
-	double * jao2=ao2s;
+	double * iao2=ao2ls;
+	double * jao2=ao2ls;
 	EigenMatrix Fxc=EigenZero(nbasis,nbasis);
 	for (int irow=0;irow<nbasis;irow++){
 		iao=aos+irow*ngrids;
@@ -787,7 +787,7 @@ EigenMatrix FxcMatrix(double * aos,double * vrs,
 			ix=ao1xs+irow*ngrids;
 			iy=ao1ys+irow*ngrids;
 			iz=ao1zs+irow*ngrids;
-			if (ao2s) iao2=ao2s+irow*ngrids;
+			if (ao2ls) iao2=ao2ls+irow*ngrids;
 		}
 		for (int jcol=0;jcol<=irow;jcol++){
 			jao=aos+jcol*ngrids;
@@ -795,18 +795,18 @@ EigenMatrix FxcMatrix(double * aos,double * vrs,
 				jx=ao1xs+jcol*ngrids;
 				jy=ao1ys+jcol*ngrids;
 				jz=ao1zs+jcol*ngrids;
-				if (ao2s) jao2=ao2s+jcol*ngrids;
+				if (ao2ls) jao2=ao2ls+jcol*ngrids;
 			}
 			double fij=0;
 			for (int kgrid=0;kgrid<ngrids;kgrid++){
-				if (! ao1xs && ! ao2s)
+				if (! ao1xs && ! ao2ls)
 					fij+=ws[kgrid]*vrs[kgrid]*iao[kgrid]*jao[kgrid];
-				else if (ao1xs && ! ao2s)
+				else if (ao1xs && ! ao2ls)
 					fij+=ws[kgrid]*(vrs[kgrid]*iao[kgrid]*jao[kgrid]
 					    +2*vss[kgrid]*(d1xs[kgrid]*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid])
 					                  +d1ys[kgrid]*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid])
 					                  +d1zs[kgrid]*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid])));
-				else if (ao1xs && ao2s)
+				else if (ao1xs && ao2ls)
 					fij+=ws[kgrid]*(vrs[kgrid]*iao[kgrid]*jao[kgrid]
 					    +2*vss[kgrid]*(d1xs[kgrid]*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid])
 					                  +d1ys[kgrid]*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid])

@@ -17,7 +17,9 @@
 int main(int argc,char *argv[]){
 
 	std::cout<<"*** Chinium started ***"<<std::endl;
-	assert(("Running Chinium requires an input file!" && argc>1));
+	assert("Running Chinium requires an input file!" && argc>1);
+
+	// Gateway
 	const int nprocs=ReadNProcs(argv[1],1);
 	double atoms[10000];
 	const int natoms=ReadXYZ(argv[1],atoms,1);
@@ -28,13 +30,34 @@ int main(int argc,char *argv[]){
 	nOneElectronIntegrals(natoms,atoms,basisset,1);
 	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms,1);
 	int derivative=ReadDerivative(argv[1],1);
+	std::string grid=ReadGrid(argv[1],1);
+	const std::string method=ReadMethod(argv[1],1);
+	const std::string guess=ReadGuess(argv[1],1);
+	const std::string scf="rijcosx";
 
+	// Density functional (if any)
+	int dfxid=0;
+	int dfcid=0;
+	double kscale;
+	char approx;
+
+	// Grid generation (if needed)
 	int ngrids=0;
 	double * xs=nullptr;
 	double * ys=nullptr;
 	double * zs=nullptr;
 	double * ws=nullptr;
-	std::string grid=ReadGrid(argv[1],1);
+	double * gridaos=nullptr;
+	double * gridao1xs=nullptr;
+	double * gridao1ys=nullptr;
+	double * gridao1zs=nullptr;
+	double * gridao2ls=nullptr;
+	double * gridao2xxs=nullptr;
+	double * gridao2yys=nullptr;
+	double * gridao2zzs=nullptr;
+	double * gridao2xys=nullptr;
+	double * gridao2xzs=nullptr;
+	double * gridao2yzs=nullptr;
 	if (!grid.empty()){
 		ngrids=SphericalGridNumber(grid,natoms,atoms,1);
 		xs=new double[ngrids];
@@ -44,61 +67,86 @@ int main(int argc,char *argv[]){
 		SphericalGrid(grid,natoms,atoms,xs,ys,zs,ws,1);
 	}
 
-	const std::string method=ReadMethod(argv[1],1);
-	int dfxid=0;
-	int dfcid=0;
-	double kscale;
-	char approx;
-	const std::string scf="rijcosx";
-	const std::string guess=ReadGuess(argv[1],1);
-
-	double * gridaos=nullptr;
-	double * gridao1xs=nullptr;
-	double * gridao1ys=nullptr;
-	double * gridao1zs=nullptr;
-	double * gridao2s=nullptr;
-	if (method.compare("rhf")!=0 || scf.compare("rijcosx")==0 || guess.compare("sap")==0){ // Three job types require grids.
-		if (method.compare("rhf")!=0){
-			assert("DFT needs a grid to be set!" && ! grid.empty());
-			ReadDF(method,dfxid,dfcid,kscale,approx,1);
-			if (approx=='l' || approx=='g' || approx=='m') 
-				gridaos=new double[nbasis*ngrids];
-			if (approx=='g' || approx=='m'){
+	// Grid values evaluation (if needed)
+	if (method.compare("rhf")!=0){ // Three job types require grids. Allocating memory to necessary grid arrays.
+		assert("DFT needs a grid to be set!" && ! grid.empty());
+		ReadDF(method,dfxid,dfcid,kscale,approx,1);
+		if (approx=='l' || approx=='g' || approx=='m') // For single point energy.
+			gridaos=new double[nbasis*ngrids];
+		if (approx=='g' || approx=='m'){
+			gridao1xs=new double[nbasis*ngrids];
+			gridao1ys=new double[nbasis*ngrids];
+			gridao1zs=new double[nbasis*ngrids];
+		}
+		if (approx=='m')
+			gridao2ls=new double[nbasis*ngrids];
+		if (derivative>=1){ // For nuclear gradient.
+			if (approx=='l' || approx=='g' || approx=='m'){
 				gridao1xs=new double[nbasis*ngrids];
 				gridao1ys=new double[nbasis*ngrids];
 				gridao1zs=new double[nbasis*ngrids];
 			}
-			if (approx=='m')
-				gridao2s=new double[nbasis*ngrids];
-		}else if (scf.compare("rijcosx")==0){
-			assert(("RIJCOSX needs a grid to be set!" && ! grid.empty()));
-			if (gridaos==nullptr) gridaos=new double[nbasis*ngrids];
-		}else if (guess.compare("sap")==0){
-			assert(("SAP needs a grid to be set!" && ! grid.empty()));
-			if (gridaos==nullptr) gridaos=new double[nbasis*ngrids];
-		}
-
-		GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,
-		            gridaos,gridao1xs,gridao1ys,gridao1zs,gridao2s);
-		for (long int i=0;i<nbasis*ngrids;i++){
-			if (approx=='l' || approx=='g' || approx=='m' || scf.compare("rijcosx")==0) 
-				if (isnan(gridaos[i])) gridaos[i]=0;
 			if (approx=='g' || approx=='m'){
-				if (isnan(gridao1xs[i])) gridao1xs[i]=0;
-				if (isnan(gridao1ys[i])) gridao1ys[i]=0;
-				if (isnan(gridao1zs[i])) gridao1zs[i]=0;
+				gridao2xxs=new double[nbasis*ngrids];
+				gridao2yys=new double[nbasis*ngrids];
+				gridao2zzs=new double[nbasis*ngrids];
+				gridao2xys=new double[nbasis*ngrids];
+				gridao2xzs=new double[nbasis*ngrids];
+				gridao2yzs=new double[nbasis*ngrids];
 			}
-			if (approx=='m')
-				if (isnan(gridao2s[i])) gridao2s[i]=0;
+			if (approx=='m'){;}
 		}
+		if (derivative>=2){;} // For nuclear hessian.
+	}else if (scf.compare("rijcosx")==0){
+		assert("RIJCOSX needs a grid to be set!" && ! grid.empty());
+		if (! gridaos) gridaos=new double[nbasis*ngrids];
+	}else if (guess.compare("sap")==0){
+		assert("SAP needs a grid to be set!" && ! grid.empty());
+		if (! gridaos) gridaos=new double[nbasis*ngrids];
 	}
+	GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,
+	            gridaos,gridao1xs,gridao1ys,gridao1zs,gridao2ls);
+	/*for (long int i=0;i<nbasis*ngrids;i++){
+		if (gridaos && isnan(gridaos[i])) gridaos[i]=0;
+		if (gridao1xs && isnan(gridao1xs[i])) gridao1xs[i]=0;
+		if (gridao1ys && isnan(gridao1ys[i])) gridao1ys[i]=0;
+		if (gridao1zs && isnan(gridao1zs[i])) gridao1zs[i]=0;
+		if (gridao2ls && isnan(gridao2ls[i])) gridao2ls[i]=0;
+		if (gridao2xxs && isnan(gridao2xxs[i])) gridao2xxs[i]=0;
+		if (gridao2yys && isnan(gridao2yys[i])) gridao2yys[i]=0;
+		if (gridao2zzs && isnan(gridao2zzs[i])) gridao2zzs[i]=0;
+		if (gridao2xys && isnan(gridao2xys[i])) gridao2xys[i]=0;
+		if (gridao2xzs && isnan(gridao2xzs[i])) gridao2xzs[i]=0;
+		if (gridao2yzs && isnan(gridao2yzs[i])) gridao2yzs[i]=0;
+	}*/
 
+	// Storable electron integrals 
 	const EigenMatrix overlap=Overlap(natoms,atoms,basisset,1);
 	const EigenMatrix kinetic=Kinetic(natoms,atoms,basisset,1);
 	const EigenMatrix nuclear=Nuclear(natoms,atoms,basisset,1);
 	const EigenMatrix hcore=kinetic+nuclear;
 	const EigenMatrix repulsiondiag=RepulsionDiag(natoms,atoms,basisset,1);
+	int nshellquartets;
+	const long int n2integrals=nTwoElectronIntegrals(natoms,atoms,basisset,repulsiondiag,nshellquartets,1);
+	double * repulsion=new double[n2integrals];
+	short int * indices=new short int[n2integrals*5];
+	Repulsion(natoms,atoms,basisset,nshellquartets,repulsiondiag,repulsion,indices,nprocs,1);
+	EigenMatrix * ovlgrads=nullptr;
+	EigenMatrix * kntgrads=nullptr;
+	EigenMatrix * nclgrads=nullptr;
+	EigenMatrix * hcoregrads=nullptr;
+	if (derivative>=1){
+		ovlgrads=new EigenMatrix[3*natoms];
+		kntgrads=new EigenMatrix[3*natoms];
+		nclgrads=new EigenMatrix[3*natoms];
+		hcoregrads=new EigenMatrix[3*natoms];
+		OvlGrads(natoms,atoms,basisset,ovlgrads,1);
+		KntGrads(natoms,atoms,basisset,kntgrads,1);
+		NclGrads(natoms,atoms,basisset,nclgrads,1);
+	}
+	if (derivative>=2){;}
 
+	// Initial guess
 	EigenMatrix density,fock;
 	if (guess.compare("core")==0)
 		fock=hcore;
@@ -107,12 +155,6 @@ int main(int argc,char *argv[]){
 	else if (guess.compare("sap")==0)
 		fock=hcore+SuperpositionAtomicPotential(natoms,atoms,nbasis,
                                                         xs,ys,zs,ws,ngrids,gridaos);
-
-	int nshellquartets;
-	const long int n2integrals=nTwoElectronIntegrals(natoms,atoms,basisset,repulsiondiag,nshellquartets,1);
-	double * repulsion=new double[n2integrals];
-	short int * indices=new short int[n2integrals*5];
-	Repulsion(natoms,atoms,basisset,nshellquartets,repulsiondiag,repulsion,indices,nprocs,1);
 
 	EigenMatrix coefficients(nbasis,nbasis);
 	EigenVector orbitalenergies(nbasis);
@@ -131,21 +173,14 @@ int main(int argc,char *argv[]){
 		           dfxid,dfcid,ngrids,ws,
 		           gridaos,
 		           gridao1xs,gridao1ys,gridao1zs,
-		           gridao2s,
+		           gridao2ls,
 		           orbitalenergies,coefficients,
 		           density,fock,
 		           nprocs,1);
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
-	if (derivative>0){
-		EigenMatrix * ovlgrads=new EigenMatrix[3*natoms];
-		EigenMatrix * kntgrads=new EigenMatrix[3*natoms];
-		EigenMatrix * nclgrads=new EigenMatrix[3*natoms];
-		EigenMatrix * hcoregrads=new EigenMatrix[3*natoms];
-		OvlGrads(natoms,atoms,basisset,ovlgrads,1);
-		KntGrads(natoms,atoms,basisset,kntgrads,1);
-		NclGrads(natoms,atoms,basisset,nclgrads,1);
+	if (derivative>=1){
 		for (int iatom=0;iatom<natoms*3;iatom++)
 			hcoregrads[iatom]=kntgrads[iatom]+nclgrads[iatom];
 		for (int i=0;i<ne/2;i++)
@@ -170,7 +205,7 @@ int main(int argc,char *argv[]){
 	delete [] gridao1xs;
 	delete [] gridao1ys;
 	delete [] gridao1zs;
-	delete [] gridao2s;
+	delete [] gridao2ls;
 	delete [] repulsion;
 	delete [] indices;
 	std::cout<<"*** Chinium terminated normally ***"<<std::endl;

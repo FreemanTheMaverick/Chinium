@@ -46,9 +46,9 @@ void QuadraticProgramming(int size,double * helements,int * hrowindeces,int * hc
 		x[i]=solver->solution->x[i];
 
 	osqp_cleanup(solver);
-	if (H) delete [] H;
-	if (A) delete [] A;
-	if (settings) delete [] settings;
+	if (H) delete H;
+	if (A) delete A;
+	if (settings) delete settings;
 	delete [] Helements;
 	delete [] Hrowindeces;
 	delete [] Hcolpointers;

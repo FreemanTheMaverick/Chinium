@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <cmath>
+#include <cassert>
 #include <ctime>
 #include <chrono>
 #include <iostream>
@@ -30,7 +31,7 @@ void PurifyDensity(EigenMatrix overlap,EigenMatrix & D){
 		D=3*D*overlap*D-2*D*overlap*D*overlap*D;
 		error=D*overlap*D*overlap-D*overlap;
 	}
-	assert(("Density matrix purification failed. Please change to another initial guess." && error.norm()<__density_purification_threshold__));
+	assert("Density matrix purification failed. Please change to another initial guess." && error.norm()<__density_purification_threshold__);
 }
 
 EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix D,double kscale,const int nprocs){
@@ -100,7 +101,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	if (dfxid){\
 		GetDensity(gridaos,\
 		           gridao1xs,gridao1ys,gridao1zs,\
-		           gridao2s,\
+		           gridao2ls,\
 		           ngrids,2*D,\
 		           ds,\
 		           d1xs,d1ys,d1zs,cgs,\
@@ -118,7 +119,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 		Fxc=FxcMatrix(gridaos,vrxs,\
                               d1xs,d1ys,d1zs,\
                               gridao1xs,gridao1ys,gridao1zs,vsxs,\
-		              gridao2s,vlxs,vtxs,\
+		              gridao2ls,vlxs,vtxs,\
                               gridweights,ngrids,nbasis);\
 		F+=Fxc;\
 	}\
@@ -156,7 +157,7 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
             int dfxid,int dfcid,int ngrids,double * gridweights,
             double * gridaos,
             double * gridao1xs,double * gridao1ys,double * gridao1zs,
-            double * gridao2s,
+            double * gridao2ls,
             EigenVector & orbitalenergies,EigenMatrix & coefficients,
             EigenMatrix & D,EigenMatrix & F,
             const int nprocs,const bool output){

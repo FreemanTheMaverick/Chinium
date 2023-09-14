@@ -132,7 +132,7 @@ std::string ReadGrid(char * inp,const bool output){
 	if (!grid.empty()){
 		std::string filename=std::string(__Grid_library_path__)+grid;
 		std::ifstream gridfile(filename);
-		assert(("Cannot find the grid folder in " __Grid_library_path__ && gridfile.good()));
+		assert("Cannot find the grid folder in " __Grid_library_path__ && gridfile.good());
 
 		if (output)
 			std::cout<<"Grid ... "<<grid<<" found in "<<std::string(__Grid_library_path__)<<std::endl;

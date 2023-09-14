@@ -9,7 +9,7 @@ OSQP=/home/yzhangnn/osqp_0.6.3
 LIBXC=/home/yzhangnn/libxc_6.2.2
 
 GeneralFlags=-O3 -Wall -Wextra -Wpedantic
-EIGEN3Flags=-isystem $(EIGEN3) -mavx2
+EIGEN3Flags=-isystem $(EIGEN3)
 LIBINT2Flags=-isystem $(LIBINT2)/include -L$(LIBINT2)/lib -lint2
 OSQPFlags=-isystem $(OSQP)/include/osqp -L$(OSQP)/lib64 -losqpstatic
 LIBXCFlags=-isystem $(LIBXC)/include -L$(LIBXC)/lib -lxc
