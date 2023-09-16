@@ -209,18 +209,26 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
                  double * xs,double * ys,double * zs,int ngrids,
                  double * aos,
                  double * ao1xs,double * ao1ys,double * ao1zs,
-                 double * ao2ls){ // ibasis*ngrids+jgrid
+                 double * ao2ls,
+                 double * ao2xxs,double * ao2yys,double * ao2zzs,
+                 double * ao2xys,double * ao2xzs,double * ao2yzs){ // ibasis*ngrids+jgrid
  __Basis_From_Atoms__
  double xo,yo,zo,x,y,z,r2;
  double tmp,tmp1,tmp2;
- double A,Ax,Ay,Az,Axx,Ayy,Azz; // Basis function values;
- A=Ax=Ay=Az=Axx=Ayy=Azz=0;
+ double A,Ax,Ay,Az,Axx,Ayy,Azz,Axy,Axz,Ayz; // Basis function values;
+ A=Ax=Ay=Az=Axx=Ayy=Azz=Axy=Axz=Ayz=0;
  double ao2xx=0;double ao2yy=0;double ao2zz=0;
  double * ao_rangers[16];
  double * ao1x_rangers[16];
  double * ao1y_rangers[16];
  double * ao1z_rangers[16];
  double * ao2l_rangers[16];
+ double * ao2xx_rangers[16];
+ double * ao2yy_rangers[16];
+ double * ao2zz_rangers[16];
+ double * ao2xy_rangers[16];
+ double * ao2xz_rangers[16];
+ double * ao2yz_rangers[16];
  double Q[16]={0};
  double Qx[16]={0};
  double Qy[16]={0};
@@ -228,6 +236,9 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
  double Qxx[16]={0};
  double Qyy[16]={0};
  double Qzz[16]={0};
+ double Qxy[16]={0};
+ double Qxz[16]={0};
+ double Qyz[16]={0};
  int two_l_plus_one,nprims; // These in-loop variables had better be declared outside the loop. Tests showed that the codes as such are faster than those otherwise.
  int ibasis=0;
  for (const libint2::Shell & shell:obs){
@@ -239,8 +250,15 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
     ao1x_rangers[iranger]=ao1xs+ibasis*ngrids;
     ao1y_rangers[iranger]=ao1ys+ibasis*ngrids;
     ao1z_rangers[iranger]=ao1zs+ibasis*ngrids;
-    if (ao2ls)
-     ao2l_rangers[iranger]=ao2ls+ibasis*ngrids;
+    if (ao2ls) ao2l_rangers[iranger]=ao2ls+ibasis*ngrids;
+    if (ao2xxs){
+     ao2xx_rangers[iranger]=ao2xxs+ibasis*ngrids;
+     ao2yy_rangers[iranger]=ao2yys+ibasis*ngrids;
+     ao2zz_rangers[iranger]=ao2zzs+ibasis*ngrids;
+     ao2xy_rangers[iranger]=ao2xys+ibasis*ngrids;
+     ao2xz_rangers[iranger]=ao2xzs+ibasis*ngrids;
+     ao2yz_rangers[iranger]=ao2yzs+ibasis*ngrids;
+    }
    }
   }
   xo=shell.O[0];
@@ -266,10 +284,15 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
     Ax=-2*x*tmp1;
     Ay=-2*y*tmp1;
     Az=-2*z*tmp1;
-    if (ao2ls){
-     Axx=-2*tmp1+4*tmp2*x;
-     Ayy=-2*tmp1+4*tmp2*y;
-     Azz=-2*tmp1+4*tmp2*z;
+    if (ao2ls || ao2xxs){
+     Axx=-2*tmp1+4*x*x*tmp2;
+     Ayy=-2*tmp1+4*y*y*tmp2;
+     Azz=-2*tmp1+4*z*z*tmp2;
+     if (ao2xxs){
+      Axy=4*tmp2*x*y;
+      Axz=4*tmp2*x*z;
+      Ayz=4*tmp2*y*z;
+     }
     }
    }
    switch(two_l_plus_one){ // Basis function values are the products of the radial parts and the spherical harmonic parts. The following spherical harmonics are rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API. The normalization constants here differ from those in "Symmetries of Spherical Harmonics: applications to ambisonics" @ https://iaem.at/ambisonics/symposium2009/proceedings/ambisym09-chapman-shsymmetries.pdf/@@download/file/AmbiSym09_Chapman_SHSymmetries.pdf by a factor of sqrt(2l+1).
@@ -279,10 +302,15 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[0]=0;
       Qy[0]=0;
       Qz[0]=0;
-      if (ao2ls){
+      if (ao2ls || ao2xxs){
        Qxx[0]=0;
        Qyy[0]=0;
        Qzz[0]=0;
+       if (ao2xxs){
+        Qxy[0]=0;
+        Qxz[0]=0;
+        Qyz[0]=0;
+       }
       }
      }
      break;
@@ -300,7 +328,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[2]=1;
       Qy[2]=0;
       Qz[2]=0;
-      if (ao2ls){
+      if (ao2ls || ao2xxs){
        Qxx[0]=0;
        Qyy[0]=0;
        Qzz[0]=0;
@@ -310,6 +338,17 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
        Qxx[2]=0;
        Qyy[2]=0;
        Qzz[2]=0;
+       if (ao2xxs){
+        Qxy[0]=0;
+        Qxz[0]=0;
+        Qyz[0]=0;
+        Qxy[1]=0;
+        Qxz[1]=0;
+        Qyz[1]=0;
+        Qxy[2]=0;
+        Qxz[2]=0;
+        Qyz[2]=0;
+       }
       }
      }
      break;
@@ -335,7 +374,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[4]=sqrt(3)*x;
       Qy[4]=( -sqrt(3)*y );
       Qz[4]=0;
-      if (ao2ls){
+      if (ao2ls || ao2xxs){
        Qxx[0]=0;
        Qyy[0]=0;
        Qzz[0]=0;
@@ -351,6 +390,23 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
        Qxx[4]=sqrt(3);
        Qyy[4]=-sqrt(3);
        Qzz[4]=0;
+       if (ao2xxs){
+        Qxy[0]=sqrt(3);
+        Qxz[0]=0;
+        Qyz[0]=0;
+        Qxy[1]=0;
+        Qxz[1]=0;
+        Qyz[1]=sqrt(3);
+        Qxy[2]=0;
+        Qxz[2]=0;
+        Qyz[2]=0;
+        Qxy[3]=0;
+        Qxz[3]=sqrt(3);
+        Qyz[3]=0;
+        Qxy[4]=0;
+        Qxz[4]=0;
+        Qyz[4]=0;
+       }
       }
      }
      break;
@@ -384,7 +440,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[6]=3*sqrt(10)*(x*x - y*y)/4;
       Qy[6]=( -3*sqrt(10)*x*y/2 );
       Qz[6]=0;
-      if (ao2ls){
+      if (ao2ls || ao2xxs){
        Qxx[0]=3*sqrt(10)*y/2;
        Qyy[0]=-3*sqrt(10)*y/2;
        Qzz[0]=0;
@@ -406,6 +462,29 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
        Qxx[6]=3*sqrt(10)*x/2;
        Qyy[6]=-3*sqrt(10)*x/2;
        Qzz[6]=0;
+       if (ao2xxs){
+        Qxy[0]=3*sqrt(10)*x/2;
+        Qxz[0]=0;
+        Qyz[0]=0;
+        Qxy[1]=sqrt(15)*z;
+        Qxz[1]=sqrt(15)*y;
+        Qyz[1]=sqrt(15)*x;
+        Qxy[2]=-sqrt(6)*x/2;
+        Qxz[2]=0;
+        Qyz[2]=2*sqrt(6)*z;
+        Qxy[3]=0;
+        Qxz[3]=-3*x;
+        Qyz[3]=-3*y;
+        Qxy[4]=-sqrt(6)*y/2;
+        Qxz[4]=2*sqrt(6)*z;
+        Qyz[4]=0;
+        Qxy[5]=0;
+        Qxz[5]=sqrt(15)*x;
+        Qyz[5]=-sqrt(15)*y;
+        Qxy[6]=-3*sqrt(10)*y/2;
+        Qxz[6]=0;
+        Qyz[6]=0;
+       }
       }
      }
      break;
@@ -447,7 +526,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[8]=sqrt(35)*x*(x*x - 3*y*y)/2;
       Qy[8]=sqrt(35)*y*(-3*x*x + y*y)/2;
       Qz[8]=0;
-      if (ao2ls){
+      if (ao2ls || ao2xxs){
        Qxx[0]=3*sqrt(35)*x*y;
        Qyy[0]=-3*sqrt(35)*x*y;
        Qzz[0]=0;
@@ -475,6 +554,35 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
        Qxx[8]=3*sqrt(35)*(x*x - y*y)/2;
        Qyy[8]=3*sqrt(35)*(-x*x + y*y)/2;
        Qzz[8]=0;
+       if (ao2xxs){
+        Qxy[0]=3*sqrt(35)*(x*x - y*y)/2;
+        Qxz[0]=0;
+        Qyz[0]=0;
+        Qxy[1]=3*sqrt(70)*x*z/2;
+        Qxz[1]=3*sqrt(70)*x*y/2;
+        Qyz[1]=3*sqrt(70)*(x*x - y*y)/4;
+        Qxy[2]=3*sqrt(5)*(-x*x - y*y + 2*z*z)/2;
+        Qxz[2]=6*sqrt(5)*y*z;
+        Qyz[2]=6*sqrt(5)*x*z;
+        Qxy[3]=-3*sqrt(10)*x*z/2;
+        Qxz[3]=-3*sqrt(10)*x*y/2;
+        Qyz[3]=3*sqrt(10)*(-x*x - 3*y*y + 4*z*z)/4;
+        Qxy[4]=3*x*y;
+        Qxz[4]=-12*x*z;
+        Qyz[4]=-12*y*z;
+        Qxy[5]=-3*sqrt(10)*y*z/2;
+        Qxz[5]=3*sqrt(10)*(-3*x*x - y*y + 4*z*z)/4;
+        Qyz[5]=-3*sqrt(10)*x*y/2;
+        Qxy[6]=0;
+        Qxz[6]=6*sqrt(5)*x*z;
+        Qyz[6]=-6*sqrt(5)*y*z;
+        Qxy[7]=-3*sqrt(70)*y*z/2;
+        Qxz[7]=3*sqrt(70)*(x*x - y*y)/4;
+        Qyz[7]=-3*sqrt(70)*x*y/2;
+        Qxy[8]=-3*sqrt(35)*x*y;
+        Qxz[8]=0;
+        Qyz[8]=0;
+       }
       }
      }
      break;
@@ -508,7 +616,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qz[4]=sqrt(15)*y*z*(-3*x*x - 3*y*y + 4*z*z);
       Qx[5]=5*x*z*(3*x*x + 3*y*y - 4*z*z)/2;
       Qy[5]=5*y*z*(3*x*x + 3*y*y - 4*z*z)/2;
-      Qz[5]=( 15*x*x*x*x/8 + 15*x*x*y*y/4 - 15*x*x*z*z + 15*y*y*y*y/8 - 15*y*y*z*z + 5*z*z*z*z );
+      Qz[5]=15*x*x*x*x/8 + 15*x*x*y*y/4 - 15*x*x*z*z + 15*y*y*y*y/8 - 15*y*y*z*z + 5*z*z*z*z;
       Qx[6]=sqrt(15)*(5*x*x*x*x + 6*x*x*y*y - 36*x*x*z*z + y*y*y*y - 12*y*y*z*z + 8*z*z*z*z)/8;
       Qy[6]=sqrt(15)*x*y*(x*x + y*y - 6*z*z)/2;
       Qz[6]=sqrt(15)*x*z*(-3*x*x - 3*y*y + 4*z*z);
@@ -524,7 +632,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[10]=15*sqrt(14)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
       Qy[10]=15*sqrt(14)*x*y*(-x*x + y*y)/4;
       Qz[10]=0;
-      if (ao2ls){
+      if (ao2ls || ao2xxs){
        Qxx[0]=15*sqrt(14)*y*(3*x*x - y*y)/4;
        Qyy[0]=15*sqrt(14)*y*(-3*x*x + y*y)/4;
        Qzz[0]=0;
@@ -558,6 +666,41 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
        Qxx[10]=15*sqrt(14)*x*(x*x - 3*y*y)/4;
        Qyy[10]=15*sqrt(14)*x*(-x*x + 3*y*y)/4;
        Qzz[10]=0;
+       if (ao2xxs){
+        Qxy[0]=15*sqrt(14)*x*(x*x - 3*y*y)/4;
+        Qxz[0]=0;
+        Qyz[0]=0;
+        Qxy[1]=9*sqrt(35)*z*(x*x - y*y)/2;
+        Qxz[1]=3*sqrt(35)*y*(3*x*x - y*y)/2;
+        Qyz[1]=3*sqrt(35)*x*(x*x - 3*y*y)/2;
+        Qxy[2]=3*sqrt(70)*x*(-x*x - y*y + 4*z*z)/4;
+        Qxz[2]=6*sqrt(70)*x*y*z;
+        Qyz[2]=3*sqrt(70)*z*(x*x - y*y);
+        Qxy[3]=sqrt(105)*z*(-3*x*x - 3*y*y + 2*z*z)/2;
+        Qxz[3]=sqrt(105)*y*(-3*x*x - y*y + 6*z*z)/2;
+        Qyz[3]=sqrt(105)*x*(-x*x - 3*y*y + 6*z*z)/2;
+        Qxy[4]=sqrt(15)*x*(x*x + 3*y*y - 6*z*z)/2;
+        Qxz[4]=-6*sqrt(15)*x*y*z;
+        Qyz[4]=sqrt(15)*z*(-3*x*x - 9*y*y + 4*z*z);
+        Qxy[5]=15*x*y*z;
+        Qxz[5]=15*x*(x*x + y*y - 4*z*z)/2;
+        Qyz[5]=15*y*(x*x + y*y - 4*z*z)/2;
+        Qxy[6]=sqrt(15)*y*(3*x*x + y*y - 6*z*z)/2;
+        Qxz[6]=sqrt(15)*z*(-9*x*x - 3*y*y + 4*z*z);
+        Qyz[6]=-6*sqrt(15)*x*y*z;
+        Qxy[7]=0;
+        Qxz[7]=sqrt(105)*x*(-x*x + 3*z*z);
+        Qyz[7]=sqrt(105)*y*(y*y - 3*z*z);
+        Qxy[8]=3*sqrt(70)*y*(x*x + y*y - 4*z*z)/4;
+        Qxz[8]=3*sqrt(70)*z*(x*x - y*y);
+        Qyz[8]=-6*sqrt(70)*x*y*z;
+        Qxy[9]=-9*sqrt(35)*x*y*z;
+        Qxz[9]=3*sqrt(35)*x*(x*x - 3*y*y)/2;
+        Qyz[9]=3*sqrt(35)*y*(-3*x*x + y*y)/2;
+        Qxy[10]=15*sqrt(14)*y*(-3*x*x + y*y)/4;
+        Qxz[10]=0;
+        Qyz[10]=0;
+       }
       }
      }
      break;
@@ -615,46 +758,87 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
       Qx[12]=3*sqrt(462)*x*(x*x*x*x - 10*x*x*y*y + 5*y*y*y*y)/16;
       Qy[12]=3*sqrt(462)*y*(-5*x*x*x*x + 10*x*x*y*y - y*y*y*y)/16;
       Qz[12]=0;
-      if (ao2ls){
-       Qx[0]=15*sqrt(462)*x*y*(x*x - y*y)/4;
-       Qy[0]=15*sqrt(462)*x*y*(-x*x + y*y)/4;
-       Qz[0]=0;
-       Qx[1]=15*sqrt(154)*y*z*(3*x*x - y*y)/4;
-       Qy[1]=15*sqrt(154)*y*z*(-3*x*x + y*y)/4;
-       Qz[1]=0;
-       Qx[2]=15*sqrt(7)*x*y*(-x*x + 3*z*z);
-       Qy[2]=15*sqrt(7)*x*y*(y*y - 3*z*z);
-       Qz[2]=15*sqrt(7)*x*y*(x*x - y*y);
-       Qx[3]=3*sqrt(210)*y*z*(-9*x*x - y*y + 4*z*z)/4;
-       Qy[3]=3*sqrt(210)*y*z*(-3*x*x + 5*y*y - 4*z*z)/4;
-       Qz[3]=3*sqrt(210)*y*z*(3*x*x - y*y);
-       Qx[4]=sqrt(210)*x*y*(5*x*x + 3*y*y - 24*z*z)/4;
-       Qy[4]=sqrt(210)*x*y*(3*x*x + 5*y*y - 24*z*z)/4;
-       Qz[4]=2*sqrt(210)*x*y*(-x*x - y*y + 6*z*z);
-       Qx[5]=5*sqrt(21)*y*z*(3*x*x + y*y - 2*z*z)/2;
-       Qy[5]=5*sqrt(21)*y*z*(3*x*x + 5*y*y - 6*z*z)/2;
-       Qz[5]=5*sqrt(21)*y*z*(-3*x*x - 3*y*y + 4*z*z);
-       Qx[6]=-75*x*x*x*x/8 - 45*x*x*y*y/4 + 135*x*x*z*z/2 - 15*y*y*y*y/8 + 45*y*y*z*z/2 - 15*z*z*z*z;
-       Qy[6]=-15*x*x*x*x/8 - 45*x*x*y*y/4 + 45*x*x*z*z/2 - 75*y*y*y*y/8 + 135*y*y*z*z/2 - 15*z*z*z*z;
-       Qz[6]=45*x*x*x*x/4 + 45*x*x*y*y/2 - 90*x*x*z*z + 45*y*y*y*y/4 - 90*y*y*z*z + 30*z*z*z*z;
-       Qx[7]=5*sqrt(21)*x*z*(5*x*x + 3*y*y - 6*z*z)/2;
-       Qy[7]=5*sqrt(21)*x*z*(x*x + 3*y*y - 2*z*z)/2;
-       Qz[7]=5*sqrt(21)*x*z*(-3*x*x - 3*y*y + 4*z*z);
-       Qx[8]=sqrt(210)*(15*x*x*x*x + 6*x*x*y*y - 96*x*x*z*z - y*y*y*y + 16*z*z*z*z)/16;
-       Qy[8]=sqrt(210)*(x*x*x*x - 6*x*x*y*y - 15*y*y*y*y + 96*y*y*z*z - 16*z*z*z*z)/16;
-       Qz[8]=sqrt(210)*(-x*x*x*x + 6*x*x*z*z + y*y*y*y - 6*y*y*z*z);
-       Qx[9]=3*sqrt(210)*x*z*(-5*x*x + 3*y*y + 4*z*z)/4;
-       Qy[9]=3*sqrt(210)*x*z*(x*x + 9*y*y - 4*z*z)/4;
-       Qz[9]=3*sqrt(210)*x*z*(x*x - 3*y*y);
-       Qx[10]=15*sqrt(7)*(-3*x*x*x*x + 6*x*x*y*y + 12*x*x*z*z + y*y*y*y - 12*y*y*z*z)/8;
-       Qy[10]=15*sqrt(7)*(x*x*x*x + 6*x*x*y*y - 12*x*x*z*z - 3*y*y*y*y + 12*y*y*z*z)/8;
-       Qz[10]=15*sqrt(7)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/4;
-       Qx[11]=15*sqrt(154)*x*z*(x*x - 3*y*y)/4;
-       Qy[11]=15*sqrt(154)*x*z*(-x*x + 3*y*y)/4;
-       Qz[11]=0;
-       Qx[12]=15*sqrt(462)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
-       Qy[12]=15*sqrt(462)*(-x*x*x*x + 6*x*x*y*y - y*y*y*y)/16;
-       Qz[12]=0;
+      if (ao2ls || ao2xxs){
+       Qxx[0]=15*sqrt(462)*x*y*(x*x - y*y)/4;
+       Qyy[0]=15*sqrt(462)*x*y*(-x*x + y*y)/4;
+       Qzz[0]=0;
+       Qxx[1]=15*sqrt(154)*y*z*(3*x*x - y*y)/4;
+       Qyy[1]=15*sqrt(154)*y*z*(-3*x*x + y*y)/4;
+       Qzz[1]=0;
+       Qxx[2]=15*sqrt(7)*x*y*(-x*x + 3*z*z);
+       Qyy[2]=15*sqrt(7)*x*y*(y*y - 3*z*z);
+       Qzz[2]=15*sqrt(7)*x*y*(x*x - y*y);
+       Qxx[3]=3*sqrt(210)*y*z*(-9*x*x - y*y + 4*z*z)/4;
+       Qyy[3]=3*sqrt(210)*y*z*(-3*x*x + 5*y*y - 4*z*z)/4;
+       Qzz[3]=3*sqrt(210)*y*z*(3*x*x - y*y);
+       Qxx[4]=sqrt(210)*x*y*(5*x*x + 3*y*y - 24*z*z)/4;
+       Qyy[4]=sqrt(210)*x*y*(3*x*x + 5*y*y - 24*z*z)/4;
+       Qzz[4]=2*sqrt(210)*x*y*(-x*x - y*y + 6*z*z);
+       Qxx[5]=5*sqrt(21)*y*z*(3*x*x + y*y - 2*z*z)/2;
+       Qyy[5]=5*sqrt(21)*y*z*(3*x*x + 5*y*y - 6*z*z)/2;
+       Qzz[5]=5*sqrt(21)*y*z*(-3*x*x - 3*y*y + 4*z*z);
+       Qxx[6]=-75*x*x*x*x/8 - 45*x*x*y*y/4 + 135*x*x*z*z/2 - 15*y*y*y*y/8 + 45*y*y*z*z/2 - 15*z*z*z*z;
+       Qyy[6]=-15*x*x*x*x/8 - 45*x*x*y*y/4 + 45*x*x*z*z/2 - 75*y*y*y*y/8 + 135*y*y*z*z/2 - 15*z*z*z*z;
+       Qzz[6]=45*x*x*x*x/4 + 45*x*x*y*y/2 - 90*x*x*z*z + 45*y*y*y*y/4 - 90*y*y*z*z + 30*z*z*z*z;
+       Qxx[7]=5*sqrt(21)*x*z*(5*x*x + 3*y*y - 6*z*z)/2;
+       Qyy[7]=5*sqrt(21)*x*z*(x*x + 3*y*y - 2*z*z)/2;
+       Qzz[7]=5*sqrt(21)*x*z*(-3*x*x - 3*y*y + 4*z*z);
+       Qxx[8]=sqrt(210)*(15*x*x*x*x + 6*x*x*y*y - 96*x*x*z*z - y*y*y*y + 16*z*z*z*z)/16;
+       Qyy[8]=sqrt(210)*(x*x*x*x - 6*x*x*y*y - 15*y*y*y*y + 96*y*y*z*z - 16*z*z*z*z)/16;
+       Qzz[8]=sqrt(210)*(-x*x*x*x + 6*x*x*z*z + y*y*y*y - 6*y*y*z*z);
+       Qxx[9]=3*sqrt(210)*x*z*(-5*x*x + 3*y*y + 4*z*z)/4;
+       Qyy[9]=3*sqrt(210)*x*z*(x*x + 9*y*y - 4*z*z)/4;
+       Qzz[9]=3*sqrt(210)*x*z*(x*x - 3*y*y);
+       Qxx[10]=15*sqrt(7)*(-3*x*x*x*x + 6*x*x*y*y + 12*x*x*z*z + y*y*y*y - 12*y*y*z*z)/8;
+       Qyy[10]=15*sqrt(7)*(x*x*x*x + 6*x*x*y*y - 12*x*x*z*z - 3*y*y*y*y + 12*y*y*z*z)/8;
+       Qzz[10]=15*sqrt(7)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/4;
+       Qxx[11]=15*sqrt(154)*x*z*(x*x - 3*y*y)/4;
+       Qyy[11]=15*sqrt(154)*x*z*(-x*x + 3*y*y)/4;
+       Qzz[11]=0;
+       Qxx[12]=15*sqrt(462)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
+       Qyy[12]=15*sqrt(462)*(-x*x*x*x + 6*x*x*y*y - y*y*y*y)/16;
+       Qzz[12]=0;
+       if (ao2xxs){
+        Qxy[0]=15*sqrt(462)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
+        Qxz[0]=0;
+        Qyz[0]=0;
+        Qxy[1]=15*sqrt(154)*x*z*(x*x - 3*y*y)/4;
+        Qxz[1]=15*sqrt(154)*x*y*(x*x - y*y)/4;
+        Qyz[1]=15*sqrt(154)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
+        Qxy[2]=15*sqrt(7)*(-x*x*x*x + 6*x*x*z*z + y*y*y*y - 6*y*y*z*z)/4;
+        Qxz[2]=15*sqrt(7)*y*z*(3*x*x - y*y);
+        Qyz[2]=15*sqrt(7)*x*z*(x*x - 3*y*y);
+        Qxy[3]=3*sqrt(210)*x*z*(-3*x*x - 3*y*y + 4*z*z)/4;
+        Qxz[3]=3*sqrt(210)*x*y*(-3*x*x - y*y + 12*z*z)/4;
+        Qyz[3]=3*sqrt(210)*(-3*x*x*x*x - 6*x*x*y*y + 24*x*x*z*z + 5*y*y*y*y - 24*y*y*z*z)/16;
+        Qxy[4]=sqrt(210)*(5*x*x*x*x + 18*x*x*y*y - 48*x*x*z*z + 5*y*y*y*y - 48*y*y*z*z + 16*z*z*z*z)/16;
+        Qxz[4]=2*sqrt(210)*y*z*(-3*x*x - y*y + 2*z*z);
+        Qyz[4]=2*sqrt(210)*x*z*(-x*x - 3*y*y + 2*z*z);
+        Qxy[5]=5*sqrt(21)*x*z*(x*x + 3*y*y - 2*z*z)/2;
+        Qxz[5]=5*sqrt(21)*x*y*(x*x + y*y - 6*z*z)/2;
+        Qyz[5]=5*sqrt(21)*(x*x*x*x + 6*x*x*y*y - 12*x*x*z*z + 5*y*y*y*y - 36*y*y*z*z + 8*z*z*z*z)/8;
+        Qxy[6]=15*x*y*(-x*x - y*y + 6*z*z)/2;
+        Qxz[6]=15*x*z*(3*x*x + 3*y*y - 4*z*z);
+        Qyz[6]=15*y*z*(3*x*x + 3*y*y - 4*z*z);
+        Qxy[7]=5*sqrt(21)*y*z*(3*x*x + y*y - 2*z*z)/2;
+        Qxz[7]=5*sqrt(21)*(5*x*x*x*x + 6*x*x*y*y - 36*x*x*z*z + y*y*y*y - 12*y*y*z*z + 8*z*z*z*z)/8;
+        Qyz[7]=5*sqrt(21)*x*y*(x*x + y*y - 6*z*z)/2;
+        Qxy[8]=sqrt(210)*x*y*(x*x - y*y)/4;
+        Qxz[8]=4*sqrt(210)*x*z*(-x*x + z*z);
+        Qyz[8]=4*sqrt(210)*y*z*(y*y - z*z) ;
+        Qxy[9]=3*sqrt(210)*y*z*(3*x*x + 3*y*y - 4*z*z)/4;
+        Qxz[9]=3*sqrt(210)*(-5*x*x*x*x + 6*x*x*y*y + 24*x*x*z*z + 3*y*y*y*y - 24*y*y*z*z)/16;
+        Qyz[9]=3*sqrt(210)*x*y*(x*x + 3*y*y - 12*z*z)/4;
+        Qxy[10]=15*sqrt(7)*x*y*(x*x + y*y - 6*z*z)/2;
+        Qxz[10]=15*sqrt(7)*x*z*(x*x - 3*y*y);
+        Qyz[10]=15*sqrt(7)*y*z*(-3*x*x + y*y);
+        Qxy[11]=15*sqrt(154)*y*z*(-3*x*x + y*y)/4;
+        Qxz[11]=15*sqrt(154)*(x*x*x*x - 6*x*x*y*y + y*y*y*y)/16;
+        Qyz[11]=15*sqrt(154)*x*y*(-x*x + y*y)/4;
+        Qxy[12]=15*sqrt(462)*x*y*(-x*x + y*y)/4;
+        Qxz[12]=0;
+        Qyz[12]=0;
+       }
       }
      }
      break;
@@ -665,11 +849,19 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
      ao1x_rangers[i][k]=Ax*Q[i]+A*Qx[i];
      ao1y_rangers[i][k]=Ay*Q[i]+A*Qy[i];
      ao1z_rangers[i][k]=Az*Q[i]+A*Qz[i];
-     if (ao2ls){
-      ao2xx=Axx*Q[i]+Ax*Qx[i]+A*Qxx[i];
-      ao2yy=Ayy*Q[i]+Ay*Qy[i]+A*Qyy[i];
-      ao2zz=Azz*Q[i]+Az*Qz[i]+A*Qzz[i];
-      ao2l_rangers[i][k]=ao2xx+ao2yy+ao2zz;
+     if (ao2ls || ao2xxs){
+      ao2xx=Axx*Q[i]+2*Ax*Qx[i]+A*Qxx[i];
+      ao2yy=Ayy*Q[i]+2*Ay*Qy[i]+A*Qyy[i];
+      ao2zz=Azz*Q[i]+2*Az*Qz[i]+A*Qzz[i];
+      if (ao2ls) ao2l_rangers[i][k]=ao2xx+ao2yy+ao2zz;
+      if (ao2xxs){
+       ao2xx_rangers[i][k]=ao2xx;
+       ao2yy_rangers[i][k]=ao2yy;
+       ao2zz_rangers[i][k]=ao2zz;
+       ao2xy_rangers[i][k]=Axy*Q[i]+Ax*Qy[i]+Ay*Qx[i]+A*Qxy[i];
+       ao2xz_rangers[i][k]=Axz*Q[i]+Ax*Qz[i]+Az*Qx[i]+A*Qxz[i];
+       ao2yz_rangers[i][k]=Ayz*Q[i]+Ay*Qz[i]+Az*Qy[i]+A*Qyz[i];
+      }
      }
     }
    }
@@ -754,8 +946,9 @@ void GetDensity(double * aos,
 }
 
 void VectorAddition(double * as,double * bs,int ngrids){
-	for (int igrid=0;igrid<ngrids;igrid++)
-		as[igrid]+=bs[igrid];
+	if (as && bs)
+		for (int igrid=0;igrid<ngrids;igrid++)
+			as[igrid]+=bs[igrid];
 }
 
 double SumUp(double * ds,double * ws,int ngrids){

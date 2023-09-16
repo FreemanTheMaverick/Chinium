@@ -99,27 +99,27 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 #define __Density_2_Fock__\
 	F=hcore+GMatrix(repulsion,indices,n2integrals,D,kscale,nprocs); /* Fock matrix. */\
 	if (dfxid){\
-		GetDensity(gridaos,\
-		           gridao1xs,gridao1ys,gridao1zs,\
-		           gridao2ls,\
+		GetDensity(aos,\
+		           ao1xs,ao1ys,ao1zs,\
+		           ao2ls,\
 		           ngrids,2*D,\
 		           ds,\
 		           d1xs,d1ys,d1zs,cgs,\
 		           d2s,ts);\
-		getEVxc(dfxid,ds,cgs,d2s,ts,ngrids,exs,vrxs,vsxs,vlxs,vtxs);\
+		getEVxc(dfxid,ds,cgs,d2s,ts,ngrids,excs,vrxcs,vsxcs,vlxcs,vtxcs);\
 		if (dfcid && dfxid!=dfcid){\
 			getEVxc(dfcid,ds,cgs,d2s,ts,ngrids,ecs,vrcs,vscs,vlcs,vtcs);\
-			VectorAddition(exs,ecs,ngrids);\
-			VectorAddition(vrxs,vrcs,ngrids);\
-			VectorAddition(vsxs,vscs,ngrids);\
-			VectorAddition(vlxs,vlcs,ngrids);\
-			VectorAddition(vtxs,vtcs,ngrids);\
+			VectorAddition(excs,ecs,ngrids);\
+			VectorAddition(vrxcs,vrcs,ngrids);\
+			VectorAddition(vsxcs,vscs,ngrids);\
+			VectorAddition(vlxcs,vlcs,ngrids);\
+			VectorAddition(vtxcs,vtcs,ngrids);\
 		}\
-		Exc=SumUp(exs,gridweights,ngrids);\
-		Fxc=FxcMatrix(gridaos,vrxs,\
+		Exc=SumUp(excs,gridweights,ngrids);\
+		Fxc=FxcMatrix(aos,vrxcs,\
                               d1xs,d1ys,d1zs,\
-                              gridao1xs,gridao1ys,gridao1zs,vsxs,\
-		              gridao2ls,vlxs,vtxs,\
+                              ao1xs,ao1ys,ao1zs,vsxcs,\
+		              ao2ls,vlxcs,vtxcs,\
                               gridweights,ngrids,nbasis);\
 		F+=Fxc;\
 	}\
@@ -155,9 +155,11 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
             double * repulsion,short int * indices,long int n2integrals,
             int dfxid,int dfcid,int ngrids,double * gridweights,
-            double * gridaos,
-            double * gridao1xs,double * gridao1ys,double * gridao1zs,
-            double * gridao2ls,
+            double * aos,
+            double * ao1xs,double * ao1ys,double * ao1zs,
+            double * ao2ls,
+            double *& d1xs,double *& d1ys,double *& d1zs,
+            double *& vrxcs,double *& vsxcs,
             EigenVector & orbitalenergies,EigenMatrix & coefficients,
             EigenMatrix & D,EigenMatrix & F,
             const int nprocs,const bool output){
@@ -180,33 +182,50 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 
 	EigenMatrix G=EigenZero(nbasis,nbasis);
 	EigenMatrix Fxc=EigenZero(nbasis,nbasis);
-	int xkind,ckind,xfamily,cfamily;
-	double Exc=0;
-	double * ds=new double[ngrids]();
-	double * d1xs=new double[ngrids]();
-	double * d1ys=new double[ngrids]();
-	double * d1zs=new double[ngrids]();
-	double * d2s=new double[ngrids]();
-	double * ts=new double[ngrids]();
-	double * cgs=new double[ngrids]();
-	double * exs=new double[ngrids]();
-	double * ecs=new double[ngrids]();
-	double * vrxs=new double[ngrids]();
-	double * vrcs=new double[ngrids]();
-	double * vsxs=new double[ngrids]();
-	double * vscs=new double[ngrids]();
-	double * vlxs=new double[ngrids]();
-	double * vlcs=new double[ngrids]();
-	double * vtxs=new double[ngrids]();
-	double * vtcs=new double[ngrids]();
 
-	// Initial guess
+	// KS preparation
+	double Exc=0;
+	double * ds=nullptr;
+	double * d2s=nullptr;
+	double * ts=nullptr;
+	double * cgs=nullptr;
+	double * excs=nullptr;
+	double * vlxcs=nullptr;
+	double * vtxcs=nullptr;
+	double * ecs=nullptr;
+	double * vrcs=nullptr;
+	double * vscs=nullptr;
+	double * vlcs=nullptr;
+	double * vtcs=nullptr;
+	int xkind,ckind,xfamily,cfamily;
+	xkind=ckind=xfamily=cfamily=114514;
 	double kscale=1;
 	if (dfxid){
+		ds=new double[ngrids]();
+		d1xs=new double[ngrids]();
+		d1ys=new double[ngrids]();
+		d1zs=new double[ngrids]();
+		d2s=new double[ngrids]();
+		ts=new double[ngrids]();
+		cgs=new double[ngrids]();
 		char rubbish[64];
-		if(dfcid) XCInfo(dfcid,rubbish,ckind,cfamily,kscale);
+		if(dfcid){
+			XCInfo(dfcid,rubbish,ckind,cfamily,kscale);
+			ecs=new double[ngrids]();
+			vrcs=new double[ngrids]();
+			vscs=new double[ngrids]();
+			vlcs=new double[ngrids]();
+			vtcs=new double[ngrids]();
+		}
 		XCInfo(dfxid,rubbish,xkind,xfamily,kscale);
+		excs=new double[ngrids]();
+		vrxcs=new double[ngrids]();
+		vsxcs=new double[ngrids]();
+		vlxcs=new double[ngrids]();
+		vtxcs=new double[ngrids]();
 	}
+
+	// Initial guess
 	if (D.rows()){__Density_2_Fock__}
 	char update='f';
 	int iiteration=0;
@@ -319,23 +338,17 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	if (output) std::cout<<"| Done; Final SCF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
 	const double energy=Es[0];
 
-	delete [] ds;
-	delete [] d1xs;
-	delete [] d1ys;
-	delete [] d1zs;
-	delete [] d2s;
-	delete [] ts;
-	delete [] cgs;
-	delete [] exs;
-	delete [] ecs;
-	delete [] vrxs;
-	delete [] vrcs;
-	delete [] vsxs;
-	delete [] vscs;
-	delete [] vlxs;
-	delete [] vlcs;
-	delete [] vtxs;
-	delete [] vtcs;
+	if (ds) delete [] ds;
+	if (d2s) delete [] d2s;
+	if (ts) delete [] ts;
+	if (cgs) delete [] cgs;
+	if (ecs) delete [] ecs;
+	if (vrcs) delete [] vrcs;
+	if (vscs) delete [] vscs;
+	if (vlxcs) delete [] vlxcs;
+	if (vlcs) delete [] vlcs;
+	if (vtxcs) delete [] vtxcs;
+	if (vtcs) delete [] vtcs;
 
 	for (int i=0;i<__diis_space_size__;i++){
 		Fs[i].resize(0,0);
@@ -360,14 +373,17 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,
            EigenVector & orbitalenergies,EigenMatrix & coefficients,
            EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output){
+	double * dummy=nullptr;
 	return RKS(nele,overlap,hcore,
-                    repulsion,indices,n2integrals,
-                    0,0,0,nullptr,
-	            nullptr,
-	            nullptr,nullptr,nullptr,
-	            nullptr,
-                    orbitalenergies,coefficients,
-	            D,F,
-                    nprocs,output);
+                   repulsion,indices,n2integrals,
+                   0,0,0,nullptr,
+	           nullptr,
+	           nullptr,nullptr,nullptr,
+	           nullptr,
+	           dummy,dummy,dummy,
+	           dummy,dummy,
+                   orbitalenergies,coefficients,
+	           D,F,
+                   nprocs,output);
 }
 

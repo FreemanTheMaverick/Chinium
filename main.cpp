@@ -38,7 +38,7 @@ int main(int argc,char *argv[]){
 	// Density functional (if any)
 	int dfxid=0;
 	int dfcid=0;
-	double kscale;
+	double kscale=1;
 	char approx;
 
 	// Grid generation (if needed)
@@ -47,17 +47,17 @@ int main(int argc,char *argv[]){
 	double * ys=nullptr;
 	double * zs=nullptr;
 	double * ws=nullptr;
-	double * gridaos=nullptr;
-	double * gridao1xs=nullptr;
-	double * gridao1ys=nullptr;
-	double * gridao1zs=nullptr;
-	double * gridao2ls=nullptr;
-	double * gridao2xxs=nullptr;
-	double * gridao2yys=nullptr;
-	double * gridao2zzs=nullptr;
-	double * gridao2xys=nullptr;
-	double * gridao2xzs=nullptr;
-	double * gridao2yzs=nullptr;
+	double * aos=nullptr;
+	double * ao1xs=nullptr;
+	double * ao1ys=nullptr;
+	double * ao1zs=nullptr;
+	double * ao2ls=nullptr;
+	double * ao2xxs=nullptr;
+	double * ao2yys=nullptr;
+	double * ao2zzs=nullptr;
+	double * ao2xys=nullptr;
+	double * ao2xzs=nullptr;
+	double * ao2yzs=nullptr;
 	if (!grid.empty()){
 		ngrids=SphericalGridNumber(grid,natoms,atoms,1);
 		xs=new double[ngrids];
@@ -72,53 +72,41 @@ int main(int argc,char *argv[]){
 		assert("DFT needs a grid to be set!" && ! grid.empty());
 		ReadDF(method,dfxid,dfcid,kscale,approx,1);
 		if (approx=='l' || approx=='g' || approx=='m') // For single point energy.
-			gridaos=new double[nbasis*ngrids];
+			aos=new double[nbasis*ngrids];
 		if (approx=='g' || approx=='m'){
-			gridao1xs=new double[nbasis*ngrids];
-			gridao1ys=new double[nbasis*ngrids];
-			gridao1zs=new double[nbasis*ngrids];
+			ao1xs=new double[nbasis*ngrids];
+			ao1ys=new double[nbasis*ngrids];
+			ao1zs=new double[nbasis*ngrids];
 		}
 		if (approx=='m')
-			gridao2ls=new double[nbasis*ngrids];
+			ao2ls=new double[nbasis*ngrids];
 		if (derivative>=1){ // For nuclear gradient.
 			if (approx=='l' || approx=='g' || approx=='m'){
-				gridao1xs=new double[nbasis*ngrids];
-				gridao1ys=new double[nbasis*ngrids];
-				gridao1zs=new double[nbasis*ngrids];
+				ao1xs=new double[nbasis*ngrids];
+				ao1ys=new double[nbasis*ngrids];
+				ao1zs=new double[nbasis*ngrids];
 			}
 			if (approx=='g' || approx=='m'){
-				gridao2xxs=new double[nbasis*ngrids];
-				gridao2yys=new double[nbasis*ngrids];
-				gridao2zzs=new double[nbasis*ngrids];
-				gridao2xys=new double[nbasis*ngrids];
-				gridao2xzs=new double[nbasis*ngrids];
-				gridao2yzs=new double[nbasis*ngrids];
+				ao2xxs=new double[nbasis*ngrids];
+				ao2yys=new double[nbasis*ngrids];
+				ao2zzs=new double[nbasis*ngrids];
+				ao2xys=new double[nbasis*ngrids];
+				ao2xzs=new double[nbasis*ngrids];
+				ao2yzs=new double[nbasis*ngrids];
 			}
 			if (approx=='m'){;}
 		}
 		if (derivative>=2){;} // For nuclear hessian.
 	}else if (scf.compare("rijcosx")==0){
 		assert("RIJCOSX needs a grid to be set!" && ! grid.empty());
-		if (! gridaos) gridaos=new double[nbasis*ngrids];
+		if (! aos) aos=new double[nbasis*ngrids];
 	}else if (guess.compare("sap")==0){
 		assert("SAP needs a grid to be set!" && ! grid.empty());
-		if (! gridaos) gridaos=new double[nbasis*ngrids];
+		if (! aos) aos=new double[nbasis*ngrids];
 	}
 	GetAoValues(natoms,atoms,basisset,xs,ys,zs,ngrids,
-	            gridaos,gridao1xs,gridao1ys,gridao1zs,gridao2ls);
-	/*for (long int i=0;i<nbasis*ngrids;i++){
-		if (gridaos && isnan(gridaos[i])) gridaos[i]=0;
-		if (gridao1xs && isnan(gridao1xs[i])) gridao1xs[i]=0;
-		if (gridao1ys && isnan(gridao1ys[i])) gridao1ys[i]=0;
-		if (gridao1zs && isnan(gridao1zs[i])) gridao1zs[i]=0;
-		if (gridao2ls && isnan(gridao2ls[i])) gridao2ls[i]=0;
-		if (gridao2xxs && isnan(gridao2xxs[i])) gridao2xxs[i]=0;
-		if (gridao2yys && isnan(gridao2yys[i])) gridao2yys[i]=0;
-		if (gridao2zzs && isnan(gridao2zzs[i])) gridao2zzs[i]=0;
-		if (gridao2xys && isnan(gridao2xys[i])) gridao2xys[i]=0;
-		if (gridao2xzs && isnan(gridao2xzs[i])) gridao2xzs[i]=0;
-		if (gridao2yzs && isnan(gridao2yzs[i])) gridao2yzs[i]=0;
-	}*/
+	            aos,ao1xs,ao1ys,ao1zs,ao2ls,
+	            ao2xxs,ao2yys,ao2zzs,ao2xys,ao2xzs,ao2yzs);
 
 	// Storable electron integrals 
 	const EigenMatrix overlap=Overlap(natoms,atoms,basisset,1);
@@ -154,12 +142,15 @@ int main(int argc,char *argv[]){
 		density=SuperpositionAtomicDensity(natoms,atoms,basisset);
 	else if (guess.compare("sap")==0)
 		fock=hcore+SuperpositionAtomicPotential(natoms,atoms,nbasis,
-                                                        xs,ys,zs,ws,ngrids,gridaos);
+                                                        xs,ys,zs,ws,ngrids,aos);
 
 	EigenMatrix coefficients(nbasis,nbasis);
 	EigenVector orbitalenergies(nbasis);
 	EigenVector occs(nbasis);occs.setZero();
 
+	// KS preparation
+	double * d1xs,*d1ys,*d1zs,*vrxcs,*vsxcs;
+	d1xs=d1ys=d1zs=vrxcs=vsxcs=nullptr;
 	double energy=114514;
 	if (method.compare("rhf")==0)
 		energy=RHF(ne,overlap,hcore,
@@ -171,9 +162,11 @@ int main(int argc,char *argv[]){
 		energy=RKS(ne,overlap,hcore,
 		           repulsion,indices,n2integrals,
 		           dfxid,dfcid,ngrids,ws,
-		           gridaos,
-		           gridao1xs,gridao1ys,gridao1zs,
-		           gridao2ls,
+		           aos,
+		           ao1xs,ao1ys,ao1zs,
+		           ao2ls,
+		           d1xs,d1ys,d1zs,
+		           vrxcs,vsxcs,
 		           orbitalenergies,coefficients,
 		           density,fock,
 		           nprocs,1);
@@ -186,11 +179,25 @@ int main(int argc,char *argv[]){
 		for (int i=0;i<ne/2;i++)
 			occs[i]=1;
 		const EigenMatrix nrg=NRG(natoms,atoms,1);
-		const EigenMatrix rhfg=RHFG(natoms,atoms,basisset,
-		                           ovlgrads,hcoregrads,
-		                           coefficients,orbitalenergies,occs,
-		                           1,1);
-		const EigenMatrix g=nrg+rhfg;
+		EigenMatrix eleg=EigenZero(nbasis,nbasis);
+		if (method.compare("rhf")==0)
+			eleg=RHFG(natoms,atoms,basisset,
+			          ovlgrads,hcoregrads,
+			          coefficients,orbitalenergies,occs,
+			          1,1);
+		else
+			eleg=RKSG(natoms,atoms,basisset,
+			          ovlgrads,hcoregrads,
+			          kscale,ngrids,ws,
+			          aos,
+			          ao1xs,ao1ys,ao1zs,
+			          ao2xxs,ao2yys,ao2zzs,
+			          ao2xys,ao2xzs,ao2yzs,
+			          d1xs,d1ys,d1zs,
+			          vrxcs,vsxcs,
+			          coefficients,orbitalenergies,occs,
+			          1,1);
+		const EigenMatrix g=nrg+eleg;
 		std::cout<<"Total gradient:"<<std::endl;
 		__Z_2_Name__
 		for (int iatom=0;iatom<natoms;iatom++)
@@ -201,11 +208,11 @@ int main(int argc,char *argv[]){
 	delete [] ys;
 	delete [] zs;
 	delete [] ws;
-	delete [] gridaos;
-	delete [] gridao1xs;
-	delete [] gridao1ys;
-	delete [] gridao1zs;
-	delete [] gridao2ls;
+	delete [] aos;
+	delete [] ao1xs;
+	delete [] ao1ys;
+	delete [] ao1zs;
+	delete [] ao2ls;
 	delete [] repulsion;
 	delete [] indices;
 	std::cout<<"*** Chinium terminated normally ***"<<std::endl;
