@@ -143,26 +143,26 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
         Gxc(atom2,2)+=tmp*thatao1zs[kgrid]*thisaos[kgrid];
        }
        if (ao2xxs){
-       tmp=ws[kgrid]*vsxcs[kgrid]*D(bf1,bf2);
-       Gxc(atom1,0)+=tmp*(d1xs[kgrid]*(thisao2xxs[kgrid]*thataos[kgrid]+thisao1xs[kgrid]*thatao1xs[kgrid])
-                         +d1ys[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thisao1ys[kgrid]*thatao1xs[kgrid])
-                         +d1zs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thisao1zs[kgrid]*thatao1xs[kgrid]));
-       Gxc(atom1,1)+=tmp*(d1xs[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thisao1xs[kgrid]*thatao1ys[kgrid])
-                         +d1ys[kgrid]*(thisao2yys[kgrid]*thataos[kgrid]+thisao1ys[kgrid]*thatao1ys[kgrid])
-                         +d1zs[kgrid]*(thisao2yzs[kgrid]*thataos[kgrid]+thisao1zs[kgrid]*thatao1ys[kgrid]));
-       Gxc(atom1,2)+=tmp*(d1xs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thisao1xs[kgrid]*thatao1zs[kgrid])
-                         +d1ys[kgrid]*(thisao2yzs[kgrid]*thataos[kgrid]+thisao1ys[kgrid]*thatao1zs[kgrid])
-                         +d1zs[kgrid]*(thisao2zzs[kgrid]*thataos[kgrid]+thisao1zs[kgrid]*thatao1zs[kgrid]));
+        tmp=2*ws[kgrid]*vsxcs[kgrid]*D(bf1,bf2);
+        Gxc(atom1,0)+=tmp*(d1xs[kgrid]*(thisao2xxs[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1xs[kgrid])
+                          +d1ys[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1xs[kgrid])
+                          +d1zs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1xs[kgrid]));
+        Gxc(atom1,1)+=tmp*(d1xs[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1ys[kgrid])
+                          +d1ys[kgrid]*(thisao2yys[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1ys[kgrid])
+                          +d1zs[kgrid]*(thisao2yzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1ys[kgrid]));
+        Gxc(atom1,2)+=tmp*(d1xs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1zs[kgrid])
+                          +d1ys[kgrid]*(thisao2yzs[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1zs[kgrid])
+                          +d1zs[kgrid]*(thisao2zzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1zs[kgrid]));
         if (bf2!=bf1){
-         Gxc(atom2,0)+=tmp*(d1xs[kgrid]*(thatao2xxs[kgrid]*thisaos[kgrid]+thatao1xs[kgrid]*thisao1xs[kgrid])
-                           +d1ys[kgrid]*(thatao2xys[kgrid]*thisaos[kgrid]+thatao1ys[kgrid]*thisao1xs[kgrid])
-                           +d1zs[kgrid]*(thatao2xzs[kgrid]*thisaos[kgrid]+thatao1zs[kgrid]*thisao1xs[kgrid]));
-         Gxc(atom2,1)+=tmp*(d1xs[kgrid]*(thatao2xys[kgrid]*thisaos[kgrid]+thatao1xs[kgrid]*thisao1ys[kgrid])
-                           +d1ys[kgrid]*(thatao2yys[kgrid]*thisaos[kgrid]+thatao1ys[kgrid]*thisao1ys[kgrid])
-                           +d1zs[kgrid]*(thatao2yzs[kgrid]*thisaos[kgrid]+thatao1zs[kgrid]*thisao1ys[kgrid]));
-         Gxc(atom2,2)+=tmp*(d1xs[kgrid]*(thatao2xzs[kgrid]*thisaos[kgrid]+thatao1xs[kgrid]*thisao1zs[kgrid])
-                           +d1ys[kgrid]*(thatao2yzs[kgrid]*thisaos[kgrid]+thatao1ys[kgrid]*thisao1zs[kgrid])
-                           +d1zs[kgrid]*(thatao2zzs[kgrid]*thisaos[kgrid]+thatao1zs[kgrid]*thisao1zs[kgrid]));
+         Gxc(atom2,0)+=tmp*(d1xs[kgrid]*(thatao2xxs[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1xs[kgrid])
+                           +d1ys[kgrid]*(thatao2xys[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1xs[kgrid])
+                           +d1zs[kgrid]*(thatao2xzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1xs[kgrid]));
+         Gxc(atom2,1)+=tmp*(d1xs[kgrid]*(thatao2xys[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1ys[kgrid])
+                           +d1ys[kgrid]*(thatao2yys[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1ys[kgrid])
+                           +d1zs[kgrid]*(thatao2yzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1ys[kgrid]));
+         Gxc(atom2,2)+=tmp*(d1xs[kgrid]*(thatao2xzs[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1zs[kgrid])
+                           +d1ys[kgrid]*(thatao2yzs[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1zs[kgrid])
+                           +d1zs[kgrid]*(thatao2zzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1zs[kgrid]));
         }
        }
       }
@@ -175,9 +175,9 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
  Ghf/=4;
  Gxc*=-4;
  for (int iatom=0;iatom<natoms;iatom++){
-  Ghf(iatom,0)+=(hcoregrads[iatom*3+0].cwiseProduct(D).sum()-ovlgrads[iatom*3+0].cwiseProduct(W).sum());
-  Ghf(iatom,1)+=(hcoregrads[iatom*3+1].cwiseProduct(D).sum()-ovlgrads[iatom*3+1].cwiseProduct(W).sum());
-  Ghf(iatom,2)+=(hcoregrads[iatom*3+2].cwiseProduct(D).sum()-ovlgrads[iatom*3+2].cwiseProduct(W).sum());
+  Ghf(iatom,0)+=hcoregrads[iatom*3+0].cwiseProduct(D).sum()-ovlgrads[iatom*3+0].cwiseProduct(W).sum();
+  Ghf(iatom,1)+=hcoregrads[iatom*3+1].cwiseProduct(D).sum()-ovlgrads[iatom*3+1].cwiseProduct(W).sum();
+  Ghf(iatom,2)+=hcoregrads[iatom*3+2].cwiseProduct(D).sum()-ovlgrads[iatom*3+2].cwiseProduct(W).sum();
  }
  Ghf*=2;
  time_t end=time(0);

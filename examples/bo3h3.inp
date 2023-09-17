@@ -24,10 +24,10 @@ guess
 sad
 
 method
-mn15
+b3lyp
 
 basis
-6-31g*
+6-31g**
 
 derivative
 1

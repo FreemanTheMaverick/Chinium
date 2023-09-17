@@ -82,9 +82,9 @@ int main(int argc,char *argv[]){
 			ao2ls=new double[nbasis*ngrids];
 		if (derivative>=1){ // For nuclear gradient.
 			if (approx=='l' || approx=='g' || approx=='m'){
-				ao1xs=new double[nbasis*ngrids];
-				ao1ys=new double[nbasis*ngrids];
-				ao1zs=new double[nbasis*ngrids];
+				if (!ao1xs) ao1xs=new double[nbasis*ngrids];
+				if (!ao1ys) ao1ys=new double[nbasis*ngrids];
+				if (!ao1zs) ao1zs=new double[nbasis*ngrids];
 			}
 			if (approx=='g' || approx=='m'){
 				ao2xxs=new double[nbasis*ngrids];

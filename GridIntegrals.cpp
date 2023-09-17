@@ -214,7 +214,7 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
                  double * ao2xys,double * ao2xzs,double * ao2yzs){ // ibasis*ngrids+jgrid
  __Basis_From_Atoms__
  double xo,yo,zo,x,y,z,r2;
- double tmp,tmp1,tmp2;
+ double tmp,tmp1,tmp2,tmp3;
  double A,Ax,Ay,Az,Axx,Ayy,Azz,Axy,Axz,Ayz; // Basis function values;
  A=Ax=Ay=Az=Axx=Ayy=Azz=Axy=Axz=Ayz=0;
  double ao2xx=0;double ao2yy=0;double ao2zz=0;
@@ -269,29 +269,29 @@ void GetAoValues(const int natoms,double * atoms,const char * basisset,
    y=ys[k]-yo;
    z=zs[k]-zo;
    r2=x*x+y*y+z*z;
-   tmp=tmp1=tmp2=0;
-   A=Az=Azz=0;
+   tmp=tmp1=tmp2=tmp3=0;
    for (int iprim=0;iprim<nprims;++iprim){ // Looping over primitive gaussians.
     tmp=shell.contr[0].coeff[iprim]*std::exp(-shell.alpha[iprim]*r2);
-    A+=tmp; // Each primitive gaussian contributes to the radial parts of basis functions.
+    tmp1+=tmp; // Each primitive gaussian contributes to the radial parts of basis functions.
     if (ao1xs){
-     tmp1+=tmp*shell.alpha[iprim];
-     if (ao2ls)
-      tmp2+=tmp*shell.alpha[iprim]*shell.alpha[iprim];
+     tmp2+=tmp*shell.alpha[iprim];
+     if (ao2ls || ao2xxs)
+      tmp3+=tmp*shell.alpha[iprim]*shell.alpha[iprim];
     }
    }
+   A=tmp1;
    if (ao1xs){
-    Ax=-2*x*tmp1;
-    Ay=-2*y*tmp1;
-    Az=-2*z*tmp1;
+    Ax=-2*x*tmp2;
+    Ay=-2*y*tmp2;
+    Az=-2*z*tmp2;
     if (ao2ls || ao2xxs){
-     Axx=-2*tmp1+4*x*x*tmp2;
-     Ayy=-2*tmp1+4*y*y*tmp2;
-     Azz=-2*tmp1+4*z*z*tmp2;
+     Axx=-2*tmp2+4*x*x*tmp3;
+     Ayy=-2*tmp2+4*y*y*tmp3;
+     Azz=-2*tmp2+4*z*z*tmp3;
      if (ao2xxs){
-      Axy=4*tmp2*x*y;
-      Axz=4*tmp2*x*z;
-      Ayz=4*tmp2*y*z;
+      Axy=4*tmp3*x*y;
+      Axz=4*tmp3*x*z;
+      Ayz=4*tmp3*y*z;
      }
     }
    }
