@@ -9,37 +9,6 @@
 #include "Aliases.h"
 #include "Libint2.h"
 
-#define __Loop_Over_XYZ_2__(iatom,position){\
- for (short int f1=0,f1234=0;f1!=n1;f1++){\
-  const short int bf1=bf1_first+f1;\
-  for (short int f2=0;f2!=n2;f2++){\
-   const short int bf2=bf2_first+f2;\
-   const double ab_deg=(bf1==bf2)?1:2;\
-   for (short int f3=0;f3!=n3;f3++){\
-    const short int bf3=bf3_first+f3;\
-    for (short int f4=0;f4!=n4;f4++,f1234++){\
-     const short int bf4=bf4_first+f4;\
-     if (bf2<=bf1 && bf3<=bf1 && bf4<=((bf1==bf3)?bf2:bf3)){\
-      const double cd_deg=(bf3==bf4)?1:2;\
-      const double ab_cd_deg=(bf1==bf3)?(bf2==bf4?1:2):2;\
-      const double abcd_deg=ab_deg*cd_deg*ab_cd_deg;\
-      double tmp=114514;\
-      if (kscale==1)\
-       tmp=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4)-(D(bf1,bf3)*D(bf2,bf4)+D(bf1,bf4)*D(bf2,bf3)));\
-      else if (kscale==0)\
-       tmp=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4));\
-      else\
-       tmp=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4)-kscale*(D(bf1,bf3)*D(bf2,bf4)+D(bf1,bf4)*D(bf2,bf3)));\
-      Ghf((iatom),0)+=tmp*buf_vec[(position)*3+0][f1234];\
-      Ghf((iatom),1)+=tmp*buf_vec[(position)*3+1][f1234];\
-      Ghf((iatom),2)+=tmp*buf_vec[(position)*3+2][f1234];\
-     }\
-    }\
-   }\
-  }\
- }\
-}
-
 EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
                  EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,
                  double kscale,int ngrids,double * ws,
@@ -75,12 +44,10 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
   const short int atom1=shell2atom[s1];
   const short int bf1_first=shell2bf[s1];
   const short int n1=obs[s1].size();
-  //for (short int s2=0;s2<(short int)obs.size();s2++){
   for (short int s2=0;s2<=s1;s2++){
    const short int atom2=shell2atom[s2];
    const short int bf2_first=shell2bf[s2];
    const short int n2=obs[s2].size();
-   //for (short int s3=0;s3<=s1 && s2<=s1;s3++){
    for (short int s3=0;s3<=s1;s3++){
     const short int atom3=shell2atom[s3];
     const short int bf3_first=shell2bf[s3];
@@ -91,10 +58,43 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
      const short int n4=obs[s4].size();
      engine.compute(obs[s1],obs[s2],obs[s3],obs[s4]);
      if (! buf_vec[0]) continue;
-     __Loop_Over_XYZ_2__(atom1,0)
-     __Loop_Over_XYZ_2__(atom2,1)
-     __Loop_Over_XYZ_2__(atom3,2)
-     __Loop_Over_XYZ_2__(atom4,3)
+     for (short int f1=0,f1234=0;f1!=n1;f1++){
+      const short int bf1=bf1_first+f1;
+      for (short int f2=0;f2!=n2;f2++){
+       const short int bf2=bf2_first+f2;
+       const double ab_deg=(bf1==bf2)?1:2;
+       for (short int f3=0;f3!=n3;f3++){
+        const short int bf3=bf3_first+f3;
+        for (short int f4=0;f4!=n4;f4++,f1234++){
+         const short int bf4=bf4_first+f4;
+         if (bf2<=bf1 && bf3<=bf1 && bf4<=((bf1==bf3)?bf2:bf3)){
+          const double cd_deg=(bf3==bf4)?1:2;
+          const double ab_cd_deg=(bf1==bf3)?(bf2==bf4?1:2):2;
+          const double abcd_deg=ab_deg*cd_deg*ab_cd_deg;
+          double tmp=114514;
+          if (kscale==1)
+           tmp=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4)-(D(bf1,bf3)*D(bf2,bf4)+D(bf1,bf4)*D(bf2,bf3)));
+          else if (kscale==0)
+           tmp=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4));
+          else
+           tmp=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4)-kscale*(D(bf1,bf3)*D(bf2,bf4)+D(bf1,bf4)*D(bf2,bf3)));
+          Ghf(atom1,0)+=tmp*buf_vec[0][f1234];
+          Ghf(atom1,1)+=tmp*buf_vec[1][f1234];
+          Ghf(atom1,2)+=tmp*buf_vec[2][f1234];
+          Ghf(atom2,0)+=tmp*buf_vec[3][f1234];
+          Ghf(atom2,1)+=tmp*buf_vec[4][f1234];
+          Ghf(atom2,2)+=tmp*buf_vec[5][f1234];
+          Ghf(atom3,0)+=tmp*buf_vec[6][f1234];
+          Ghf(atom3,1)+=tmp*buf_vec[7][f1234];
+          Ghf(atom3,2)+=tmp*buf_vec[8][f1234];
+          Ghf(atom4,0)+=tmp*buf_vec[9][f1234];
+          Ghf(atom4,1)+=tmp*buf_vec[10][f1234];
+          Ghf(atom4,2)+=tmp*buf_vec[11][f1234];
+         }
+        }
+       }
+      }
+     }
     }
    }
    if (aos && ao1xs){
