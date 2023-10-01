@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <omp.h>
 #include "Aliases.h"
+#include "Libint2.h"
 #include "GridIntegrals.h"
 #include "DensityFunctional.h"
 #include "Optimization.h"
@@ -34,7 +35,7 @@ void PurifyDensity(EigenMatrix overlap,EigenMatrix & D){
 	assert("Density matrix purification failed. Please change to another initial guess." && error.norm()<__density_purification_threshold__);
 }
 
-EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix D,double kscale,double * bf2atom,EigenMatrix * Gu,const int nprocs){
+EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix D,double kscale,const int nprocs){
 	int nbasis=D.cols();
 	short int * degs=indices+0*n2integrals;
 	short int * bf1s=indices+1*n2integrals;
@@ -106,7 +107,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 }
 
 #define __Density_2_Fock__\
-	F=hcore+GMatrix(repulsion,indices,n2integrals,D,kscale,nullptr,nullptr,nprocs); /* Fock matrix. */\
+	F=hcore+GMatrix(repulsion,indices,n2integrals,D,kscale,nprocs); /* Fock matrix. */\
 	if (dfxid){\
 		GetDensity(aos,\
 		           ao1xs,ao1ys,ao1zs,\
