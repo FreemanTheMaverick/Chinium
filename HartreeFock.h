@@ -1,6 +1,6 @@
 void PurifyDensity(EigenMatrix overlap,EigenMatrix & density);
 
-EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix D,double kscale,const int nprocs);
+EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,EigenMatrix D,double kscale,const int nprocs);
 
 double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
             double * repulsion,short int * indices,long int n2integrals,
