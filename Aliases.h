@@ -19,7 +19,23 @@
 		"Na","Mg","Al","Si","P","S","Cl","Ar","K","Ca"\
 	};
 
+#define __Libint2_Atoms__\
+	std::vector<libint2::Atom> libint2atoms(natoms);\
+	for (int iatom=0;iatom<natoms;iatom++){\
+		libint2::Atom atomi;\
+		atomi.atomic_number=(int)atoms[iatom*4];\
+		atomi.x=atoms[iatom*4+1];\
+		atomi.y=atoms[iatom*4+2];\
+		atomi.z=atoms[iatom*4+3];\
+		libint2atoms[iatom]=atomi;\
+	} // Converting atoms array to libint's std::vector<libint2::Atom>.
+
+#define __nBasis_From_OBS__\
+	int nbasis=0;\
+	for (const auto& shell:obs)\
+		nbasis+=shell.size(); // Size of basis set directly derived from libint2::BasisSet.
+
 #define __Basis_From_Atoms__\
-	const std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);\
+	__Libint2_Atoms__\
 	libint2::BasisSet obs(basisset,libint2atoms);\
 	obs.set_pure(1);

@@ -40,7 +40,7 @@ EigenMatrix SuperpositionAtomicDensity(const int natoms,double * atoms,const cha
 		const int n2integrals=nTwoElectronIntegrals(1,atom,basisset,repulsiondiag,nshellquartets,0);
 		double * repulsion=new double[n2integrals];
 		short int * indices=new short int[n2integrals*5];
-		Repulsion(1,atom,basisset,nshellquartets,repulsiondiag,repulsion,indices,1,0);
+		Repulsion(1,atom,basisset,nshellquartets,repulsiondiag,n2integrals,repulsion,indices,1,0);
 		EigenVector orbitalenergies(nbasis);
 		EigenMatrix coefficients(nbasis,nbasis);
 		EigenMatrix dummy;

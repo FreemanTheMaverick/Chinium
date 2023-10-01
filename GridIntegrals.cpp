@@ -9,7 +9,6 @@
 #include <map>
 #include <functional>
 #include "Aliases.h"
-#include "Libint2.h"
 #include "sphere_lebedev_rule.hpp"
 
 int SphericalGridNumber(std::string grid,const int natoms,double * atoms,const bool output){
@@ -148,7 +147,7 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 }
 
 #define __Uniform_Box_Grid_Number__\
-	const std::vector<libint2::Atom> libint2atoms=Libint2Atoms(natoms,atoms);\
+	__Libint2_Atoms__\
 	const libint2::BasisSet obs(basisset,libint2atoms);\
 	double xu=-10000;\
 	double yu=-10000;\

@@ -118,7 +118,7 @@ int main(int argc,char *argv[]){
 	const long int n2integrals=nTwoElectronIntegrals(natoms,atoms,basisset,repulsiondiag,nshellquartets,1);
 	double * repulsion=new double[n2integrals];
 	short int * indices=new short int[n2integrals*5];
-	Repulsion(natoms,atoms,basisset,nshellquartets,repulsiondiag,repulsion,indices,nprocs,1);
+	Repulsion(natoms,atoms,basisset,nshellquartets,repulsiondiag,n2integrals,repulsion,indices,nprocs,1);
 	EigenMatrix * ovlgrads=nullptr;
 	EigenMatrix * kntgrads=nullptr;
 	EigenMatrix * nclgrads=nullptr;
@@ -173,31 +173,37 @@ int main(int argc,char *argv[]){
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
+	EigenMatrix * fskeletons=nullptr;
 	if (derivative>=1){
-		for (int iatom=0;iatom<natoms*3;iatom++)
-			hcoregrads[iatom]=kntgrads[iatom]+nclgrads[iatom];
+		for (int i=0;i<natoms*3;i++)
+			hcoregrads[i]=kntgrads[i]+nclgrads[i];
+		if (derivative>=2){
+			fskeletons=new EigenMatrix[3*natoms];
+			for (int i=0;i<3*natoms;i++)
+				fskeletons[i]=hcoregrads[i];
+		}
 		for (int i=0;i<ne/2;i++)
 			occs[i]=1;
 		const EigenMatrix nrg=NRG(natoms,atoms,1);
-		EigenMatrix eleg=EigenZero(nbasis,nbasis);
+		EigenMatrix gele=EigenZero(natoms,3);
 		if (method.compare("rhf")==0)
-			eleg=RHFG(natoms,atoms,basisset,
-			          ovlgrads,hcoregrads,
-			          coefficients,orbitalenergies,occs,
-			          1,1);
+			gele=RHFG(natoms,atoms,basisset,
+			                      ovlgrads,hcoregrads,fskeletons,
+			                      coefficients,orbitalenergies,occs,
+			                      1,1);
 		else
-			eleg=RKSG(natoms,atoms,basisset,
-			          ovlgrads,hcoregrads,
-			          kscale,ngrids,ws,
-			          aos,
-			          ao1xs,ao1ys,ao1zs,
-			          ao2xxs,ao2yys,ao2zzs,
-			          ao2xys,ao2xzs,ao2yzs,
-			          d1xs,d1ys,d1zs,
-			          vrxcs,vsxcs,
-			          coefficients,orbitalenergies,occs,
-			          1,1);
-		const EigenMatrix g=nrg+eleg;
+			gele=RKSG(natoms,atoms,basisset,
+			                      ovlgrads,hcoregrads,fskeletons,
+			                      kscale,ngrids,ws,
+			                      aos,
+			                      ao1xs,ao1ys,ao1zs,
+			                      ao2xxs,ao2yys,ao2zzs,
+			                      ao2xys,ao2xzs,ao2yzs,
+			                      d1xs,d1ys,d1zs,
+			                      vrxcs,vsxcs,
+			                      coefficients,orbitalenergies,occs,
+			                      1,1);
+		const EigenMatrix g=nrg+gele;
 		std::cout<<"Total gradient:"<<std::endl;
 		__Z_2_Name__
 		for (int iatom=0;iatom<natoms;iatom++)

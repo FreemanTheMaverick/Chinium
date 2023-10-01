@@ -5,7 +5,6 @@
 #include <iostream>
 #include <omp.h>
 #include "Aliases.h"
-#include "Libint2.h"
 
 #define __Loop_Over_XYZ__(iatom,position){\
 	for (short int f1=0,f12=0;f1!=n1;f1++){\
@@ -35,7 +34,7 @@ void OneEleDeris(const int natoms,double * atoms,const char * basisset,char type
 	}
 	time_t start=time(0);
 	__Basis_From_Atoms__
-	int nbasis=nBasis_from_obs(obs);
+	__nBasis_From_OBS__
 	for (int i=0;i<natoms*3;i++)
 		gs[i]=EigenZero(nbasis,nbasis);
 	libint2::initialize();

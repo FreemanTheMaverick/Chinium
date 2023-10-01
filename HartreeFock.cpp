@@ -34,8 +34,13 @@ void PurifyDensity(EigenMatrix overlap,EigenMatrix & D){
 	assert("Density matrix purification failed. Please change to another initial guess." && error.norm()<__density_purification_threshold__);
 }
 
-EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix D,double kscale,const int nprocs){
+EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix D,double kscale,double * bf2atom,EigenMatrix * Gu,const int nprocs){
 	int nbasis=D.cols();
+	short int * degs=indices+0*n2integrals;
+	short int * bf1s=indices+1*n2integrals;
+	short int * bf2s=indices+2*n2integrals;
+	short int * bf3s=indices+3*n2integrals;
+	short int * bf4s=indices+4*n2integrals;
 	omp_set_num_threads(nprocs);
 	long int nintsperthread_fewer=n2integrals/nprocs;
 	int ntimes_fewer=nprocs-n2integrals+nintsperthread_fewer*nprocs; // How many integrals a thread will handle. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to handle (a) integrals, x, and that to compute (a+1) integrals, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of integrals and threads respectively.
@@ -51,8 +56,12 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 	for (int iproc=0;iproc<nprocs;iproc++){
 		long int nints=nintsperthread[iproc];
 		long int iintfirst=iintfirstperthread[iproc];
-		double * repulsionranger=repulsion+iintfirst;
-		short int * indicesranger=indices+iintfirst*5;
+		double * thisrepulsions=repulsion+iintfirst;
+		short int * thisdegs=degs+iintfirst;
+		short int * thisbf1s=bf1s+iintfirst;
+		short int * thisbf2s=bf2s+iintfirst;
+		short int * thisbf3s=bf3s+iintfirst;
+		short int * thisbf4s=bf4s+iintfirst;
 		short int a,b,c,d;
 		double deg_value;
 		EigenMatrix * thisrawj=&rawjs[iproc];
@@ -61,11 +70,11 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 		*thisrawk=EigenZero(nbasis,nbasis);
 		// Without SIMD
 		for (long int i=0;i<nints;i++){ // Manual loop unrolling does not help.
-			a=*(indicesranger++); // Moving the ranger pointer to the right, where the next index is located.
-			b=*(indicesranger++);
-			c=*(indicesranger++);
-			d=*(indicesranger++); // Moving the ranger pointer to the right, where the degeneracy factor is located.
-			deg_value=*(indicesranger++)**(repulsionranger++); // Moving the ranger pointer to the right, where the next integral is located.
+			deg_value=*(thisdegs++)**(thisrepulsions++); // Moving the ranger pointer to the right, where the next integral is located.
+			a=*(thisbf1s++);
+			b=*(thisbf2s++);
+			c=*(thisbf3s++);
+			d=*(thisbf4s++);
 			(*thisrawj)(a,b)+=D(c,d)*deg_value;
 			(*thisrawj)(c,d)+=D(a,b)*deg_value;
 			if (kscale>0){
@@ -97,7 +106,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,Eigen
 }
 
 #define __Density_2_Fock__\
-	F=hcore+GMatrix(repulsion,indices,n2integrals,D,kscale,nprocs); /* Fock matrix. */\
+	F=hcore+GMatrix(repulsion,indices,n2integrals,D,kscale,nullptr,nullptr,nprocs); /* Fock matrix. */\
 	if (dfxid){\
 		GetDensity(aos,\
 		           ao1xs,ao1ys,ao1zs,\

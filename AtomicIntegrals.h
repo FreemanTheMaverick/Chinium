@@ -12,6 +12,6 @@ EigenMatrix RepulsionDiag(const int natoms,double * atoms,const char * basisset,
 
 long int nTwoElectronIntegrals(const int natoms,double * atoms,const char * basisset,EigenMatrix repulsiondiag,int & nshellquartets,const bool output);
 
-void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellquartets,EigenMatrix repulsiondiag,double * repulsion,short int * indices,const int nprocs,const bool output);
+void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellquartets,EigenMatrix repulsiondiag,long int n2integrals,double * repulsion,short int * indices,const int nprocs,const bool output);
 
 

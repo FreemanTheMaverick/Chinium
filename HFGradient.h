@@ -1,5 +1,5 @@
 EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
-                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,
+                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
                  double kscale,int ngrids,double * ws,
                  double * aos,
                  double * ao1xs,double * ao1ys,double * ao1zs,
@@ -8,9 +8,9 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
                  double * d1xs,double * d1ys,double * d1zs,
                  double * vrxcs,double * vsxcs,
                  EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occs,
-                const int nprocs,const bool output);
+                 const int nprocs,const bool output);
 
 EigenMatrix RHFG(const int natoms,double * atoms,const char * basisset,
-                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,
+                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
                  EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occs,
-                const int nprocs,const bool output);
+                 const int nprocs,const bool output);

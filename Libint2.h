@@ -1,3 +1,3 @@
-std::vector<libint2::Atom> Libint2Atoms(const int natoms,double * atoms);
+void BF2Shell(const int natoms,double * atoms,const char * basisset,short int * bf2shell);
 
-int nBasis_from_obs(libint2::BasisSet obs);
+void BF2Atom(const int natoms,double * atoms,const char * basisset,short int * bf2atom);

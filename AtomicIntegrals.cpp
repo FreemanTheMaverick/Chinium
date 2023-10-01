@@ -5,20 +5,19 @@
 #include <iostream>
 #include <omp.h>
 #include "Aliases.h"
-#include "Libint2.h"
 
 #define __integral_threshold__ -1.e-12
 
 int nBasis(const int natoms,double * atoms,const char * basisset,const bool output){ // Size of basis set.
 	__Basis_From_Atoms__
-	int n=nBasis_from_obs(obs);
-	if (output) std::cout<<"Number of atomic bases ... "<<n<<std::endl;
-	return n;
+	__nBasis_From_OBS__
+	if (output) std::cout<<"Number of atomic bases ... "<<nbasis<<std::endl;
+	return nbasis;
 }
 
 int nOneElectronIntegrals(const int natoms,double * atoms,const char * basisset,const bool output){ // Number of one-electron integrals.
 	__Basis_From_Atoms__
-	int nbasis=nBasis_from_obs(obs);
+	__nBasis_From_OBS__
 	int n1integrals=(1+nbasis)*nbasis/2;
 	if (output) std::cout<<"Number of one-electron integrals in total ... "<<n1integrals<<std::endl;
 	return n1integrals;
@@ -38,7 +37,7 @@ EigenMatrix OneElectronIntegrals(const int natoms,double * atoms,const char * ba
 	}
 	time_t start=time(0);
 	__Basis_From_Atoms__
-	int nbasis=nBasis_from_obs(obs);
+	__nBasis_From_OBS__
 	EigenMatrix matrix(nbasis,nbasis);
 	libint2::initialize();
 	libint2::Engine engine(operator_,obs.max_nprim(),obs.max_l());
@@ -92,7 +91,7 @@ EigenMatrix RepulsionDiag(const int natoms,double * atoms,const char * basisset,
 	if (output) std::cout<<"Calculating diagonal elements of repulsion integrals ... ";
 	time_t start=time(0);
 	__Basis_From_Atoms__
-	int nbasis=nBasis_from_obs(obs);
+	__nBasis_From_OBS__
 	EigenMatrix repulsiondiag(nbasis,nbasis);
 	libint2::initialize();
 	libint2::Engine engine(libint2::Operator::coulomb,obs.max_nprim(),obs.max_l());
@@ -135,7 +134,7 @@ EigenMatrix RepulsionDiag(const int natoms,double * atoms,const char * basisset,
 
 long int nTwoElectronIntegrals(const int natoms,double * atoms,const char * basisset,EigenMatrix repulsiondiag,int & nshellquartets,const bool output){ // Numbers of two-electron integrals and nonequivalent shell quartets after Cauchy-Schwarz screening.
 	__Basis_From_Atoms__
-        long int nbasis=(long int)nBasis_from_obs(obs);
+	__nBasis_From_OBS__
 	long int n2integrals=nbasis*(nbasis+1)*(nbasis*(nbasis+1)/2+1)/4;
         if (output) std::cout<<"Number of two electron integrals in total ... "<<n2integrals<<std::endl;
 	const auto shell2bf=obs.shell2bf();
@@ -189,13 +188,17 @@ long int nTwoElectronIntegrals(const int natoms,double * atoms,const char * basi
 	return n2integrals;
 }
 
-void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellquartets,EigenMatrix repulsiondiag,double * repulsion,short int * indices,const int nprocs,const bool output){
+void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellquartets,EigenMatrix repulsiondiag,long int n2integrals,double * repulsion,short int * indices,const int nprocs,const bool output){
 	if (output) std::cout<<"Calculating electron repulsion integrals ... ";
 	time_t start=time(0);
 	__Basis_From_Atoms__
 	const auto shell2bf=obs.shell2bf();
 	short int * shellquartets=new short int[nshellquartets*4];
-	short int * shellquartetsranger=shellquartets;
+	short int * s1s=shellquartets+0*nshellquartets;
+	short int * s2s=shellquartets+1*nshellquartets;
+	short int * s3s=shellquartets+2*nshellquartets;
+	short int * s4s=shellquartets+3*nshellquartets;
+	long int s1234=0;
 	for (short int s1=0;s1<(short int)obs.size();s1++){ // In this loop, indices of shell quartets to be computed are obtained.
 		const short int bf1_first=shell2bf[s1];
 		const short int n1=obs[s1].size();
@@ -224,10 +227,11 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 										const double upperbound=sqrt(abs(integral1*integral2)); // According to Cauchy-Schwarz inequality, sqrt(integral1*integral2) is the upper bound of (bf1,bf2|bf3,bf4). If the upper bound of any basis function quartet of (bf1,bf2,bf3,bf4) in the shell quartet (s1,s2,s3,s4) is larger than 10^-10, the shell quartet will not be discarded in the following two-electron integral evaluation.
 										if (upperbound>=__integral_threshold__){
 											discard=false;
-											*(shellquartetsranger++)=s1;
-											*(shellquartetsranger++)=s2;
-											*(shellquartetsranger++)=s3;
-											*(shellquartetsranger++)=s4;
+											s1s[s1234]=s1;
+											s2s[s1234]=s2;
+											s3s[s1234]=s3;
+											s4s[s1234]=s4;
+											s1234++;
 										}
 									}
 								}
@@ -251,10 +255,10 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 		isqfirstperthread[iproc]=iproc==0?0:(isqfirstperthread[iproc-1]+nsqperthread[iproc-1]);
 		nbfperthread[iproc]=0;
 		for (int isq=isqfirstperthread[iproc];isq<isqfirstperthread[iproc]+nsqperthread[iproc];isq++){
-			const short int s1=shellquartets[isq*4];const short int bf1_first=shell2bf[s1];const short int n1=obs[s1].size();
-			const short int s2=shellquartets[isq*4+1];const short int bf2_first=shell2bf[s2];const short int n2=obs[s2].size();
-			const short int s3=shellquartets[isq*4+2];const short int bf3_first=shell2bf[s3];const short int n3=obs[s3].size();
-			const short int s4=shellquartets[isq*4+3];const short int bf4_first=shell2bf[s4];const short int n4=obs[s4].size();
+			const short int s1=s1s[isq];const short int bf1_first=shell2bf[s1];const short int n1=obs[s1].size();
+			const short int s2=s2s[isq];const short int bf2_first=shell2bf[s2];const short int n2=obs[s2].size();
+			const short int s3=s3s[isq];const short int bf3_first=shell2bf[s3];const short int n3=obs[s3].size();
+			const short int s4=s4s[isq];const short int bf4_first=shell2bf[s4];const short int n4=obs[s4].size();
 			for (short int f1=0;f1!=n1;f1++){
 				const short int bf1=f1+bf1_first;
 				for (short int f2=0;f2!=n2;f2++){
@@ -282,20 +286,25 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 		long int isqfirst=isqfirstperthread[iproc];
 		long int ibffirst=ibffirstperthread[iproc];
 		double * repulsionranger=repulsion+ibffirst;
-		short int * indicesranger=indices+ibffirst*5; // Four indices and one degenerate degree.
-		short int * sqranger=shellquartets+isqfirst*4;
+		short int * thisdegs=indices+0*n2integrals+ibffirst; // Four indices and one degenerate degree.
+		short int * thisbf1s=indices+1*n2integrals+ibffirst;
+		short int * thisbf2s=indices+2*n2integrals+ibffirst;
+		short int * thisbf3s=indices+3*n2integrals+ibffirst;
+		short int * thisbf4s=indices+4*n2integrals+ibffirst;
+		short int * thiss1s=s1s+isqfirst;
+		short int * thiss2s=s2s+isqfirst;
+		short int * thiss3s=s3s+isqfirst;
+		short int * thiss4s=s4s+isqfirst;
 		libint2::Engine engine(libint2::Operator::coulomb,obs.max_nprim(),obs.max_l());
 		const auto & buf_vec=engine.results();
-		for (int isq=0;isq<nsq;isq++){
-			const short int s1=*(sqranger++);const short int bf1_first=shell2bf[s1];const short int n1=obs[s1].size();
-			const short int s2=*(sqranger++);const short int bf2_first=shell2bf[s2];const short int n2=obs[s2].size();
-			const short int s3=*(sqranger++);const short int bf3_first=shell2bf[s3];const short int n3=obs[s3].size();
-			const short int s4=*(sqranger++);const short int bf4_first=shell2bf[s4];const short int n4=obs[s4].size();
+		for (int isq=0,ibfq=0;isq<nsq;isq++){
+			const short int s1=thiss1s[isq];const short int bf1_first=shell2bf[s1];const short int n1=obs[s1].size();
+			const short int s2=thiss2s[isq];const short int bf2_first=shell2bf[s2];const short int n2=obs[s2].size();
+			const short int s3=thiss3s[isq];const short int bf3_first=shell2bf[s3];const short int n3=obs[s3].size();
+			const short int s4=thiss4s[isq];const short int bf4_first=shell2bf[s4];const short int n4=obs[s4].size();
 			engine.compute(obs[s1],obs[s2],obs[s3],obs[s4]);
 			const auto ints_shellset=buf_vec[0];
-			if (ints_shellset==nullptr){
-				continue;
-			}
+			if (ints_shellset==nullptr) continue;
 			for (short int f1=0,f1234=0;f1<n1;f1++){
 				const short int bf1=bf1_first+f1;
 				for (short int f2=0;f2<n2;f2++){
@@ -310,11 +319,12 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 							const short int abcd_deg=ab_deg*cd_deg*ab_cd_deg;
 							if (bf2<=bf1 && bf3<=bf1 && bf4<=((bf1==bf3)?bf2:bf3)){
 								*(repulsionranger++)=ints_shellset[f1234];
-								*(indicesranger++)=bf1;
-								*(indicesranger++)=bf2;
-								*(indicesranger++)=bf3;
-								*(indicesranger++)=bf4;
-								*(indicesranger++)=abcd_deg;
+								thisdegs[ibfq]=abcd_deg;
+								thisbf1s[ibfq]=bf1;
+								thisbf2s[ibfq]=bf2;
+								thisbf3s[ibfq]=bf3;
+								thisbf4s[ibfq]=bf4;
+								ibfq++;
 							}
 						}
 					}
