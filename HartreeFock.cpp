@@ -35,7 +35,7 @@ void PurifyDensity(EigenMatrix overlap,EigenMatrix & D){
 	assert("Density matrix purification failed. Please change to another initial guess." && error.norm()<__density_purification_threshold__);
 }
 
-EigenMatrix GMatrix(double * repulsion,short int * indices,int n2integrals,EigenMatrix D,double kscale,const int nprocs){
+EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,EigenMatrix D,double kscale,const int nprocs){
 	int nbasis=D.cols();
 	short int * degs=indices+0*n2integrals;
 	short int * bf1s=indices+1*n2integrals;
