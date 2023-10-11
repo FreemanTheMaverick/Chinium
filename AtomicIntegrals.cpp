@@ -243,7 +243,6 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 		}
 	}
 	if (output) std::cout<<"Spawning "<<nprocs<<" threads; ";
-	omp_set_num_threads(nprocs);
 	long int nsqperthread_fewer=nshellquartets/nprocs; // How many shell quartets a thread will compute. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to compute a quartets, x, and that to compute (a+1) quartets, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of quartes and threads respectively.
 	int ntimes_fewer=nprocs-nshellquartets+nsqperthread_fewer*nprocs;
 	long int * nsqperthread=new long int[nprocs]; // The number of shell quartets each thread is to compute.
@@ -279,6 +278,8 @@ void Repulsion(const int natoms,double * atoms,const char * basisset,int nshellq
 	}
 
 	libint2::initialize();
+	Eigen::initParallel();
+	omp_set_num_threads(nprocs);
 	#pragma omp parallel for
 	for (int iproc=0;iproc<nprocs;iproc++){
 		time_t tstart=time(0);

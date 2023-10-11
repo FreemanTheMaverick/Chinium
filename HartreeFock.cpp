@@ -42,7 +42,6 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 	short int * bf2s=indices+2*n2integrals;
 	short int * bf3s=indices+3*n2integrals;
 	short int * bf4s=indices+4*n2integrals;
-	omp_set_num_threads(nprocs);
 	long int nintsperthread_fewer=n2integrals/nprocs;
 	int ntimes_fewer=nprocs-n2integrals+nintsperthread_fewer*nprocs; // How many integrals a thread will handle. If the average number is A, the number of each thread is either a or (a+1), where a=floor(A). The number of threads to handle (a) integrals, x, and that to compute (a+1) integrals, y, can be obtained by solving (1) a*x+(a+1)*y=b and (2) x+y=c, where b and c stand for the total numbers of integrals and threads respectively.
 	long int * iintfirstperthread=new long int[nprocs];
@@ -53,6 +52,8 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 	}
 	EigenMatrix * rawjs=new EigenMatrix[nprocs];
 	EigenMatrix * rawks=new EigenMatrix[nprocs];
+	Eigen::initParallel();
+	omp_set_num_threads(nprocs);
 	#pragma omp parallel for
 	for (int iproc=0;iproc<nprocs;iproc++){
 		long int nints=nintsperthread[iproc];
@@ -141,8 +142,20 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 	orbitalenergies=eigensolver.eigenvalues();\
 	const EigenMatrix Cprime=eigensolver.eigenvectors();\
 	coefficients=X*Cprime;\
-	const EigenMatrix C_occ=coefficients.leftCols(nocc);\
-	D=C_occ*C_occ.transpose();
+	D=EigenZero(nbasis,nbasis);\
+	if (std::isnormal(temperature+chemicalpotential))\
+		for (int i=0;i<nbasis;i++){\
+			occupation[i]=1./(1.+std::exp((orbitalenergies[i]-chemicalpotential)/temperature));\
+			for (int a=0;a<nbasis;a++)\
+				for (int b=0;b<nbasis;b++)\
+					D(a,b)+=occupation[i]*coefficients(a,i)*coefficients(b,i);\
+		}\
+	else{\
+		for (int ibasis=0;ibasis<nbasis;ibasis++)\
+			occupation[ibasis]=(double)(ibasis<nocc);\
+		const EigenMatrix C_occ=coefficients.leftCols(nocc);\
+		D=C_occ*C_occ.transpose();\
+	}
 
 #define __Loop_Over_OV__\
 	for (int o=0,i=0;o<nocc;o++)\
@@ -162,20 +175,26 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 	std::cout<<'g'<<std::endl;\
 	std::cout<<g<<std::endl;
 
-double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
-            double * repulsion,short int * indices,long int n2integrals,
-            int dfxid,int dfcid,int ngrids,double * gridweights,
-            double * aos,
-            double * ao1xs,double * ao1ys,double * ao1zs,
-            double * ao2ls,
-            double *& d1xs,double *& d1ys,double *& d1zs,
-            double *& vrxcs,double *& vsxcs,
-            EigenVector & orbitalenergies,EigenMatrix & coefficients,
-            EigenMatrix & D,EigenMatrix & F,
-            const int nprocs,const bool output){
+double RKS(int nele,double temperature,double chemicalpotential,
+           EigenMatrix overlap,EigenMatrix hcore,
+           double * repulsion,short int * indices,long int n2integrals,
+           int dfxid,int dfcid,int ngrids,double * gridweights,
+           double * aos,
+           double * ao1xs,double * ao1ys,double * ao1zs,
+           double * ao2ls,
+           double *& d1xs,double *& d1ys,double *& d1zs,
+           double *& vrxcs,double *& vsxcs,
+           EigenVector & orbitalenergies,EigenMatrix & coefficients,
+           EigenVector & occupation,EigenMatrix & D,EigenMatrix & F,
+           const int nprocs,const bool output){
 	if (output){
-		if (dfxid) std::cout<<"Restricted Kohn-Sham ..."<<std::endl;
-		else std::cout<<"Restricted Hartree-Fock ..."<<std::endl;
+		std::cout<<"Restricted ";
+		if (std::isnormal(temperature+chemicalpotential))
+			std::cout<<"finite-temperature ";
+		else if (std::isnormal(temperature))
+			std::cout<<"thermally-assisted-occupation ";
+		if (dfxid) std::cout<<"Kohn-Sham ..."<<std::endl;
+		else std::cout<<"Hartree-Fock ..."<<std::endl;
 	}
 
 	// General preparation
@@ -338,13 +357,13 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 			std::cout.setf(std::ios::fixed);
 			std::cout<<"energy = "<<std::setprecision(12)<<Es[0];
 			std::cout.unsetf(std::ios::fixed);
-			std::cout<<std::setprecision(3)<<" a.u.  ||gradient|| = "<<pG.norm()<<" a.u.  ";
+			std::cout<<std::setprecision(3)<<" a.u.  ||gradient|| = "<<G.norm()<<" a.u.  ";
 			std::cout.setf(std::ios::fixed);
 			std::cout<<"cpu_time = "<<double(clock()-iterstart_cpu)/CLOCKS_PER_SEC;
 			std::cout<<" s  wall_time = "<<duration_wall.count()<<" s"<<std::endl;
 		}
 		iiteration++;
-	}while (abs(Es[0]-Es[1])>__scf_convergence_energy_threshold__ || pG.norm()>__scf_convergence_gradient_threshold__);
+	}while (abs(Es[0]-Es[1])>__scf_convergence_energy_threshold__ || G.norm()>__scf_convergence_gradient_threshold__);
 	if (output) std::cout<<"| Done; Final SCF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
 	const double energy=Es[0];
 
@@ -378,13 +397,15 @@ double RKS(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	return energy;
 }
 
-double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,
+double RHF(int nele,double temperature,double chemicalpotential,
+           EigenMatrix overlap,EigenMatrix hcore,
            double * repulsion,short int * indices,long int n2integrals,
            EigenVector & orbitalenergies,EigenMatrix & coefficients,
-           EigenMatrix & D,EigenMatrix & F,
+           EigenVector & occupation,EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output){
 	double * dummy=nullptr;
-	return RKS(nele,overlap,hcore,
+	return RKS(nele,temperature,chemicalpotential,
+	           overlap,hcore,
                    repulsion,indices,n2integrals,
                    0,0,0,nullptr,
 	           nullptr,
@@ -393,7 +414,7 @@ double RHF(int nele,EigenMatrix overlap,EigenMatrix hcore,
 	           dummy,dummy,dummy,
 	           dummy,dummy,
                    orbitalenergies,coefficients,
-	           D,F,
+	           occupation,D,F,
                    nprocs,output);
 }
 

@@ -29,10 +29,12 @@ int main(int argc,char *argv[]){
 	const int nbasis=nBasis(natoms,atoms,basisset,1);
 	nOneElectronIntegrals(natoms,atoms,basisset,1);
 	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms,1);
-	int derivative=ReadDerivative(argv[1],1);
-	std::string grid=ReadGrid(argv[1],1);
+	const int derivative=ReadDerivative(argv[1],1);
+	const std::string grid=ReadGrid(argv[1],1);
 	const std::string method=ReadMethod(argv[1],1);
 	const std::string guess=ReadGuess(argv[1],1);
+	const double temperature=ReadTemperature(argv[1],1);
+	const double chemicalpotential=ReadChemicalPotential(argv[1],1);
 	const std::string scf="rijcosx";
 
 	// Density functional (if any)
@@ -146,20 +148,22 @@ int main(int argc,char *argv[]){
 
 	EigenMatrix coefficients(nbasis,nbasis);
 	EigenVector orbitalenergies(nbasis);
-	EigenVector occs(nbasis);occs.setZero();
+	EigenVector occupation(nbasis);occupation.setZero();
 
 	// KS preparation
 	double * d1xs,*d1ys,*d1zs,*vrxcs,*vsxcs;
 	d1xs=d1ys=d1zs=vrxcs=vsxcs=nullptr;
 	double energy=114514;
 	if (method.compare("rhf")==0)
-		energy=RHF(ne,overlap,hcore,
+		energy=RHF(ne,temperature,chemicalpotential,
+		           overlap,hcore,
 		           repulsion,indices,n2integrals,
 		           orbitalenergies,coefficients,
-		           density,fock,
+		           occupation,density,fock,
 		           nprocs,1);
 	else
-		energy=RKS(ne,overlap,hcore,
+		energy=RKS(ne,temperature,chemicalpotential,
+		           overlap,hcore,
 		           repulsion,indices,n2integrals,
 		           dfxid,dfcid,ngrids,ws,
 		           aos,
@@ -168,7 +172,7 @@ int main(int argc,char *argv[]){
 		           d1xs,d1ys,d1zs,
 		           vrxcs,vsxcs,
 		           orbitalenergies,coefficients,
-		           density,fock,
+		           occupation,density,fock,
 		           nprocs,1);
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
@@ -182,27 +186,25 @@ int main(int argc,char *argv[]){
 			for (int i=0;i<3*natoms;i++)
 				fskeletons[i]=hcoregrads[i];
 		}
-		for (int i=0;i<ne/2;i++)
-			occs[i]=1;
 		const EigenMatrix nrg=NRG(natoms,atoms,1);
 		EigenMatrix gele=EigenZero(natoms,3);
 		if (method.compare("rhf")==0)
 			gele=RHFG(natoms,atoms,basisset,
-			                      ovlgrads,hcoregrads,fskeletons,
-			                      coefficients,orbitalenergies,occs,
-			                      1,1);
+			          ovlgrads,hcoregrads,fskeletons,
+			          coefficients,orbitalenergies,occupation,
+			          1,1);
 		else
 			gele=RKSG(natoms,atoms,basisset,
-			                      ovlgrads,hcoregrads,fskeletons,
-			                      kscale,ngrids,ws,
-			                      aos,
-			                      ao1xs,ao1ys,ao1zs,
-			                      ao2xxs,ao2yys,ao2zzs,
-			                      ao2xys,ao2xzs,ao2yzs,
-			                      d1xs,d1ys,d1zs,
-			                      vrxcs,vsxcs,
-			                      coefficients,orbitalenergies,occs,
-			                      1,1);
+			          ovlgrads,hcoregrads,fskeletons,
+			          kscale,ngrids,ws,
+			          aos,
+			          ao1xs,ao1ys,ao1zs,
+			          ao2xxs,ao2yys,ao2zzs,
+			          ao2xys,ao2xzs,ao2yzs,
+			          d1xs,d1ys,d1zs,
+			          vrxcs,vsxcs,
+			          coefficients,orbitalenergies,occupation,
+			          1,1);
 		const EigenMatrix g=nrg+gele;
 		std::cout<<"Total gradient:"<<std::endl;
 		__Z_2_Name__

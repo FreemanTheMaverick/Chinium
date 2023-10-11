@@ -61,9 +61,9 @@ EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int maxsize,double & error2no
 	return D;
 }
 
-void Dense2CSC(EigenMatrix dense,bool sym,double * elements,int * rowindeces,int * colpointers){
+void Dense2CSC(EigenMatrix dense,bool sym,double * elements,int * rowindices,int * colpointers){
 	double * element=elements;
-	int * rowindex=rowindeces;
+	int * rowindex=rowindices;
 	int * colpointer=colpointers;
 	for (int j=0;j<dense.cols();j++){
 		*(colpointer++)=sym?(1+j)*j/2:dense.rows()*j;
@@ -106,16 +106,16 @@ EigenMatrix AEDIIS(char diistype,double * Es,EigenMatrix * Ds,EigenMatrix * Fs,i
 
 	int hnnz=(size+1)*size/2;
 	double * helements=new double[hnnz];
-	int * hrowindeces=new int[hnnz];
+	int * hrowindices=new int[hnnz];
 	int * hcolpointers=new int[size+1];
 
 	int annz=nconstraints*size;
 	double * aelements=new double[annz];
-	int * arowindeces=new int[annz];
+	int * arowindices=new int[annz];
 	int * acolpointers=new int[size+1];
 
-	Dense2CSC(h,1,helements,hrowindeces,hcolpointers);
-	Dense2CSC(a,0,aelements,arowindeces,acolpointers);
+	Dense2CSC(h,1,helements,hrowindices,hcolpointers);
+	Dense2CSC(a,0,aelements,arowindices,acolpointers);
 
 	double * l=new double[nconstraints];
 	double * u=new double[nconstraints];
@@ -128,14 +128,14 @@ EigenMatrix AEDIIS(char diistype,double * Es,EigenMatrix * Ds,EigenMatrix * Fs,i
 	for (int i=0;i<size;i++) x[i]=0;
 
 	if (diistype=='e')
-		QuadraticProgramming(size,helements,hrowindeces,hcolpointers,Es,aelements,arowindeces,acolpointers,nconstraints,l,u,x);
+		QuadraticProgramming(size,helements,hrowindices,hcolpointers,Es,aelements,arowindices,acolpointers,nconstraints,l,u,x);
 	else if (diistype=='a'){
 		double * g=new double[size];
 		for (int i=0;i<size;i++){
 			EigenMatrix gi=(Ds[i].transpose()-Ds[0].transpose())*Fs[0];
 			g[i]=2*gi.trace();
 		}
-		QuadraticProgramming(size,helements,hrowindeces,hcolpointers,g,aelements,arowindeces,acolpointers,nconstraints,l,u,x);
+		QuadraticProgramming(size,helements,hrowindices,hcolpointers,g,aelements,arowindices,acolpointers,nconstraints,l,u,x);
 		delete [] g;
 	}
 
@@ -144,10 +144,10 @@ EigenMatrix AEDIIS(char diistype,double * Es,EigenMatrix * Ds,EigenMatrix * Fs,i
 		F+=Fs[i]*x[i];
 
 	delete [] helements;
-	delete [] hrowindeces;
+	delete [] hrowindices;
 	delete [] hcolpointers;
 	delete [] aelements;
-	delete [] arowindeces;
+	delete [] arowindices;
 	delete [] acolpointers;
 	delete [] l;
 	delete [] u;
@@ -172,16 +172,16 @@ int main(){ // Testing OSQP related functions.
 
 	int hnnz=(1+h.cols())*h.cols()/2;
 	double helements[hnnz]={0};
-	int hrowindeces[hnnz]={0};
+	int hrowindices[hnnz]={0};
 	int hcolpointers[h.cols()+1]={0};
 
 	int annz=a.rows()*a.cols();
 	double aelements[annz]={0};
-	int arowindeces[annz]={0};
+	int arowindices[annz]={0};
 	int acolpointers[a.cols()+1]={0};
 
-	Dense2CSC(h,1,helements,hrowindeces,hcolpointers);
-	Dense2CSC(a,0,aelements,arowindeces,acolpointers);
+	Dense2CSC(h,1,helements,hrowindices,hcolpointers);
+	Dense2CSC(a,0,aelements,arowindices,acolpointers);
 
 	std::cout<<"H ="<<std::endl;
 	std::cout<<h<<std::endl;
@@ -189,9 +189,9 @@ int main(){ // Testing OSQP related functions.
 	for (int i=0;i<hnnz;i++)
 		std::cout<<helements[i]<<",";
 	std::cout<<std::endl;
-	std::cout<<"H row indeces = "<<std::endl;
+	std::cout<<"H row indices = "<<std::endl;
 	for (int i=0;i<hnnz;i++)
-		std::cout<<hrowindeces[i]<<",";
+		std::cout<<hrowindices[i]<<",";
 	std::cout<<std::endl;
 	std::cout<<"H column pointers = "<<std::endl;
 	for (int i=0;i<h.cols()+1;i++)
@@ -204,9 +204,9 @@ int main(){ // Testing OSQP related functions.
 	for (int i=0;i<annz;i++)
 		std::cout<<aelements[i]<<",";
 	std::cout<<std::endl;
-	std::cout<<"A row indeces = ";
+	std::cout<<"A row indices = ";
 	for (int i=0;i<annz;i++)
-		std::cout<<arowindeces[i]<<",";
+		std::cout<<arowindices[i]<<",";
 	std::cout<<std::endl;
 	std::cout<<"A column pointers = "<<std::endl;
 	for (int i=0;i<a.cols()+1;i++)
@@ -214,7 +214,7 @@ int main(){ // Testing OSQP related functions.
 	std::cout<<std::endl;
 
 	double x[size];
-	QuadraticProgramming(size,helements,hrowindeces,hcolpointers,g,aelements,arowindeces,acolpointers,nconstraints,l,u,x);
+	QuadraticProgramming(size,helements,hrowindices,hcolpointers,g,aelements,arowindices,acolpointers,nconstraints,l,u,x);
 	std::cout<<"Solution = ";
 	for (int i=0;i<size;i++)
 		std::cout<<x[i]<<",";

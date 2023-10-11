@@ -26,12 +26,12 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
  __nBasis_From_OBS__
  EigenMatrix D=EigenZero(nbasis,nbasis);
  EigenMatrix W=EigenZero(nbasis,nbasis);
- for (int a=0;a<nbasis;a++)
-   for (int b=0;b<nbasis;b++)
-    for (int i=0;i<nbasis;i++){
-     D(a,b)+=occs(i)*coefficients(a,i)*coefficients(b,i);
-     W(a,b)+=occs(i)*coefficients(a,i)*coefficients(b,i)*orbitalenergies(i);
-    }
+ for (int i=0;i<nbasis;i++)
+  for (int a=0;a<nbasis;a++)
+   for (int b=0;b<nbasis;b++){
+    D(a,b)+=occs(i)*coefficients(a,i)*coefficients(b,i);
+    W(a,b)+=occs(i)*coefficients(a,i)*coefficients(b,i)*orbitalenergies(i);
+   }
  EigenMatrix Ghf=EigenZero(natoms,3);
  EigenMatrix Gxc=EigenZero(natoms,3);
  EigenMatrix * rawjskeletons=new EigenMatrix[3*natoms];
