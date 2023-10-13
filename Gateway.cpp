@@ -185,7 +185,7 @@ double ReadTemperature(char * inp,const bool output){
 	std::ifstream file(inp);
 	std::string thisline;
 	bool found=0;
-	double temperature=std::nan("");
+	double temperature=__nan__;
 	while (getline(file,thisline) && ! found){
 		if (thisline.compare("temperature")==0){
 			found=1;
@@ -194,6 +194,8 @@ double ReadTemperature(char * inp,const bool output){
 			ss>>temperature;
 		}
 	}
+	assert("If you want to set temperature to zero, just omit the 'temperature' section." && (temperature!=0 || std::isnan(temperature)));
+	assert("Temperature must be positive." && (temperature>0 || std::isnan(temperature)));
 	if (std::isnormal(temperature) && output) std::cout<<"Electronic temperature ... "<<temperature<<" Eh"<<std::endl;
 	return temperature;
 }
@@ -202,7 +204,7 @@ double ReadChemicalPotential(char * inp,const bool output){
 	std::ifstream file(inp);
 	std::string thisline;
 	bool found=0;
-	double chemicalpotential=std::nan("");
+	double chemicalpotential=__nan__;
 	while (getline(file,thisline) && ! found){
 		if (thisline.compare("chemicalpotential")==0){
 			found=1;
@@ -211,7 +213,7 @@ double ReadChemicalPotential(char * inp,const bool output){
 			ss>>chemicalpotential;
 		}
 	}
-	if (std::isnormal(chemicalpotential) && output) std::cout<<"Electronic chemical potential ... "<<chemicalpotential<<" Eh"<<std::endl;
+	if (!std::isnan(chemicalpotential) && output) std::cout<<"Electronic chemical potential ... "<<chemicalpotential<<" Eh"<<std::endl;
 	return chemicalpotential;
 }
 

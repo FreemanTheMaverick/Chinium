@@ -1,4 +1,6 @@
+#define __nan__ (0./0.)
 #define __angstrom2bohr__ 1.8897259886
+#define __hartree2ev__ 27.21139664130791
 
 #define EigenVector Eigen::VectorXd
 #define EigenMatrix Eigen::MatrixXd

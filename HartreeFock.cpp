@@ -1,8 +1,8 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include <cassert>
-#include <ctime>
 #include <chrono>
+#include <cstdio>
 #include <iostream>
 #include <iomanip>
 #include <omp.h>
@@ -143,7 +143,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 	const EigenMatrix Cprime=eigensolver.eigenvectors();\
 	coefficients=X*Cprime;\
 	D=EigenZero(nbasis,nbasis);\
-	if (std::isnormal(temperature+chemicalpotential))\
+	if (!std::isnan(temperature+chemicalpotential))\
 		for (int i=0;i<nbasis;i++){\
 			occupation[i]=1./(1.+std::exp((orbitalenergies[i]-chemicalpotential)/temperature));\
 			for (int a=0;a<nbasis;a++)\
@@ -188,13 +188,19 @@ double RKS(int nele,double temperature,double chemicalpotential,
            EigenVector & occupation,EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output){
 	if (output){
-		std::cout<<"Restricted ";
-		if (std::isnormal(temperature+chemicalpotential))
-			std::cout<<"finite-temperature ";
+		std::printf("Restricted ");
+		if (std::isnormal(temperature+chemicalpotential) || temperature+chemicalpotential==0)
+			std::printf("finite-temperature ");
 		else if (std::isnormal(temperature))
-			std::cout<<"thermally-assisted-occupation ";
-		if (dfxid) std::cout<<"Kohn-Sham ..."<<std::endl;
-		else std::cout<<"Hartree-Fock ..."<<std::endl;
+			std::printf("thermally-assisted-occupation ");
+		if (dfxid) std::printf("Kohn-Sham ...\n");
+		else std::printf("Hartree-Fock ...\n");
+		if (std::isnormal(temperature+chemicalpotential) || temperature+chemicalpotential==0)
+			std::printf("| Iteration | Fock update |    Grand potential    | Gradient norm | Wall time |\n");
+		else if (std::isnormal(temperature))
+			std::printf("| Iteration | Fock update |      Free energy      | Gradient norm | Wall time |\n");
+		else
+			std::printf("| Iteration | Fock update |        Energy         | Gradient norm | Wall time |\n");
 	}
 
 	// General preparation
@@ -286,31 +292,30 @@ double RKS(int nele,double temperature,double chemicalpotential,
 
 	// RHF-SCF iterations
 	do{
-		if (output) std::cout<<"| Iteration "<<iiteration<<":  ";
-		const clock_t iterstart_cpu=clock();
+		if (output) std::printf("|   %5d   |",iiteration);
 		const auto iterstart_wall=std::chrono::system_clock::now();
 
 		// Convergence techniques
 		if (iiteration==0 && nlbfgs==-1){
-			if (output) std::cout<<"fock_update = naive  ";
+			if (output) std::cout<<"    naive    |";
 			update='f';
 			F=Fs[0];
 		}else if (abs(Es[0]-Es[1])>__damping_start_threshold__ && nlbfgs==-1){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
-			if (output) std::cout<<"fock_update = damping  ";
+			if (output) std::cout<<"   damping   |";
 			update='f';
 			F=(1.-__damping_factor__)*Fs[0]+__damping_factor__*Fs[1];
 		}else if (__diis_start_iter__>=iiteration && iiteration>__adiis_start_iter__ && nlbfgs==-1){ // Starting A-DIIS in the beginning to facilitate (but not necesarily accelerate) convergence.
-			if (output) std::cout<<"fock_update = ADIIS  ";
+			if (output) std::cout<<"    ADIIS    |";
 			update='f';
 			F=AEDIIS('a',Es,Ds,Fs,iiteration<__diis_space_size__?iiteration:__diis_space_size__);
 		}else if (iiteration>__diis_start_iter__ && pG.norm()>__lbfgs_start_threshold__ && nlbfgs==-1){ // Starting DIIS after A-DIIS to accelerate convergence in the medium-gradient area.
-			if (output) std::cout<<"fock_update = Pulay's_DIIS  ";
+			if (output) std::cout<<"    CDIIS    |";
 			update='f';
 			F=DIIS(Fs,Gs,iiteration<__diis_space_size__?iiteration:__diis_space_size__,error2norm); // error2norm is updated.
 		}else if ((iiteration>__diis_start_iter__ && pG.norm()<__lbfgs_start_threshold__) || nlbfgs>=0){ // Stopping DIIS for ASOSCF (or simply L-BFGS) in the final part to prevent trailing.
 			EigenVector hessiandiag(nocc*(nbasis-nocc));
 			hessiandiag.setZero();
-			if (output) std::cout<<"density_update = L-BFGS  ";
+			if (output) std::cout<<"    L-BFGS   |";
 			update='d';
 			if (nlbfgs==-1)
 				firstcoefficients=coefficients;
@@ -329,7 +334,7 @@ double RKS(int nele,double temperature,double chemicalpotential,
 			D=C_occ*C_occ.transpose();
 			nlbfgs++;
 		}else{
-			if (output) std::cout<<"fock_update = naive  ";
+			if (output) std::cout<<"    naive    |";
 			update='f';
 			F=Fs[0];
 		}
@@ -352,20 +357,31 @@ double RKS(int nele,double temperature,double chemicalpotential,
 		// Iteration information output
 		const EigenMatrix Iamgoingtobeanobellaureate=D*(hcore+F-Fxc); // Intermediate matrix.
 		PushDoubleQueue(Iamgoingtobeanobellaureate.trace()+Exc,Es,__diis_space_size__); // Updating energy.
-		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
-		if (output){
-			std::cout.setf(std::ios::fixed);
-			std::cout<<"energy = "<<std::setprecision(12)<<Es[0];
-			std::cout.unsetf(std::ios::fixed);
-			std::cout<<std::setprecision(3)<<" a.u.  ||gradient|| = "<<G.norm()<<" a.u.  ";
-			std::cout.setf(std::ios::fixed);
-			std::cout<<"cpu_time = "<<double(clock()-iterstart_cpu)/CLOCKS_PER_SEC;
-			std::cout<<" s  wall_time = "<<duration_wall.count()<<" s"<<std::endl;
+
+		if (std::isnormal(temperature)){
+			double entropy=0;
+			for (int i=0;i<nbasis;i++)
+				entropy+=std::log(std::pow(occupation[i],occupation[i]))+std::log(std::pow(1.-occupation[i],1.-occupation[i]));
+			Es[0]-=temperature*2*entropy;
+			if (std::isnormal(temperature+chemicalpotential) || temperature+chemicalpotential==0)
+				Es[0]-=chemicalpotential*2*occupation.sum();
 		}
+
+		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
+		if (output) std::printf("   %17.10f   | %13.6f | %9.6f |\n",Es[0],G.norm(),duration_wall.count());
 		iiteration++;
 	}while (abs(Es[0]-Es[1])>__scf_convergence_energy_threshold__ || G.norm()>__scf_convergence_gradient_threshold__);
 	if (output) std::cout<<"| Done; Final SCF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
 	const double energy=Es[0];
+
+	// Printing orbital information
+	if (output){
+		std::printf("Orbital information ...\n");
+		std::printf("| Index |  Energy (eV)  | Occupancy |\n");
+		for (int i=0;i<nbasis;i++)
+			std::printf("| %4d  | %13.6f | %9.6f |\n",i,orbitalenergies[i]*__hartree2ev__,2*occupation[i]);
+		std::cout<<"Total number of electrons ... "<<occupation.sum()<<std::endl;
+	}
 
 	if (ds) delete [] ds;
 	if (d2s) delete [] d2s;
