@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <iostream>
+#include <functional>
 #include "Aliases.h"
 #include "OSQP.h"
 
@@ -155,6 +156,22 @@ EigenMatrix AEDIIS(char diistype,double * Es,EigenMatrix * Ds,EigenMatrix * Fs,i
 	return F;
 }
 
+EigenMatrix ConjugateGradient(std::function<EigenMatrix(EigenMatrix)> func,EigenMatrix guess,EigenMatrix b,int maxiter,double threshold){
+	EigenMatrix x=guess;
+	EigenMatrix Ax=func(guess);
+	EigenMatrix r=b-Ax;
+	EigenMatrix p=r;
+	for (int k=0;k<maxiter && r.norm()<threshold;k++){
+		const double rdot=(r.transpose()*r).trace();
+		const EigenMatrix Ap=func(p);
+		const double a=rdot/(p.transpose()*Ap).trace();
+		x+=a*p;
+		r-=a*Ap;
+		const double b=(r.transpose()*r).trace()/rdot;
+		p=r+b*p;
+	}
+	return x;
+}
 
 /*
 #include <iostream>

@@ -208,8 +208,14 @@ int main(int argc,char *argv[]){
 		const EigenMatrix g=nrg+gele;
 		std::cout<<"Total gradient:"<<std::endl;
 		__Z_2_Name__
-		for (int iatom=0;iatom<natoms;iatom++)
-			std::cout<<"| "<<Z2Name[(int)atoms[4*iatom]]<<" "<<g.row(iatom)<<std::endl;
+		for (int iatom=0;iatom<natoms;iatom++){
+			std::cout<<"| "<<Z2Name[(int)atoms[4*iatom]];
+			if (Z2Name[(int)atoms[4*iatom]].length()==1)
+				std::cout<<"   ";
+			else if (Z2Name[(int)atoms[4*iatom]].length()==2)
+				std::cout<<"  ";
+			std::printf(" %17.10f  %17.10f  %17.10f\n",g(iatom,0),g(iatom,1),g(iatom,2));
+		}
 	}
 
 	delete [] xs;

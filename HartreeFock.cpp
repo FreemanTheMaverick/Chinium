@@ -23,7 +23,7 @@
 #define __scf_convergence_energy_threshold__ 1.e-8
 #define __scf_convergence_gradient_threshold__ 1.e-5
 #define __density_purification_niterations__ 1024
-#define __density_purification_threshold__ 1.e-12
+#define __density_purification_threshold__ 1.e-15
 
 void PurifyDensity(EigenMatrix overlap,EigenMatrix & D){
 	const int nbasis=D.rows();
@@ -52,10 +52,11 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 	}
 	EigenMatrix * rawjs=new EigenMatrix[nprocs];
 	EigenMatrix * rawks=new EigenMatrix[nprocs];
-	Eigen::initParallel();
+
 	omp_set_num_threads(nprocs);
 	#pragma omp parallel for
 	for (int iproc=0;iproc<nprocs;iproc++){
+		Eigen::setNbThreads(1);
 		long int nints=nintsperthread[iproc];
 		long int iintfirst=iintfirstperthread[iproc];
 		double * thisrepulsions=repulsion+iintfirst;
@@ -87,6 +88,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 			}
 		}
 	}
+	Eigen::setNbThreads(nprocs);
 	EigenMatrix rawj=EigenZero(nbasis,nbasis);
 	EigenMatrix rawk=EigenZero(nbasis,nbasis);
 	for (int iproc=0;iproc<nprocs;iproc++){
@@ -146,16 +148,14 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 	if (!std::isnan(temperature+chemicalpotential))\
 		for (int i=0;i<nbasis;i++){\
 			occupation[i]=1./(1.+std::exp((orbitalenergies[i]-chemicalpotential)/temperature));\
-			for (int a=0;a<nbasis;a++)\
-				for (int b=0;b<nbasis;b++)\
-					D(a,b)+=occupation[i]*coefficients(a,i)*coefficients(b,i);\
 		}\
 	else{\
-		for (int ibasis=0;ibasis<nbasis;ibasis++)\
-			occupation[ibasis]=(double)(ibasis<nocc);\
-		const EigenMatrix C_occ=coefficients.leftCols(nocc);\
-		D=C_occ*C_occ.transpose();\
-	}
+		for (int i=0;i<nbasis;i++)\
+			occupation[i]=(double)(i<nocc);\
+	}\
+	D.diagonal()=occupation;\
+	D=coefficients*D*coefficients.transpose();\
+	//PurifyDensity(overlap,D);
 
 #define __Loop_Over_OV__\
 	for (int o=0,i=0;o<nocc;o++)\
@@ -204,6 +204,7 @@ double RKS(int nele,double temperature,double chemicalpotential,
 	}
 
 	// General preparation
+	Eigen::setNbThreads(nprocs);
 	const int nbasis=overlap.cols();
 	const int nocc=nele/2;
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
@@ -297,25 +298,25 @@ double RKS(int nele,double temperature,double chemicalpotential,
 
 		// Convergence techniques
 		if (iiteration==0 && nlbfgs==-1){
-			if (output) std::cout<<"    naive    |";
+			if (output) std::printf("    naive    |");
 			update='f';
 			F=Fs[0];
 		}else if (abs(Es[0]-Es[1])>__damping_start_threshold__ && nlbfgs==-1){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
-			if (output) std::cout<<"   damping   |";
+			if (output) std::printf("   damping   |");
 			update='f';
 			F=(1.-__damping_factor__)*Fs[0]+__damping_factor__*Fs[1];
 		}else if (__diis_start_iter__>=iiteration && iiteration>__adiis_start_iter__ && nlbfgs==-1){ // Starting A-DIIS in the beginning to facilitate (but not necesarily accelerate) convergence.
-			if (output) std::cout<<"    ADIIS    |";
+			if (output) std::printf("    ADIIS    |");
 			update='f';
 			F=AEDIIS('a',Es,Ds,Fs,iiteration<__diis_space_size__?iiteration:__diis_space_size__);
 		}else if (iiteration>__diis_start_iter__ && pG.norm()>__lbfgs_start_threshold__ && nlbfgs==-1){ // Starting DIIS after A-DIIS to accelerate convergence in the medium-gradient area.
-			if (output) std::cout<<"    CDIIS    |";
+			if (output) std::printf("    CDIIS    |");
 			update='f';
 			F=DIIS(Fs,Gs,iiteration<__diis_space_size__?iiteration:__diis_space_size__,error2norm); // error2norm is updated.
 		}else if ((iiteration>__diis_start_iter__ && pG.norm()<__lbfgs_start_threshold__) || nlbfgs>=0){ // Stopping DIIS for ASOSCF (or simply L-BFGS) in the final part to prevent trailing.
 			EigenVector hessiandiag(nocc*(nbasis-nocc));
 			hessiandiag.setZero();
-			if (output) std::cout<<"    L-BFGS   |";
+			if (output) std::printf("    L-BFGS   |");
 			update='d';
 			if (nlbfgs==-1)
 				firstcoefficients=coefficients;
@@ -334,7 +335,7 @@ double RKS(int nele,double temperature,double chemicalpotential,
 			D=C_occ*C_occ.transpose();
 			nlbfgs++;
 		}else{
-			if (output) std::cout<<"    naive    |";
+			if (output) std::printf("    naive    |");
 			update='f';
 			F=Fs[0];
 		}
@@ -348,7 +349,7 @@ double RKS(int nele,double temperature,double chemicalpotential,
 		PushMatrixQueue(D,Ds,__diis_space_size__); // Updating atomic density matrix.
 
 		const EigenMatrix Fmo=coefficients.transpose()*F*coefficients;
-		__Loop_Over_OV__ pG(i)=-4*Fmo(o,v);
+		__Loop_Over_OV__ pG(i)=-Fmo(o,v)*(occupation[o]-occupation[v]);
 		PushVectorQueue(pG,pGs,__lbfgs_space_size__+1); // Updating packed gradient matrix.
 		PushVectorQueue(pX,pXs,__lbfgs_space_size__+1);
 
@@ -368,7 +369,7 @@ double RKS(int nele,double temperature,double chemicalpotential,
 		}
 
 		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
-		if (output) std::printf("   %17.10f   | %13.6f | %9.6f |\n",Es[0],G.norm(),duration_wall.count());
+		if (output) std::printf("   %17.10f   | %13.6f | %9.6f |\n",Es[0],pG.norm(),duration_wall.count());
 		iiteration++;
 	}while (abs(Es[0]-Es[1])>__scf_convergence_energy_threshold__ || G.norm()>__scf_convergence_gradient_threshold__);
 	if (output) std::cout<<"| Done; Final SCF energy = "<<std::setprecision(12)<<Es[0]<<" a.u."<<std::endl;
@@ -377,10 +378,10 @@ double RKS(int nele,double temperature,double chemicalpotential,
 	// Printing orbital information
 	if (output){
 		std::printf("Orbital information ...\n");
-		std::printf("| Index |  Energy (eV)  | Occupancy |\n");
+		std::printf("| Index |  Energy (Eh)  |  Energy (eV)  | Occupancy |\n");
 		for (int i=0;i<nbasis;i++)
-			std::printf("| %4d  | %13.6f | %9.6f |\n",i,orbitalenergies[i]*__hartree2ev__,2*occupation[i]);
-		std::cout<<"Total number of electrons ... "<<occupation.sum()<<std::endl;
+			std::printf("| %4d  | %13.6f | %13.6f | %9.6f |\n",i,orbitalenergies[i],orbitalenergies[i]*__hartree2ev__,2*occupation[i]);
+		std::cout<<"Total number of electrons ... "<<occupation.sum()*2<<std::endl;
 	}
 
 	if (ds) delete [] ds;
