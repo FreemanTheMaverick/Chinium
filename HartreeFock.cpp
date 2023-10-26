@@ -146,13 +146,13 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 	D=EigenZero(nbasis,nbasis);\
 	if (!std::isnan(temperature+chemicalpotential))\
 		for (int i=0;i<nbasis;i++){\
-			occupation[i]=1./(1.+std::exp((orbitalenergies[i]-chemicalpotential)/temperature));\
+			occupancies[i]=1./(1.+std::exp((orbitalenergies[i]-chemicalpotential)/temperature));\
 		}\
 	else{\
 		for (int i=0;i<nbasis;i++)\
-			occupation[i]=(double)(i<nocc);\
+			occupancies[i]=(double)(i<nocc);\
 	}\
-	D.diagonal()=occupation;\
+	D.diagonal()=occupancies;\
 	D=coefficients*D*coefficients.transpose();\
 	//PurifyDensity(overlap,D);
 
@@ -184,7 +184,7 @@ double RKS(int nele,double temperature,double chemicalpotential,
            double *& d1xs,double *& d1ys,double *& d1zs,
            double *& vrxcs,double *& vsxcs,
            EigenVector & orbitalenergies,EigenMatrix & coefficients,
-           EigenVector & occupation,EigenMatrix & D,EigenMatrix & F,
+           EigenVector & occupancies,EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output){
 	if (output){
 		std::printf("Restricted ");
@@ -348,7 +348,7 @@ double RKS(int nele,double temperature,double chemicalpotential,
 		PushMatrixQueue(D,Ds,__diis_space_size__); // Updating atomic density matrix.
 
 		const EigenMatrix Fmo=coefficients.transpose()*F*coefficients;
-		__Loop_Over_OV__ pG(i)=-Fmo(o,v)*(occupation[o]-occupation[v]);
+		__Loop_Over_OV__ pG(i)=-Fmo(o,v)*(occupancies[o]-occupancies[v]);
 		PushVectorQueue(pG,pGs,__lbfgs_space_size__+1); // Updating packed gradient matrix.
 		PushVectorQueue(pX,pXs,__lbfgs_space_size__+1);
 
@@ -361,10 +361,10 @@ double RKS(int nele,double temperature,double chemicalpotential,
 		if (std::isnormal(temperature)){
 			double entropy=0;
 			for (int i=0;i<nbasis;i++)
-				entropy+=std::log(std::pow(occupation[i],occupation[i]))+std::log(std::pow(1.-occupation[i],1.-occupation[i]));
+				entropy+=std::log(std::pow(occupancies[i],occupancies[i]))+std::log(std::pow(1.-occupancies[i],1.-occupancies[i]));
 			Es[0]-=temperature*2*entropy;
 			if (std::isnormal(temperature+chemicalpotential) || temperature+chemicalpotential==0)
-				Es[0]-=chemicalpotential*2*occupation.sum();
+				Es[0]-=chemicalpotential*2*occupancies.sum();
 		}
 
 		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
@@ -379,8 +379,8 @@ double RKS(int nele,double temperature,double chemicalpotential,
 		std::printf("Orbital information ...\n");
 		std::printf("| Index |  Energy (Eh)  |  Energy (eV)  | Occupancy |\n");
 		for (int i=0;i<nbasis;i++)
-			std::printf("| %4d  | %13.6f | %13.6f | %9.6f |\n",i,orbitalenergies[i],orbitalenergies[i]*__hartree2ev__,2*occupation[i]);
-		std::cout<<"Total number of electrons ... "<<occupation.sum()*2<<std::endl;
+			std::printf("| %4d  | %13.6f | %13.6f | %9.6f |\n",i,orbitalenergies[i],orbitalenergies[i]*__hartree2ev__,2*occupancies[i]);
+		std::cout<<"Total number of electrons ... "<<occupancies.sum()*2<<std::endl;
 	}
 
 	if (ds) delete [] ds;
@@ -417,7 +417,7 @@ double RHF(int nele,double temperature,double chemicalpotential,
            EigenMatrix overlap,EigenMatrix hcore,
            double * repulsion,short int * indices,long int n2integrals,
            EigenVector & orbitalenergies,EigenMatrix & coefficients,
-           EigenVector & occupation,EigenMatrix & D,EigenMatrix & F,
+           EigenVector & occupancies,EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output){
 	double * dummy=nullptr;
 	return RKS(nele,temperature,chemicalpotential,
@@ -430,7 +430,7 @@ double RHF(int nele,double temperature,double chemicalpotential,
 	           dummy,dummy,dummy,
 	           dummy,dummy,
                    orbitalenergies,coefficients,
-	           occupation,D,F,
+	           occupancies,D,F,
                    nprocs,output);
 }
 

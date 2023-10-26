@@ -42,10 +42,10 @@ EigenMatrix SuperpositionAtomicDensity(const int natoms,double * atoms,const cha
 		short int * indices=new short int[n2integrals*5];
 		Repulsion(1,atom,basisset,nshellquartets,repulsiondiag,n2integrals,repulsion,indices,1,0);
 		EigenVector orbitalenergies(nbasis);
-		EigenVector occupation(nbasis);
+		EigenVector occupancies(nbasis);
 		EigenMatrix coefficients(nbasis,nbasis);
 		EigenMatrix dummy;
-		RHF(ne,0./0.,0./0.,overlap,hcore,repulsion,indices,n2integrals,orbitalenergies,coefficients,occupation,atomicdensity,dummy,1,0);
+		RHF(ne,0./0.,0./0.,overlap,hcore,repulsion,indices,n2integrals,orbitalenergies,coefficients,occupancies,atomicdensity,dummy,1,0);
 		delete [] repulsion;
 		delete [] indices;
 		for (int & ibasis:unique_atom.second)

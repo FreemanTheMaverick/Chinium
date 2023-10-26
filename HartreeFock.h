@@ -12,12 +12,12 @@ double RKS(int nele,double temperature,double chemicalpotential,
            double *& d1xs,double *& d1ys,double *& d1zs,
            double *& vrxcs,double *& vsxcs,
            EigenVector & orbitalenergies,EigenMatrix & coefficients,
-           EigenVector & occupation,EigenMatrix & D,EigenMatrix & F,
+           EigenVector & occupancies,EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output);
 
 double RHF(int nele,double temperature,double chemicalpotential,
            EigenMatrix overlap,EigenMatrix hcore,
            double * repulsion,short int * indices,long int n2integrals,
            EigenVector & orbitalenergies,EigenMatrix & coefficients,
-           EigenVector & occupation,EigenMatrix & D,EigenMatrix & F,
+           EigenVector & occupancies,EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output);

@@ -148,7 +148,7 @@ int main(int argc,char *argv[]){
 
 	EigenMatrix coefficients(nbasis,nbasis);
 	EigenVector orbitalenergies(nbasis);
-	EigenVector occupation(nbasis);occupation.setZero();
+	EigenVector occupancies(nbasis);occupancies.setZero();
 
 	// KS preparation
 	double * d1xs,*d1ys,*d1zs,*vrxcs,*vsxcs;
@@ -159,7 +159,7 @@ int main(int argc,char *argv[]){
 		           overlap,hcore,
 		           repulsion,indices,n2integrals,
 		           orbitalenergies,coefficients,
-		           occupation,density,fock,
+		           occupancies,density,fock,
 		           nprocs,1);
 	else
 		energy=RKS(ne,temperature,chemicalpotential,
@@ -172,7 +172,7 @@ int main(int argc,char *argv[]){
 		           d1xs,d1ys,d1zs,
 		           vrxcs,vsxcs,
 		           orbitalenergies,coefficients,
-		           occupation,density,fock,
+		           occupancies,density,fock,
 		           nprocs,1);
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
@@ -181,14 +181,12 @@ int main(int argc,char *argv[]){
 	if (derivative>=1){
 		for (int i=0;i<natoms*3;i++)
 			hcoregrads[i]=kntgrads[i]+nclgrads[i];
-		if (derivative>=2)
-			fskeletons=new EigenMatrix[3*natoms];
 		const EigenMatrix nrg=NRG(natoms,atoms,1);
 		EigenMatrix gele=EigenZero(natoms,3);
 		if (method.compare("rhf")==0)
 			gele=RHFG(natoms,atoms,basisset,
 			          ovlgrads,hcoregrads,fskeletons,
-			          coefficients,orbitalenergies,occupation,
+			          coefficients,orbitalenergies,occupancies,
 			          1,1);
 		else
 			gele=RKSG(natoms,atoms,basisset,
@@ -200,7 +198,7 @@ int main(int argc,char *argv[]){
 			          ao2xys,ao2xzs,ao2yzs,
 			          d1xs,d1ys,d1zs,
 			          vrxcs,vsxcs,
-			          coefficients,orbitalenergies,occupation,
+			          coefficients,orbitalenergies,occupancies,
 			          1,1);
 		const EigenMatrix g=nrg+gele;
 		std::cout<<"Total gradient:"<<std::endl;
@@ -213,6 +211,22 @@ int main(int argc,char *argv[]){
 				std::cout<<"  ";
 			std::printf(" %17.10f  %17.10f  %17.10f\n",g(iatom,0),g(iatom,1),g(iatom,2));
 		}
+	}
+
+	if (derivative>=2){
+		fskeletons=new EigenMatrix[3*natoms];
+		Gskeletons(natoms,atoms,basisset,
+		           D,
+		           kscale,ngrids,ws,
+		           aos,
+		           ao1xs,ao1ys,ao1zs,
+		           ao2xxs,ao2yys,ao2zzs,
+		           ao2xys,ao2xzs,ao2yzs,
+		           d1xs,d1ys,d1zs,
+		           vrxcs,vsxcs,
+		           fskeletons);
+		for (int it=0;it<natoms*3;it++)
+			fskeletons[it]+=hcoregrads[it];
 	}
 
 	delete [] xs;
