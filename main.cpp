@@ -181,11 +181,8 @@ int main(int argc,char *argv[]){
 	if (derivative>=1){
 		for (int i=0;i<natoms*3;i++)
 			hcoregrads[i]=kntgrads[i]+nclgrads[i];
-		if (derivative>=2){
+		if (derivative>=2)
 			fskeletons=new EigenMatrix[3*natoms];
-			for (int i=0;i<3*natoms;i++)
-				fskeletons[i]=hcoregrads[i];
-		}
 		const EigenMatrix nrg=NRG(natoms,atoms,1);
 		EigenMatrix gele=EigenZero(natoms,3);
 		if (method.compare("rhf")==0)

@@ -28,7 +28,14 @@ int ReadXYZ(char * inp,double * atoms,const bool output){
 				double x;ss>>x;atoms[4*iatom+1]=x*__angstrom2bohr__;
 				double y;ss>>y;atoms[4*iatom+2]=y*__angstrom2bohr__;
 				double z;ss>>z;atoms[4*iatom+3]=z*__angstrom2bohr__;
-				if (output) std::cout<<"| "<<iatom<<" "<<Name2Z[elementname]<<" "<<elementname<<" "<<x*__angstrom2bohr__<<" "<<y*__angstrom2bohr__<<" "<<z*__angstrom2bohr__<<std::endl;
+				if (output){
+					std::cout<<"| "<<elementname;
+					if (elementname.length()==1)
+						std::cout<<"   ";
+					else if (elementname.length()==2)
+						std::cout<<"  ";
+					std::printf(" %13.6f  %13.6f  %13.6f\n",x*__angstrom2bohr__,y*__angstrom2bohr__,z*__angstrom2bohr__);
+				}
 			}
 		}
 	}

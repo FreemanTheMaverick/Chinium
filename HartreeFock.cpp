@@ -2,7 +2,6 @@
 #include <cmath>
 #include <cassert>
 #include <chrono>
-#include <cstdio>
 #include <iostream>
 #include <iomanip>
 #include <omp.h>

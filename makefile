@@ -8,7 +8,7 @@ OSQP=/home/yzhangnn/osqp_0.6.3
 # The path where you can find "bin/", "include/" and "lib/".
 LIBXC=/home/yzhangnn/libxc_6.2.2
 
-GeneralFlags=-O3 -Wall -Wextra -Wpedantic
+GeneralFlags=-O2 -Wall -Wextra -Wpedantic
 EIGEN3Flags=-isystem $(EIGEN3) -march=native -fopenmp -DEIGEN_NO_DEBUG -DEIGEN_INITIALIZE_MATRICES_BY_ZERO
 LIBINT2Flags=-isystem $(LIBINT2)/include -L$(LIBINT2)/lib -lint2
 OSQPFlags=-isystem $(OSQP)/include/osqp -L$(OSQP)/lib64 -losqpstatic
