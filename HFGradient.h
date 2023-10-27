@@ -10,7 +10,7 @@ void Gskeletons(const int natoms,double * atoms,const char * basisset,
                 EigenMatrix * gskeletons);
 
 EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
-                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
+                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,
                  double kscale,int ngrids,double * ws,
                  double * aos,
                  double * ao1xs,double * ao1ys,double * ao1zs,
@@ -22,6 +22,6 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
                  const int nprocs,const bool output);
 
 EigenMatrix RHFG(const int natoms,double * atoms,const char * basisset,
-                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
+                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,
                  EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
                  const int nprocs,const bool output);

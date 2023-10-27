@@ -13,6 +13,7 @@
 #include "GridIntegrals.h"
 #include "DensityFunctional.h"
 #include "HFGradient.h"
+#include "CoupledPerturbed.h"
 
 int main(int argc,char *argv[]){
 
@@ -177,7 +178,6 @@ int main(int argc,char *argv[]){
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
-	EigenMatrix * fskeletons=nullptr;
 	if (derivative>=1){
 		for (int i=0;i<natoms*3;i++)
 			hcoregrads[i]=kntgrads[i]+nclgrads[i];
@@ -185,12 +185,12 @@ int main(int argc,char *argv[]){
 		EigenMatrix gele=EigenZero(natoms,3);
 		if (method.compare("rhf")==0)
 			gele=RHFG(natoms,atoms,basisset,
-			          ovlgrads,hcoregrads,fskeletons,
+			          ovlgrads,hcoregrads,
 			          coefficients,orbitalenergies,occupancies,
 			          1,1);
 		else
 			gele=RKSG(natoms,atoms,basisset,
-			          ovlgrads,hcoregrads,fskeletons,
+			          ovlgrads,hcoregrads,
 			          kscale,ngrids,ws,
 			          aos,
 			          ao1xs,ao1ys,ao1zs,
@@ -214,9 +214,10 @@ int main(int argc,char *argv[]){
 	}
 
 	if (derivative>=2){
-		fskeletons=new EigenMatrix[3*natoms];
+		EigenMatrix * fskeletons=new EigenMatrix[3*natoms];
+		EigenMatrix * dxn=new EigenMatrix[3*natoms];
 		Gskeletons(natoms,atoms,basisset,
-		           D,
+		           density,
 		           kscale,ngrids,ws,
 		           aos,
 		           ao1xs,ao1ys,ao1zs,
@@ -227,6 +228,18 @@ int main(int argc,char *argv[]){
 		           fskeletons);
 		for (int it=0;it<natoms*3;it++)
 			fskeletons[it]+=hcoregrads[it];
+		NonIdempotent(natoms,
+		              ovlgrads,fskeletons,
+		              repulsion,indices,n2integrals,kscale,
+		              coefficients,orbitalenergies,occupancies,
+		              nullptr,dxn,
+		              nprocs,1);
+		/*
+		std::cout<<"density"<<std::endl;
+		std::cout<<density<<std::endl;
+		std::cout<<"dxn[0]"<<std::endl;
+		std::cout<<dxn[0]<<std::endl;
+		*/
 	}
 
 	delete [] xs;

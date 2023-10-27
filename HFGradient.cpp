@@ -250,7 +250,7 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
 
 // This one is faster but uglier.
 EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
-                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
+                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,
                  double kscale,int ngrids,double * ws,
                  double * aos,
                  double * ao1xs,double * ao1ys,double * ao1zs,
@@ -317,26 +317,25 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
           const double cd_deg=(bf3==bf4)?1:2;
           const double ab_cd_deg=(bf1==bf3)?(bf2==bf4?1:2):2;
           const double abcd_deg=ab_deg*cd_deg*ab_cd_deg;
-          double tmp1=114514;
-          double tmp2=114514;
+          double tmp=114514;
           if (kscale==1)
-           tmp1=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4)-(D(bf1,bf3)*D(bf2,bf4)+D(bf1,bf4)*D(bf2,bf3)));
+           tmp=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4)-(D(bf1,bf3)*D(bf2,bf4)+D(bf1,bf4)*D(bf2,bf3)));
           else if (kscale==0)
-           tmp1=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4));
+           tmp=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4));
           else
-           tmp1=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4)-kscale*(D(bf1,bf3)*D(bf2,bf4)+D(bf1,bf4)*D(bf2,bf3)));
-          Ghf(atom1,0)+=tmp1*buf_vec[0][f1234];
-          Ghf(atom1,1)+=tmp1*buf_vec[1][f1234];
-          Ghf(atom1,2)+=tmp1*buf_vec[2][f1234];
-          Ghf(atom2,0)+=tmp1*buf_vec[3][f1234];
-          Ghf(atom2,1)+=tmp1*buf_vec[4][f1234];
-          Ghf(atom2,2)+=tmp1*buf_vec[5][f1234];
-          Ghf(atom3,0)+=tmp1*buf_vec[6][f1234];
-          Ghf(atom3,1)+=tmp1*buf_vec[7][f1234];
-          Ghf(atom3,2)+=tmp1*buf_vec[8][f1234];
-          Ghf(atom4,0)+=tmp1*buf_vec[9][f1234];
-          Ghf(atom4,1)+=tmp1*buf_vec[10][f1234];
-          Ghf(atom4,2)+=tmp1*buf_vec[11][f1234];
+           tmp=abcd_deg*(4*D(bf1,bf2)*D(bf3,bf4)-kscale*(D(bf1,bf3)*D(bf2,bf4)+D(bf1,bf4)*D(bf2,bf3)));
+          Ghf(atom1,0)+=tmp*buf_vec[0][f1234];
+          Ghf(atom1,1)+=tmp*buf_vec[1][f1234];
+          Ghf(atom1,2)+=tmp*buf_vec[2][f1234];
+          Ghf(atom2,0)+=tmp*buf_vec[3][f1234];
+          Ghf(atom2,1)+=tmp*buf_vec[4][f1234];
+          Ghf(atom2,2)+=tmp*buf_vec[5][f1234];
+          Ghf(atom3,0)+=tmp*buf_vec[6][f1234];
+          Ghf(atom3,1)+=tmp*buf_vec[7][f1234];
+          Ghf(atom3,2)+=tmp*buf_vec[8][f1234];
+          Ghf(atom4,0)+=tmp*buf_vec[9][f1234];
+          Ghf(atom4,1)+=tmp*buf_vec[10][f1234];
+          Ghf(atom4,2)+=tmp*buf_vec[11][f1234];
          }
         }
        }
@@ -421,11 +420,6 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
  libint2::finalize();
  Ghf/=4;
  Gxc*=-4;
- for (int i=0;i<3*natoms && fskeletons;i++){
-  EigenMatrix jskeleton=0.5*(rawjskeletons[i]+rawjskeletons[i].transpose());
-  EigenMatrix kskeleton=0.25*(rawkskeletons[i]+rawkskeletons[i].transpose());
-  fskeletons[i]+=jskeleton-0.5*kscale*kskeleton;
- }
  for (int iatom=0;iatom<natoms;iatom++){
   Ghf(iatom,0)+=hcoregrads[iatom*3+0].cwiseProduct(D).sum()-ovlgrads[iatom*3+0].cwiseProduct(W).sum();
   Ghf(iatom,1)+=hcoregrads[iatom*3+1].cwiseProduct(D).sum()-ovlgrads[iatom*3+1].cwiseProduct(W).sum();
@@ -438,11 +432,11 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
 }
 
 EigenMatrix RHFG(const int natoms,double * atoms,const char * basisset,
-                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
+                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,
                  EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occs,
                  const int nprocs,const bool output){
  return RKSG(natoms,atoms,basisset,
-             ovlgrads,hcoregrads,fskeletons,
+             ovlgrads,hcoregrads,
              1,0,nullptr,
              nullptr,
              nullptr,nullptr,nullptr,
