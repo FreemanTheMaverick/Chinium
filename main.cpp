@@ -178,19 +178,24 @@ int main(int argc,char *argv[]){
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
+	EigenMatrix * fskeletons=nullptr;
 	if (derivative>=1){
 		for (int i=0;i<natoms*3;i++)
 			hcoregrads[i]=kntgrads[i]+nclgrads[i];
+		delete [] kntgrads;
+		delete [] nclgrads;
+		if (derivative>=2)
+			fskeletons=new EigenMatrix[3*natoms];
 		const EigenMatrix nrg=NRG(natoms,atoms,1);
 		EigenMatrix gele=EigenZero(natoms,3);
 		if (method.compare("rhf")==0)
 			gele=RHFG(natoms,atoms,basisset,
-			          ovlgrads,hcoregrads,
+			          ovlgrads,hcoregrads,fskeletons,
 			          coefficients,orbitalenergies,occupancies,
 			          1,1);
 		else
 			gele=RKSG(natoms,atoms,basisset,
-			          ovlgrads,hcoregrads,
+			          ovlgrads,hcoregrads,fskeletons,
 			          kscale,ngrids,ws,
 			          aos,
 			          ao1xs,ao1ys,ao1zs,
@@ -200,6 +205,7 @@ int main(int argc,char *argv[]){
 			          vrxcs,vsxcs,
 			          coefficients,orbitalenergies,occupancies,
 			          1,1);
+		delete [] hcoregrads;
 		const EigenMatrix g=nrg+gele;
 		std::cout<<"Total gradient:"<<std::endl;
 		__Z_2_Name__
@@ -214,34 +220,15 @@ int main(int argc,char *argv[]){
 	}
 
 	if (derivative>=2){
-		EigenMatrix * fskeletons=new EigenMatrix[3*natoms];
 		EigenMatrix * dxn=new EigenMatrix[3*natoms];
-		Gskeletons(natoms,atoms,basisset,
-		           density,
-		           kscale,ngrids,ws,
-		           aos,
-		           ao1xs,ao1ys,ao1zs,
-		           ao2xxs,ao2yys,ao2zzs,
-		           ao2xys,ao2xzs,ao2yzs,
-		           d1xs,d1ys,d1zs,
-		           vrxcs,vsxcs,
-		           fskeletons);
-		for (int it=0;it<natoms*3;it++)
-			fskeletons[it]+=hcoregrads[it];
+		EigenMatrix * wxn=new EigenMatrix[3*natoms];
 		NonIdempotent(natoms,
 		              ovlgrads,fskeletons,
 		              repulsion,indices,n2integrals,kscale,
 		              coefficients,orbitalenergies,occupancies,
-		              nullptr,dxn,
+		              wxn,dxn,
 		              nprocs,1);
-		/*
-		std::cout<<"\ndensity"<<std::endl;
-		std::cout<<density<<std::endl;
-		for (int it=0;it<3*natoms;it++){
-			std::cout<<"\ndxn["<<it<<"]"<<std::endl;
-			std::cout<<dxn[it]<<std::endl;
-		}
-		*/
+
 	}
 
 	delete [] xs;
