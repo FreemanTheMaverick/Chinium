@@ -31,27 +31,27 @@ EigenMatrix DIIS(EigenMatrix * Ds,EigenMatrix * Es,int maxsize,double & error2no
 	double determinant=0;
 	int size=maxsize;
 	EigenMatrix B(size+1,size+1);
-	EigenMatrix b(size+1,1);
+	EigenVector b(size+1);
 	do{
 		B=EigenZero(size+1,size+1);
 		B(size,size)=0;
-		b=EigenZero(size+1,1);
-		b(size,0)=-1;
+		b.setZero();
+		b[size]=-1;
 		for (int i=0;i<size;i++){
 			for (int j=0;j<=i;j++){
-				EigenMatrix bij=Es[i].transpose()*Es[j];
-				B(i,j)=bij.trace();
-				B(j,i)=bij.trace();
+				double bij=(Es[i].transpose()*Es[j]).trace();
+				B(i,j)=bij;
+				B(j,i)=bij;
 			}
 			B(i,size)=-1;
 			B(size,i)=-1;
-			b(i,0)=0;
+			b[i]=0;
 		}
 		determinant=B.block(0,0,size,size).determinant();
 		size--;
 	}while (size>__minimum_DIIS_space__&&abs(determinant)<__DIIS_determinant_threshold__);
 	size++;
-	EigenMatrix x=B.colPivHouseholderQr().solve(b);
+	EigenVector x=B.colPivHouseholderQr().solve(b);
 	EigenMatrix D=EigenZero(Ds[0].rows(),Ds[0].cols());
 	for (int i=0;i<size;i++)
 		D+=x(i,0)*Ds[i];

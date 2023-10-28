@@ -235,10 +235,12 @@ int main(int argc,char *argv[]){
 		              nullptr,dxn,
 		              nprocs,1);
 		/*
-		std::cout<<"density"<<std::endl;
+		std::cout<<"\ndensity"<<std::endl;
 		std::cout<<density<<std::endl;
-		std::cout<<"dxn[0]"<<std::endl;
-		std::cout<<dxn[0]<<std::endl;
+		for (int it=0;it<3*natoms;it++){
+			std::cout<<"\ndxn["<<it<<"]"<<std::endl;
+			std::cout<<dxn[it]<<std::endl;
+		}
 		*/
 	}
 
