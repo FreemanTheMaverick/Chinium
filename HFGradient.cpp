@@ -92,6 +92,7 @@ void Gskeletons(const int natoms,double * atoms,const char * basisset,
    }
   }
  }
+ libint2::finalize();
  for (int it=0;it<3*natoms;it++){
   const EigenMatrix jskeleton=0.5*(rawjskeletons[it]+rawjskeletons[it].transpose());
   const EigenMatrix kskeleton=0.25*(rawkskeletons[it]+rawkskeletons[it].transpose());
@@ -185,7 +186,7 @@ void Gskeletons(const int natoms,double * atoms,const char * basisset,
  }
 }
 
-// This one is slower but more concise in maths. It is used to check if G skeleton derivatives are correctly computed.
+// This one is slower but more concise in maths. It is used when G skeleton derivatives are requested.
 EigenMatrix RKSG_concise(const int natoms,double * atoms,const char * basisset,
                          EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
                          double kscale,int ngrids,double * ws,
@@ -198,7 +199,7 @@ EigenMatrix RKSG_concise(const int natoms,double * atoms,const char * basisset,
                          EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
                          const int nprocs,const bool output){
  if (output && aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RKS gradient ... ";
- if (output && !aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RKS gradient ... ";
+ if (output && !aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RHF gradient ... ";
  time_t start=time(0);
  __Basis_From_Atoms__
  __nBasis_From_OBS__
@@ -206,12 +207,10 @@ EigenMatrix RKSG_concise(const int natoms,double * atoms,const char * basisset,
  // One-electron contributions
  EigenMatrix D=EigenZero(nbasis,nbasis);
  EigenMatrix W=EigenZero(nbasis,nbasis);
- for (int i=0;i<nbasis;i++)
-  for (int a=0;a<nbasis;a++)
-   for (int b=0;b<nbasis;b++){
-    D(a,b)+=occupancies(i)*coefficients(a,i)*coefficients(b,i);
-    W(a,b)+=occupancies(i)*coefficients(a,i)*coefficients(b,i)*orbitalenergies(i);
-   }
+ for (int i=0;i<nbasis;i++){
+    D+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose();
+    W+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose()*orbitalenergies[i];
+ }
  EigenMatrix gradient1=EigenZero(natoms,3);
  for (int iatom=0,it=0;iatom<natoms;iatom++)
   for (int t=0;t<3;t++,it++)
@@ -257,7 +256,7 @@ EigenMatrix RKSG_fast(const int natoms,double * atoms,const char * basisset,
                       double * ao2xys,double * ao2xzs,double * ao2yzs,
                       double * d1xs,double * d1ys,double * d1zs,
                       double * vrxcs,double * vsxcs,
-                      EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occs,
+                      EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
                       const int nprocs,const bool output){
  if (output && aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RKS gradient ... ";
  if (output && !aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RKS gradient ... ";
@@ -266,12 +265,10 @@ EigenMatrix RKSG_fast(const int natoms,double * atoms,const char * basisset,
  __nBasis_From_OBS__
  EigenMatrix D=EigenZero(nbasis,nbasis);
  EigenMatrix W=EigenZero(nbasis,nbasis);
- for (int i=0;i<nbasis;i++)
-  for (int a=0;a<nbasis;a++)
-   for (int b=0;b<nbasis;b++){
-    D(a,b)+=occs(i)*coefficients(a,i)*coefficients(b,i);
-    W(a,b)+=occs(i)*coefficients(a,i)*coefficients(b,i)*orbitalenergies(i);
-   }
+ for (int i=0;i<nbasis;i++){
+    D+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose();
+    W+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose()*orbitalenergies[i];
+ }
  EigenMatrix Ghf=EigenZero(natoms,3);
  EigenMatrix Gxc=EigenZero(natoms,3);
  EigenMatrix * rawjskeletons=new EigenMatrix[3*natoms];
@@ -469,7 +466,7 @@ EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
 
 EigenMatrix RHFG(const int natoms,double * atoms,const char * basisset,
                  EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
-                 EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occs,
+                 EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
                  const int nprocs,const bool output){
  return RKSG(natoms,atoms,basisset,
              ovlgrads,hcoregrads,fskeletons,
@@ -480,6 +477,6 @@ EigenMatrix RHFG(const int natoms,double * atoms,const char * basisset,
              nullptr,nullptr,nullptr,
              nullptr,nullptr,nullptr,
              nullptr,nullptr,
-             coefficients,orbitalenergies,occs,
+             coefficients,orbitalenergies,occupancies,
              nprocs,output);
 }

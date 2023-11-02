@@ -114,11 +114,11 @@ std::string ReadGuess(char * inp,const bool output){
 		}
 	}
 	if (guess.compare("core")==0 && output)
-		std::cout<<"Initial guessed fock matrix ... Core"<<std::endl;
+		std::cout<<"Initial guessed fock matrix ... Core hamiltonian"<<std::endl;
 	else if (guess.compare("sad")==0 && output)
-		std::cout<<"Initial guessed density matrix ... SAD"<<std::endl;
+		std::cout<<"Initial guessed density matrix ... Superposition of atomic density"<<std::endl;
 	else if (guess.compare("sap")==0 && output)
-		std::cout<<"Initial guessed fock matrix ... SAP"<<std::endl;
+		std::cout<<"Initial guessed density matrix ... Superposition of atomic potentials"<<std::endl;
 	else if (output)
 		std::cout<<"Initial guessed density matrix ... taken from '"<<guess<<"'"<<std::endl;
 	return guess;

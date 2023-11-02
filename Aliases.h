@@ -44,5 +44,10 @@
 
 #define __Delete_Matrices__(matrices,size)\
 	for (int imatrix=0;imatrix<size;imatrix++)\
-		matrices.resize(0,0);\
+		matrices[imatrix].resize(0,0);\
 	delete [] matrices;
+
+#define __Delete_Vectors__(vectors,size)\
+	for (int ivector=0;ivector<size;ivector++)\
+		vectors[ivector].resize(0);\
+	delete [] vectors;

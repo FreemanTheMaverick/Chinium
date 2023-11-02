@@ -72,6 +72,10 @@ HFGradient: HFGradient.cpp
 CoupledPerturbed: CoupledPerturbed.cpp
 	$(CXX) CoupledPerturbed.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
+HFHessian: HFHessian.cpp
+	$(CXX) HFHessian.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags)
+
+
 LD:
 	$(CXX) -o Chinium main.o Gateway.o NuclearRepulsion.o InitialGuess.o Libint2.o AtomicIntegrals.o AtoIntGradients.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o HFGradient.o CoupledPerturbed.o $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
 
