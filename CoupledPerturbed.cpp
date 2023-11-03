@@ -112,7 +112,7 @@ void NonIdempotent(int natoms,
 		if (output) std::printf("|    %6d    |     %7d     | %9.6f |\n",ipert,jiter,duration_wall.count());
 	}
 }
-#include <iostream>
+
 EigenMatrix OccupancyNuclearGradientSCF(double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
                                         EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * dxn,EigenVector * exn,int natoms,
                                         EigenMatrix coefficients,EigenVector occupancies,EigenVector orbitalenergies,
@@ -214,14 +214,14 @@ EigenMatrix OccupancyNuclearGradientSCF(double temperature,double * repulsion,sh
 	std::chrono::duration<double> duration=std::chrono::system_clock::now()-start;
 	if (output) std::printf("%f s\n",duration.count());
 
-	/*
+	/* Checking whether every MO's contribution to G is correct
 	EigenMatrix dd=EigenZero(nbasis,nbasis);
 	EigenMatrix ff=EigenZero(nbasis,nbasis);
 	for (int kbasis=0;kbasis<nbasis;kbasis++){
 		dd+=occupancies[kbasis]*coefficients.col(kbasis)*coefficients.col(kbasis).transpose();
 		ff+=fn[kbasis]*occupancies[kbasis];
 	}
-	std::cout<<(ff-GMatrix(repulsion,indices,n2integrals,dd,kscale,nprocs)).norm()<<std::endl;
+	std::printf("%f\n",(ff-GMatrix(repulsion,indices,n2integrals,dd,kscale,nprocs)).norm());
 	*/
 
 	if (output){
@@ -252,10 +252,9 @@ EigenMatrix OccupancyNuclearGradientSCF(double temperature,double * repulsion,sh
 				const double exs=coefficients.col(kbasis).transpose()*F*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
 				nxs(ipert,kbasis)=occupancies[kbasis]*(occupancies[kbasis]-1.)/temperature*exs;
 			}
-			F=EigenZero(nbasis,nbasis);
+			F=fxn;
 			for (int kbasis=0;kbasis<nbasis;kbasis++)
 				F+=fn[kbasis]*nxs(ipert,kbasis);
-			F+=fxn;
 			R=F-Fs[0];
 			PushMatrixQueue(F,Fs,__diis_space_size__);
 			PushMatrixQueue(R,Rs,__diis_space_size__);
@@ -263,15 +262,6 @@ EigenMatrix OccupancyNuclearGradientSCF(double temperature,double * repulsion,sh
 		const std::chrono::duration<double> duration=std::chrono::system_clock::now()-pert_start;
 		if (output) std::printf("|    %6d    |     %7d     | %9.6f |\n",ipert,jiter,duration.count());
 	}
-
-	/*
-	std::cout<<"\noccupancies"<<std::endl;
-	std::cout<<occupancies<<std::endl;
-	for (int ipert=0;ipert<3*natoms;ipert++){
-		std::cout<<"\ngradient"<<ipert<<std::endl;
-		std::cout<<nxs.row(ipert).transpose()<<std::endl;
-	}
-	*/
 
 	EigenMatrix hessian=EigenZero(3*natoms,3*natoms);
 	for (int ipert=0;ipert<3*natoms;ipert++)
