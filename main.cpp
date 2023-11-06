@@ -223,15 +223,16 @@ int main(int argc,char *argv[]){
 		EigenMatrix * dxn=new EigenMatrix[3*natoms];
 		EigenMatrix * wxn=new EigenMatrix[3*natoms];
 		EigenVector * exn=new EigenVector[3*natoms];
-		NonIdempotent(natoms,
-		              ovlgrads,fskeletons,
-		              repulsion,indices,n2integrals,kscale,
-		              coefficients,orbitalenergies,occupancies,
-		              wxn,dxn,exn,
-		              nprocs,1);
+		NonIdempotentCPSCF(
+				natoms,
+				ovlgrads,fskeletons,
+				repulsion,indices,n2integrals,kscale,
+				coefficients,orbitalenergies,occupancies,
+				wxn,dxn,exn,
+				nprocs,1);
 		EigenMatrix hessian=EigenZero(3*natoms,3*natoms);
 		if (temperature>0)
-			hessian+=OccupancyNuclearGradientSCF(
+			hessian+=OccupancyNuclearCPSCF(
 					temperature,repulsion,indices,n2integrals,kscale,
 					ovlgrads,fskeletons,dxn,exn,natoms,
 					coefficients,occupancies,orbitalenergies,

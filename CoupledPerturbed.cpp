@@ -14,12 +14,12 @@
 #define __convergence_threshold__ 1.e-4
 #define __small_value__ 1.e-9
 
-void NonIdempotent(int natoms,
-                   EigenMatrix * ovlgrads,EigenMatrix * fskeletons,
-                   double * repulsion,short int * indices,long int n2integrals,double kscale,
-                   EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
-		   EigenMatrix * wxn,EigenMatrix * dxn,EigenVector * exn,
-		   const int nprocs,const bool output){
+void NonIdempotentCPSCF(int natoms,
+                        EigenMatrix * ovlgrads,EigenMatrix * fskeletons,
+                        double * repulsion,short int * indices,long int n2integrals,double kscale,
+                        EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
+                        EigenMatrix * wxn,EigenMatrix * dxn,EigenVector * exn,
+                        const int nprocs,const bool output){
 	if (output){
 		std::printf("Non-idempotent CPSCF ...\n");
 		std::printf("| Perturbation | # of iterations | Wall time |\n");
@@ -113,10 +113,10 @@ void NonIdempotent(int natoms,
 	}
 }
 
-EigenMatrix OccupancyNuclearGradientSCF(double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
-                                        EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * dxn,EigenVector * exn,int natoms,
-                                        EigenMatrix coefficients,EigenVector occupancies,EigenVector orbitalenergies,
-                                        const int nprocs,const bool output){
+EigenMatrix OccupancyNuclearCPSCF(double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
+                                  EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * dxn,EigenVector * exn,int natoms,
+                                  EigenMatrix coefficients,EigenVector occupancies,EigenVector orbitalenergies,
+                                  const int nprocs,const bool output){
 	if (output) std::printf("Calculating Fock matrix derivative with respect to occupation numbers ... ");
 	auto start=std::chrono::system_clock::now();
 	int nbasis=coefficients.cols();
@@ -225,7 +225,7 @@ EigenMatrix OccupancyNuclearGradientSCF(double temperature,double * repulsion,sh
 	*/
 
 	if (output){
-		std::printf("Occupation-number-gradient self-consistent-field ...\n");
+		std::printf("Occupation-gradient self-consistent-field ...\n");
 		std::printf("| Perturbation | # of iterations | Wall time |\n");
 	}
 	EigenMatrix nxs=EigenZero(3*natoms,nbasis);
@@ -243,7 +243,7 @@ EigenMatrix OccupancyNuclearGradientSCF(double temperature,double * repulsion,sh
 		}
 		int jiter=0;
 		for (jiter=0;R.norm()>__convergence_threshold__;jiter++){
-			assert("ONGSCF does not converge." && jiter<__cpscf_max_iter__);
+			assert("OG-CPSCF does not converge." && jiter<__cpscf_max_iter__);
 			double error2norm=114514;
 			F=Fs[0];
 			if (jiter>__diis_start_iter__)
