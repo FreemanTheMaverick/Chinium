@@ -47,20 +47,21 @@ void Gskeletons(const int natoms,double * atoms,const char * basisset,
  const auto & buf_vec=engine.results();
  auto shell2bf=obs.shell2bf();
  auto shell2atom=obs.shell2atom(libint2atoms);
+ int atomlist[]={114,514,1919,810};
  for (short int s1=0;s1<(short int)obs.size();s1++){
-  const short int atom1=shell2atom[s1];
+  atomlist[0]=shell2atom[s1];
   const short int bf1_first=shell2bf[s1];
   const short int n1=obs[s1].size();
   for (short int s2=0;s2<=s1;s2++){
-   const short int atom2=shell2atom[s2];
+   atomlist[1]=shell2atom[s2];
    const short int bf2_first=shell2bf[s2];
    const short int n2=obs[s2].size();
    for (short int s3=0;s3<=s1;s3++){
-    const short int atom3=shell2atom[s3];
+    atomlist[2]=shell2atom[s3];
     const short int bf3_first=shell2bf[s3];
     const short int n3=obs[s3].size();
     for (short int s4=0;s4<=std::max(s2,s3);s4++){
-     const short int atom4=shell2atom[s4];
+     atomlist[3]=shell2atom[s4];
      const short int bf4_first=shell2bf[s4];
      const short int n4=obs[s4].size();
      engine.compute(obs[s1],obs[s2],obs[s3],obs[s4]);
@@ -79,10 +80,23 @@ void Gskeletons(const int natoms,double * atoms,const char * basisset,
           const double ab_cd_deg=(bf1==bf3)?(bf2==bf4?1:2):2;
           const double abcd_deg=ab_deg*cd_deg*ab_cd_deg;
           double tmp=114514;
-          __Loop_Over_XYZ__(atom1,0)
-          __Loop_Over_XYZ__(atom2,1)
-          __Loop_Over_XYZ__(atom3,2)
-          __Loop_Over_XYZ__(atom4,3)
+          int xpert=1919810;
+	  for (int position=0;position<4;position++){
+           for (int t=0;t<3;t++){
+            tmp=abcd_deg*buf_vec[3*(position)+t][f1234];
+            xpert=3*(atomlist[position])+t;
+            if (gskeletons){
+             rawjskeletons[xpert](bf1,bf2)+=tmp*D(bf3,bf4);
+             rawjskeletons[xpert](bf3,bf4)+=tmp*D(bf1,bf2);
+             if (kscale>0){
+              rawkskeletons[xpert](bf1,bf3)+=tmp*D(bf2,bf4);
+              rawkskeletons[xpert](bf2,bf4)+=tmp*D(bf1,bf3);
+              rawkskeletons[xpert](bf1,bf4)+=tmp*D(bf2,bf3);
+              rawkskeletons[xpert](bf2,bf3)+=tmp*D(bf1,bf4);
+             }
+            }
+           }
+          }
          }
         }
        }
