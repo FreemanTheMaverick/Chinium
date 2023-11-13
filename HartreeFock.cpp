@@ -157,8 +157,8 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 	//PurifyDensity(overlap,D);
 
 #define __Loop_Over_OV__\
-	for (int o=0,i=0;o<nocc;o++)\
-		for (int v=nocc;v<nbasis;v++,i++)
+	for (int o=0,i=0;o<nbasis;o++)\
+		for (int v=0;v<nbasis;v++,i++)
 
 #define __Print_GX__\
 	EigenMatrix x(pX.rows(),__lbfgs_space_size__+1);\
@@ -279,7 +279,8 @@ double RKS(int nele,double temperature,double chemicalpotential,
 	double error2norm=-889464; // |e|^2=Sigma_ij(c_i*c_j*e_i*e_j)
 
 	// L-BFGS preparation
-	EigenVector pG(nocc*(nbasis-nocc)); // Packed form of gradient matrix and NR parametres.
+	EigenVector pG(nbasis*nbasis); // Packed form of gradient matrix and NR parametres.
+	//EigenVector pG(nocc*(nbasis-nocc)); // Packed form of gradient matrix and NR parametres.
 	EigenVector pX(nocc*(nbasis-nocc));pX.setZero();
 	EigenVector * pGs=new EigenVector[__lbfgs_space_size__+1];
 	EigenVector * pXs=new EigenVector[__lbfgs_space_size__+1];
@@ -361,7 +362,7 @@ double RKS(int nele,double temperature,double chemicalpotential,
 		if (std::isnormal(temperature)){
 			double entropy=0;
 			for (int i=0;i<nbasis;i++)
-				entropy+=std::log(std::pow(occupancies[i],occupancies[i]))+std::log(std::pow(1.-occupancies[i],1.-occupancies[i]));
+				entropy-=std::log(std::pow(occupancies[i],occupancies[i]))+std::log(std::pow(1.-occupancies[i],1.-occupancies[i]));
 			Es[0]-=temperature*2*entropy;
 			if (std::isnormal(temperature+chemicalpotential) || temperature+chemicalpotential==0)
 				Es[0]-=chemicalpotential*2*occupancies.sum();

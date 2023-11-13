@@ -14,6 +14,7 @@
 #include "DensityFunctional.h"
 #include "HFGradient.h"
 #include "CoupledPerturbed.h"
+#include "HFHessian.h"
 
 int main(int argc,char *argv[]){
 
@@ -156,56 +157,63 @@ int main(int argc,char *argv[]){
 	d1xs=d1ys=d1zs=vrxcs=vsxcs=nullptr;
 	double energy=114514;
 	if (method.compare("rhf")==0)
-		energy=RHF(ne,temperature,chemicalpotential,
-		           overlap,hcore,
-		           repulsion,indices,n2integrals,
-		           orbitalenergies,coefficients,
-		           occupancies,density,fock,
-		           nprocs,1);
+		energy=RHF(
+			ne,temperature,chemicalpotential,
+			overlap,hcore,
+			repulsion,indices,n2integrals,
+			orbitalenergies,coefficients,
+			occupancies,density,fock,
+			nprocs,1);
 	else
-		energy=RKS(ne,temperature,chemicalpotential,
-		           overlap,hcore,
-		           repulsion,indices,n2integrals,
-		           dfxid,dfcid,ngrids,ws,
-		           aos,
-		           ao1xs,ao1ys,ao1zs,
-		           ao2ls,
-		           d1xs,d1ys,d1zs,
-		           vrxcs,vsxcs,
-		           orbitalenergies,coefficients,
-		           occupancies,density,fock,
-		           nprocs,1);
+		energy=RKS(
+			ne,temperature,chemicalpotential,
+			overlap,hcore,
+			repulsion,indices,n2integrals,
+			dfxid,dfcid,ngrids,ws,
+			aos,
+			ao1xs,ao1ys,ao1zs,
+			ao2ls,
+			d1xs,d1ys,d1zs,
+			vrxcs,vsxcs,
+			orbitalenergies,coefficients,
+			occupancies,density,fock,
+			nprocs,1);
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
 	EigenMatrix * fskeletons=nullptr;
+	EigenMatrix W=EigenZero(nbasis,nbasis);
+	for (int i=0;i<nbasis;i++)
+		W+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose()*orbitalenergies[i];
+
 	if (derivative>=1){
 		for (int i=0;i<natoms*3;i++)
 			hcoregrads[i]=kntgrads[i]+nclgrads[i];
-		delete [] kntgrads;
-		delete [] nclgrads;
+		__Delete_Matrices__(kntgrads,3*natoms);
+		__Delete_Matrices__(nclgrads,3*natoms);
 		if (derivative>=2)
 			fskeletons=new EigenMatrix[3*natoms];
 		const EigenMatrix nrg=NRG(natoms,atoms,1);
 		EigenMatrix gele=EigenZero(natoms,3);
 		if (method.compare("rhf")==0)
-			gele=RHFG(natoms,atoms,basisset,
-			          ovlgrads,hcoregrads,fskeletons,
-			          coefficients,orbitalenergies,occupancies,
-			          1,1);
+			gele=RHFG(
+				natoms,atoms,basisset,
+				ovlgrads,hcoregrads,fskeletons,
+				coefficients,orbitalenergies,occupancies,
+				1,1);
 		else
-			gele=RKSG(natoms,atoms,basisset,
-			          ovlgrads,hcoregrads,fskeletons,
-			          kscale,ngrids,ws,
-			          aos,
-			          ao1xs,ao1ys,ao1zs,
-			          ao2xxs,ao2yys,ao2zzs,
-			          ao2xys,ao2xzs,ao2yzs,
-			          d1xs,d1ys,d1zs,
-			          vrxcs,vsxcs,
-			          coefficients,orbitalenergies,occupancies,
-			          1,1);
-		delete [] hcoregrads;
+			gele=RKSG(
+				natoms,atoms,basisset,
+				ovlgrads,hcoregrads,fskeletons,
+				kscale,ngrids,ws,
+				aos,
+				ao1xs,ao1ys,ao1zs,
+				ao2xxs,ao2yys,ao2zzs,
+				ao2xys,ao2xzs,ao2yzs,
+				d1xs,d1ys,d1zs,
+				vrxcs,vsxcs,
+				coefficients,orbitalenergies,occupancies,
+				1,1);
 		const EigenMatrix g=nrg+gele;
 		std::cout<<"Total gradient:"<<std::endl;
 		__Z_2_Name__
@@ -224,24 +232,34 @@ int main(int argc,char *argv[]){
 		EigenMatrix * wxn=new EigenMatrix[3*natoms];
 		EigenVector * exn=new EigenVector[3*natoms];
 		NonIdempotentCPSCF(
-				natoms,
-				ovlgrads,fskeletons,
-				repulsion,indices,n2integrals,kscale,
-				coefficients,orbitalenergies,occupancies,
-				wxn,dxn,exn,
-				nprocs,1);
-		EigenMatrix hessian=EigenZero(3*natoms,3*natoms);
+			natoms,
+			ovlgrads,fskeletons,
+			repulsion,indices,n2integrals,kscale,
+			coefficients,orbitalenergies,occupancies,
+			wxn,dxn,exn,
+			nprocs,1);
+		EigenMatrix hessian=NRH(natoms,atoms,1);
+		/*
+		hessian+=RKSH(
+			natoms,atoms,basisset,
+			density,dxn,
+			W,wxn,
+			ovlgrads,fskeletons,
+			kscale,
+			nprocs,1);
+		*/
 		if (temperature>0)
-			hessian+=OccupancyNuclearCPSCF(
-					temperature,repulsion,indices,n2integrals,kscale,
-					ovlgrads,fskeletons,dxn,exn,natoms,
-					coefficients,occupancies,orbitalenergies,
-					nprocs,1);
-
+			hessian+=FockOccupationGradientCPSCF(
+				temperature,repulsion,indices,n2integrals,kscale,
+				ovlgrads,fskeletons,dxn,exn,natoms,
+				coefficients,occupancies,orbitalenergies,
+				nprocs,1);
 
 		__Delete_Matrices__(dxn,3*natoms);
 		__Delete_Matrices__(wxn,3*natoms);
 		__Delete_Vectors__(exn,3*natoms);
+		//std::cout<<"Total hessian:"<<std::endl;
+		//std::cout<<hessian<<std::endl;
 	}
 
 	delete [] xs;

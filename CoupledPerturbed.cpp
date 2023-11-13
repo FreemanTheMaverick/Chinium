@@ -7,6 +7,7 @@
 #include "HartreeFock.h"
 #include "Optimization.h"
 #include "LinearAlgebra.h"
+#include <iostream>
 
 #define __diis_start_iter__ 2
 #define __diis_space_size__ 6
@@ -113,11 +114,12 @@ void NonIdempotentCPSCF(int natoms,
 	}
 }
 
-EigenMatrix OccupancyNuclearCPSCF(double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
-                                  EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * dxn,EigenVector * exn,int natoms,
-                                  EigenMatrix coefficients,EigenVector occupancies,EigenVector orbitalenergies,
-                                  const int nprocs,const bool output){
-	if (output) std::printf("Calculating Fock matrix derivative with respect to occupation numbers ... ");
+EigenMatrix FockOccupationGradientCPSCF(
+		double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
+		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * dxn,EigenVector * exn,int natoms,
+		EigenMatrix coefficients,EigenVector occupancies,EigenVector orbitalenergies,
+		const int nprocs,const bool output){
+	if (output) std::printf("Calculating Fock matrix derivative with respect to occupation numbers for Fock-matrix-based occupation-gradient CPSCF... ");
 	auto start=std::chrono::system_clock::now();
 	int nbasis=coefficients.cols();
 	short int * degs=indices+0*n2integrals;
@@ -225,39 +227,42 @@ EigenMatrix OccupancyNuclearCPSCF(double temperature,double * repulsion,short in
 	*/
 
 	if (output){
-		std::printf("Occupation-gradient self-consistent-field ...\n");
+		std::printf("Fock-matrix-based occupation-gradient CPSCF ...\n");
 		std::printf("| Perturbation | # of iterations | Wall time |\n");
 	}
 	EigenMatrix nxs=EigenZero(3*natoms,nbasis);
 	for (int ipert=0;ipert<3*natoms;ipert++){
 		auto pert_start=std::chrono::system_clock::now();
 		EigenMatrix fxn=fskeletons[ipert]+GMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs);
-		EigenMatrix F=fxn;
+		EigenMatrix Fx=fxn;
 		EigenMatrix csxc=coefficients.transpose()*ovlgrads[ipert]*coefficients;
 		EigenMatrix R=EigenZero(nbasis,nbasis);R(0)=114514;
-		EigenMatrix * Fs=new EigenMatrix[__diis_space_size__];
+		EigenMatrix * Fxs=new EigenMatrix[__diis_space_size__];
 		EigenMatrix * Rs=new EigenMatrix[__diis_space_size__];
 		for (int i=0;i<__diis_space_size__;i++){
-			Fs[i]=F;
+			Fxs[i]=Fx;
 			Rs[i]=R;
 		}
 		int jiter=0;
 		for (jiter=0;R.norm()>__convergence_threshold__;jiter++){
-			assert("OG-CPSCF does not converge." && jiter<__cpscf_max_iter__);
+			assert("FOG-CPSCF does not converge." && jiter<__cpscf_max_iter__);
 			double error2norm=114514;
-			F=Fs[0];
+			Fx=Fxs[0];
+			EigenMatrix dx=dxn[ipert];
 			if (jiter>__diis_start_iter__)
-				F=DIIS(Fs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
+				Fx=DIIS(Fxs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
 			for (int kbasis=0;kbasis<nbasis;kbasis++){
-				const double exs=coefficients.col(kbasis).transpose()*F*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
+				const double exs=coefficients.col(kbasis).transpose()*Fx*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
 				nxs(ipert,kbasis)=occupancies[kbasis]*(occupancies[kbasis]-1.)/temperature*exs;
+				dx+=coefficients.col(kbasis)*coefficients.col(kbasis).transpose()*nxs(ipert,kbasis);
 			}
-			F=fxn;
+			Fx=fxn;
 			for (int kbasis=0;kbasis<nbasis;kbasis++)
-				F+=fn[kbasis]*nxs(ipert,kbasis);
-			R=F-Fs[0];
-			PushMatrixQueue(F,Fs,__diis_space_size__);
+				Fx+=fn[kbasis]*nxs(ipert,kbasis);
+			R=Fx-Fxs[0];
+			PushMatrixQueue(Fx,Fxs,__diis_space_size__);
 			PushMatrixQueue(R,Rs,__diis_space_size__);
+			//std::cout<<(Fx*D*overlap+F*dx*overlap+F*D*ovlgrads[ipert]-overlap*D*Fx-overlap*dx*F-ovlgrads[ipert]*D*F).norm()<<std::endl;
 		}
 		const std::chrono::duration<double> duration=std::chrono::system_clock::now()-pert_start;
 		if (output) std::printf("|    %6d    |     %7d     | %9.6f |\n",ipert,jiter,duration.count());
@@ -268,8 +273,63 @@ EigenMatrix OccupancyNuclearCPSCF(double temperature,double * repulsion,short in
 		for (int jpert=0;jpert<3*natoms;jpert++)
 			for (int kbasis=0;kbasis<nbasis;kbasis++)
 				hessian(ipert,jpert)+=exn[ipert](kbasis)*nxs(jpert,kbasis);
-	return hessian;
+	//std::cout<<hessian<<std::endl;
+	return 0.5*(hessian+hessian.transpose());
 }
 
+
+EigenMatrix DensityOccupationGradientCPSCF(
+		double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
+		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * dxn,EigenVector * exn,int natoms,
+		EigenMatrix coefficients,EigenVector occupancies,EigenVector orbitalenergies,
+		const int nprocs,const bool output){
+	if (output){
+		std::printf("Density-matrix-based occupation-gradient CPSCF ...\n");
+		std::printf("| Perturbation | # of iterations | Wall time |\n");
+	}
+	int nbasis=coefficients.cols();
+	EigenMatrix nxs=EigenZero(3*natoms,nbasis);
+	for (int ipert=0;ipert<3*natoms;ipert++){
+		auto pert_start=std::chrono::system_clock::now();
+		EigenMatrix fxn=fskeletons[ipert]+GMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs);
+		EigenMatrix Fx=fxn;
+		EigenMatrix csxc=coefficients.transpose()*ovlgrads[ipert]*coefficients;
+		EigenMatrix R=EigenZero(nbasis,nbasis);R(0)=114514;
+		EigenMatrix * Fxs=new EigenMatrix[__diis_space_size__];
+		EigenMatrix * Rs=new EigenMatrix[__diis_space_size__];
+		for (int i=0;i<__diis_space_size__;i++){
+			Fxs[i]=Fx;
+			Rs[i]=R;
+		}
+		int jiter=0;
+		for (jiter=0;R.norm()>__convergence_threshold__;jiter++){
+			assert("DOG-CPSCF does not converge." && jiter<__cpscf_max_iter__);
+			double error2norm=114514;
+			Fx=Fxs[0];
+			if (jiter>__diis_start_iter__)
+				Fx=DIIS(Fxs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
+			EigenMatrix dx=dxn[ipert];
+			for (int kbasis=0;kbasis<nbasis;kbasis++){ // Fock 2 density
+				const double exs=coefficients.col(kbasis).transpose()*Fx*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
+				nxs(ipert,kbasis)=occupancies[kbasis]*(occupancies[kbasis]-1.)/temperature*exs;
+				dx+=coefficients.col(kbasis)*coefficients.col(kbasis).transpose()*nxs(ipert,kbasis);
+			}
+			Fx=fskeletons[ipert]+GMatrix(repulsion,indices,n2integrals,dx,kscale,nprocs); // Density 2 Fock
+			R=Fx-Fxs[0];
+			PushMatrixQueue(Fx,Fxs,__diis_space_size__);
+			PushMatrixQueue(R,Rs,__diis_space_size__);
+			//std::cout<<(Fx*D*overlap+F*dx*overlap+F*D*ovlgrads[ipert]-overlap*D*Fx-overlap*dx*F-ovlgrads[ipert]*D*F).norm()<<std::endl;
+		}
+		const std::chrono::duration<double> duration=std::chrono::system_clock::now()-pert_start;
+		if (output) std::printf("|    %6d    |     %7d     | %9.6f |\n",ipert,jiter,duration.count());
+	}
+	EigenMatrix hessian=EigenZero(3*natoms,3*natoms);
+	for (int ipert=0;ipert<3*natoms;ipert++)
+		for (int jpert=0;jpert<3*natoms;jpert++)
+			for (int kbasis=0;kbasis<nbasis;kbasis++)
+				hessian(ipert,jpert)+=exn[ipert](kbasis)*nxs(jpert,kbasis);
+	//std::cout<<hessian<<std::endl;
+	return 0.5*(hessian+hessian.transpose());
+}
 
 

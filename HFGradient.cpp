@@ -81,10 +81,10 @@ void Gskeletons(const int natoms,double * atoms,const char * basisset,
           const double abcd_deg=ab_deg*cd_deg*ab_cd_deg;
           double tmp=114514;
           int xpert=1919810;
-	  for (int position=0;position<4;position++){
-           for (int t=0;t<3;t++){
-            tmp=abcd_deg*buf_vec[3*(position)+t][f1234];
-            xpert=3*(atomlist[position])+t;
+	  for (int p=0,pt=0;p<4;p++){
+           for (int t=0;t<3;t++,pt++){
+            tmp=abcd_deg*buf_vec[pt][f1234];
+            xpert=3*(atomlist[p])+t;
             if (gskeletons){
              rawjskeletons[xpert](bf1,bf2)+=tmp*D(bf3,bf4);
              rawjskeletons[xpert](bf3,bf4)+=tmp*D(bf1,bf2);
