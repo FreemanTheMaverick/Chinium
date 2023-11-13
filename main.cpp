@@ -239,16 +239,14 @@ int main(int argc,char *argv[]){
 			wxn,dxn,exn,
 			nprocs,1);
 		EigenMatrix hessian=NRH(natoms,atoms,1);
-		/*
-		hessian+=RKSH(
+/*		hessian+=RKSH(
 			natoms,atoms,basisset,
 			density,dxn,
 			W,wxn,
 			ovlgrads,fskeletons,
 			kscale,
 			nprocs,1);
-		*/
-		if (temperature>0)
+*/		if (temperature>0)
 			hessian+=FockOccupationGradientCPSCF(
 				temperature,repulsion,indices,n2integrals,kscale,
 				ovlgrads,fskeletons,dxn,exn,natoms,

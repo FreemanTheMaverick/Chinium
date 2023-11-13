@@ -84,7 +84,7 @@ void NonIdempotentCPSCF(int natoms,
 					dxn[ipert]+=(occupancies[j]-occupancies[i])*U(i,j)*Mij;
 				}
 
-			B=B1-coefficients.transpose()*GMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs)*coefficients; // Forming a new B matrix.
+			B=B1-coefficients.transpose()*GhfMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs)*coefficients; // Forming a new B matrix.
 			for (int i=0;i<nbasis;i++)
 				for (int j=0;j<nbasis;j++){
 					R(i,j)=B(i,j)-(orbitalenergies[i]-orbitalenergies[j])*U(i,j);
@@ -223,7 +223,7 @@ EigenMatrix FockOccupationGradientCPSCF(
 		dd+=occupancies[kbasis]*coefficients.col(kbasis)*coefficients.col(kbasis).transpose();
 		ff+=fn[kbasis]*occupancies[kbasis];
 	}
-	std::printf("%f\n",(ff-GMatrix(repulsion,indices,n2integrals,dd,kscale,nprocs)).norm());
+	std::printf("%f\n",(ff-GhfMatrix(repulsion,indices,n2integrals,dd,kscale,nprocs)).norm());
 	*/
 
 	if (output){
@@ -233,7 +233,7 @@ EigenMatrix FockOccupationGradientCPSCF(
 	EigenMatrix nxs=EigenZero(3*natoms,nbasis);
 	for (int ipert=0;ipert<3*natoms;ipert++){
 		auto pert_start=std::chrono::system_clock::now();
-		EigenMatrix fxn=fskeletons[ipert]+GMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs);
+		EigenMatrix fxn=fskeletons[ipert]+GhfMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs);
 		EigenMatrix Fx=fxn;
 		EigenMatrix csxc=coefficients.transpose()*ovlgrads[ipert]*coefficients;
 		EigenMatrix R=EigenZero(nbasis,nbasis);R(0)=114514;
@@ -291,7 +291,7 @@ EigenMatrix DensityOccupationGradientCPSCF(
 	EigenMatrix nxs=EigenZero(3*natoms,nbasis);
 	for (int ipert=0;ipert<3*natoms;ipert++){
 		auto pert_start=std::chrono::system_clock::now();
-		EigenMatrix fxn=fskeletons[ipert]+GMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs);
+		EigenMatrix fxn=fskeletons[ipert]+GhfMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs);
 		EigenMatrix Fx=fxn;
 		EigenMatrix csxc=coefficients.transpose()*ovlgrads[ipert]*coefficients;
 		EigenMatrix R=EigenZero(nbasis,nbasis);R(0)=114514;
@@ -314,7 +314,7 @@ EigenMatrix DensityOccupationGradientCPSCF(
 				nxs(ipert,kbasis)=occupancies[kbasis]*(occupancies[kbasis]-1.)/temperature*exs;
 				dx+=coefficients.col(kbasis)*coefficients.col(kbasis).transpose()*nxs(ipert,kbasis);
 			}
-			Fx=fskeletons[ipert]+GMatrix(repulsion,indices,n2integrals,dx,kscale,nprocs); // Density 2 Fock
+			Fx=fskeletons[ipert]+GhfMatrix(repulsion,indices,n2integrals,dx,kscale,nprocs); // Density 2 Fock
 			R=Fx-Fxs[0];
 			PushMatrixQueue(Fx,Fxs,__diis_space_size__);
 			PushMatrixQueue(R,Rs,__diis_space_size__);

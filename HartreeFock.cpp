@@ -34,7 +34,7 @@ void PurifyDensity(EigenMatrix overlap,EigenMatrix & D){
 	assert("Density matrix purification failed. Please change to another initial guess." && error.norm()<__density_purification_threshold__);
 }
 
-EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,EigenMatrix D,double kscale,const int nprocs){
+EigenMatrix GhfMatrix(double * repulsion,short int * indices,long int n2integrals,EigenMatrix D,double kscale,const int nprocs){
 	int nbasis=D.cols();
 	short int * degs=indices+0*n2integrals;
 	short int * bf1s=indices+1*n2integrals;
@@ -108,33 +108,65 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 	return g;
 }
 
+EigenMatrix GxcMatrix(
+		EigenMatrix D,
+		int dfxid,int dfcid,int ngrids,double * ws,
+		double * aos,
+		double * ao1xs,double * ao1ys,double * ao1zs,
+		double * ao2ls,
+		double * ds,double * d2s,double * ts,double * cgs,
+		double *& d1xs,double *& d1ys,double *& d1zs,
+		double *& excs,double *& vlxcs,double *& vtxcs,
+		double *& vrxcs,double *& vsxcs,
+		double *& ecs,double *& vlcs,double *& vtcs,
+		double *& vrcs,double *& vscs,
+		double & Exc,
+		const int nprocs){
+	int nbasis=D.rows();
+	if (!dfxid) return EigenZero(nbasis,nbasis);
+	GetDensity(
+			aos,
+			ao1xs,ao1ys,ao1zs,
+			ao2ls,
+			ngrids,2*D,
+			ds,
+			d1xs,d1ys,d1zs,cgs,
+			d2s,ts);
+	getEVxc(dfxid,ds,cgs,d2s,ts,ngrids,excs,vrxcs,vsxcs,vlxcs,vtxcs);
+	if (dfcid && dfxid!=dfcid){
+		getEVxc(dfcid,ds,cgs,d2s,ts,ngrids,ecs,vrcs,vscs,vlcs,vtcs);
+		VectorAddition(excs,ecs,ngrids);
+		VectorAddition(vrxcs,vrcs,ngrids);
+		VectorAddition(vsxcs,vscs,ngrids);
+		VectorAddition(vlxcs,vlcs,ngrids);
+		VectorAddition(vtxcs,vtcs,ngrids);
+	}
+	Exc=SumUp(excs,ws,ngrids);
+	return FxcMatrix(
+			aos,vrxcs,
+			d1xs,d1ys,d1zs,
+			ao1xs,ao1ys,ao1zs,vsxcs,
+			ao2ls,vlxcs,vtxcs,
+			ws,ngrids,nbasis);
+}
+
 #define __Density_2_Fock__\
-	F=hcore+GMatrix(repulsion,indices,n2integrals,D,kscale,nprocs); /* Fock matrix. */\
-	if (dfxid){\
-		GetDensity(aos,\
-		           ao1xs,ao1ys,ao1zs,\
-		           ao2ls,\
-		           ngrids,2*D,\
-		           ds,\
-		           d1xs,d1ys,d1zs,cgs,\
-		           d2s,ts);\
-		getEVxc(dfxid,ds,cgs,d2s,ts,ngrids,excs,vrxcs,vsxcs,vlxcs,vtxcs);\
-		if (dfcid && dfxid!=dfcid){\
-			getEVxc(dfcid,ds,cgs,d2s,ts,ngrids,ecs,vrcs,vscs,vlcs,vtcs);\
-			VectorAddition(excs,ecs,ngrids);\
-			VectorAddition(vrxcs,vrcs,ngrids);\
-			VectorAddition(vsxcs,vscs,ngrids);\
-			VectorAddition(vlxcs,vlcs,ngrids);\
-			VectorAddition(vtxcs,vtcs,ngrids);\
-		}\
-		Exc=SumUp(excs,gridweights,ngrids);\
-		Fxc=FxcMatrix(aos,vrxcs,\
-                              d1xs,d1ys,d1zs,\
-                              ao1xs,ao1ys,ao1zs,vsxcs,\
-		              ao2ls,vlxcs,vtxcs,\
-                              gridweights,ngrids,nbasis);\
-		F+=Fxc;\
-	}\
+	Ghf=GhfMatrix(repulsion,indices,n2integrals,D,kscale,nprocs);\
+	Gxc=GxcMatrix(\
+		D,\
+		dfxid,dfcid,ngrids,ws,\
+		aos,\
+		ao1xs,ao1ys,ao1zs,\
+		ao2ls,\
+		ds,d2s,ts,cgs,\
+		d1xs,d1ys,d1zs,\
+		excs,vlxcs,vtxcs,\
+		vrxcs,vsxcs,\
+		ecs,vlcs,vtcs,\
+		vrcs,vscs,\
+		Exc,\
+		nprocs);\
+	F=hcore+Ghf+Gxc;\
 	G=4*(overlap*D*F-F*D*overlap); // Electronic gradient of energy with respect to nonredundant orbital rotational parameters. [F(D),D] instead of [F,D(F)].
 
 #define __Fock_2_Density__\
@@ -177,7 +209,7 @@ EigenMatrix GMatrix(double * repulsion,short int * indices,long int n2integrals,
 double RKS(int nele,double temperature,double chemicalpotential,
            EigenMatrix overlap,EigenMatrix hcore,
            double * repulsion,short int * indices,long int n2integrals,
-           int dfxid,int dfcid,int ngrids,double * gridweights,
+           int dfxid,int dfcid,int ngrids,double * ws,
            double * aos,
            double * ao1xs,double * ao1ys,double * ao1zs,
            double * ao2ls,
@@ -216,7 +248,8 @@ double RKS(int nele,double temperature,double chemicalpotential,
 	const EigenMatrix X=U*sinversesqrt*U.transpose();
 
 	EigenMatrix G=EigenZero(nbasis,nbasis);
-	EigenMatrix Fxc=EigenZero(nbasis,nbasis);
+	EigenMatrix Ghf=EigenZero(nbasis,nbasis);
+	EigenMatrix Gxc=EigenZero(nbasis,nbasis);
 
 	// KS preparation
 	double Exc=0;
@@ -244,7 +277,7 @@ double RKS(int nele,double temperature,double chemicalpotential,
 		ts=new double[ngrids]();
 		cgs=new double[ngrids]();
 		char rubbish[64];
-		if(dfcid){
+		if (dfcid && dfxid!=dfcid){
 			XCInfo(dfcid,rubbish,ckind,cfamily,kscale);
 			ecs=new double[ngrids]();
 			vrcs=new double[ngrids]();
@@ -356,7 +389,7 @@ double RKS(int nele,double temperature,double chemicalpotential,
 		if (update=='d'){__Fock_2_Density__} // Some techniques update Fock matrix. To complete the iteration, we obtain density matrix from it.
 
 		// Iteration information output
-		const EigenMatrix Iamgoingtobeanobellaureate=D*(hcore+F-Fxc); // Intermediate matrix.
+		const EigenMatrix Iamgoingtobeanobellaureate=D*(hcore+F-Gxc); // Intermediate matrix.
 		PushDoubleQueue(Iamgoingtobeanobellaureate.trace()+Exc,Es,__diis_space_size__); // Updating energy.
 
 		if (std::isnormal(temperature)){
@@ -367,7 +400,6 @@ double RKS(int nele,double temperature,double chemicalpotential,
 			if (std::isnormal(temperature+chemicalpotential) || temperature+chemicalpotential==0)
 				Es[0]-=chemicalpotential*2*occupancies.sum();
 		}
-
 		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
 		if (output) std::printf("   %17.10f   | %13.6f | %9.6f |\n",Es[0],pG.norm(),duration_wall.count());
 		iiteration++;
