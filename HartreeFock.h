@@ -9,12 +9,7 @@ EigenMatrix GxcMatrix(
 		double * ao1xs,double * ao1ys,double * ao1zs,
 		double * ao2ls,
 		double * ds,double * d2s,double * ts,double * cgs,
-		double *& d1xs,double *& d1ys,double *& d1zs,
-		double *& excs,double *& vlxcs,double *& vtxcs,
-		double *& vrxcs,double *& vsxcs,
-		double *& ecs,double *& vlcs,double *& vtcs,
-		double *& vrcs,double *& vscs,
-		double & Exc,
+		double * Exc_ptr,
 		const int nprocs);
 
 double RKS(int nele,double temperature,double chemicalpotential,
@@ -24,8 +19,6 @@ double RKS(int nele,double temperature,double chemicalpotential,
            double * aos,
            double * ao1xs,double * ao1ys,double * ao1zs,
            double * ao2ls,
-           double *& d1xs,double *& d1ys,double *& d1zs,
-           double *& vrxcs,double *& vsxcs,
            EigenVector & orbitalenergies,EigenMatrix & coefficients,
            EigenVector & occupancies,EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output);

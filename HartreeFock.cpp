@@ -114,40 +114,21 @@ EigenMatrix GxcMatrix(
 		double * aos,
 		double * ao1xs,double * ao1ys,double * ao1zs,
 		double * ao2ls,
-		double * ds,double * d2s,double * ts,double * cgs,
-		double *& d1xs,double *& d1ys,double *& d1zs,
-		double *& excs,double *& vlxcs,double *& vtxcs,
-		double *& vrxcs,double *& vsxcs,
-		double *& ecs,double *& vlcs,double *& vtcs,
-		double *& vrcs,double *& vscs,
 		double & Exc,
 		const int nprocs){
 	int nbasis=D.rows();
 	if (!dfxid) return EigenZero(nbasis,nbasis);
-	GetDensity(
-			aos,
-			ao1xs,ao1ys,ao1zs,
-			ao2ls,
-			ngrids,2*D,
-			ds,
-			d1xs,d1ys,d1zs,cgs,
-			d2s,ts);
-	getEVxc(dfxid,ds,cgs,d2s,ts,ngrids,excs,vrxcs,vsxcs,vlxcs,vtxcs);
-	if (dfcid && dfxid!=dfcid){
-		getEVxc(dfcid,ds,cgs,d2s,ts,ngrids,ecs,vrcs,vscs,vlcs,vtcs);
-		VectorAddition(excs,ecs,ngrids);
-		VectorAddition(vrxcs,vrcs,ngrids);
-		VectorAddition(vsxcs,vscs,ngrids);
-		VectorAddition(vlxcs,vlcs,ngrids);
-		VectorAddition(vtxcs,vtcs,ngrids);
-	}
+
+	__Begin_KS__(aos,ao1xs,ao1ys,ao1zs,ao2ls,1)
 	Exc=SumUp(excs,ws,ngrids);
-	return FxcMatrix(
+	EigenMatrix fxc=FxcMatrix(
 			aos,vrxcs,
 			d1xs,d1ys,d1zs,
 			ao1xs,ao1ys,ao1zs,vsxcs,
 			ao2ls,vlxcs,vtxcs,
 			ws,ngrids,nbasis);
+	__Finalize_KS__
+	return fxc;
 }
 
 #define __Density_2_Fock__\
@@ -158,12 +139,6 @@ EigenMatrix GxcMatrix(
 		aos,\
 		ao1xs,ao1ys,ao1zs,\
 		ao2ls,\
-		ds,d2s,ts,cgs,\
-		d1xs,d1ys,d1zs,\
-		excs,vlxcs,vtxcs,\
-		vrxcs,vsxcs,\
-		ecs,vlcs,vtcs,\
-		vrcs,vscs,\
 		Exc,\
 		nprocs);\
 	F=hcore+Ghf+Gxc;\
@@ -213,8 +188,6 @@ double RKS(int nele,double temperature,double chemicalpotential,
            double * aos,
            double * ao1xs,double * ao1ys,double * ao1zs,
            double * ao2ls,
-           double *& d1xs,double *& d1ys,double *& d1zs,
-           double *& vrxcs,double *& vsxcs,
            EigenVector & orbitalenergies,EigenMatrix & coefficients,
            EigenVector & occupancies,EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output){
@@ -253,45 +226,11 @@ double RKS(int nele,double temperature,double chemicalpotential,
 
 	// KS preparation
 	double Exc=0;
-	double * ds=nullptr;
-	double * d2s=nullptr;
-	double * ts=nullptr;
-	double * cgs=nullptr;
-	double * excs=nullptr;
-	double * vlxcs=nullptr;
-	double * vtxcs=nullptr;
-	double * ecs=nullptr;
-	double * vrcs=nullptr;
-	double * vscs=nullptr;
-	double * vlcs=nullptr;
-	double * vtcs=nullptr;
-	int xkind,ckind,xfamily,cfamily;
-	xkind=ckind=xfamily=cfamily=114514;
+	char xname[64];
+	int xkind=1919;
+	int xfamily=810;
 	double kscale=1;
-	if (dfxid){
-		ds=new double[ngrids]();
-		d1xs=new double[ngrids]();
-		d1ys=new double[ngrids]();
-		d1zs=new double[ngrids]();
-		d2s=new double[ngrids]();
-		ts=new double[ngrids]();
-		cgs=new double[ngrids]();
-		char rubbish[64];
-		if (dfcid && dfxid!=dfcid){
-			XCInfo(dfcid,rubbish,ckind,cfamily,kscale);
-			ecs=new double[ngrids]();
-			vrcs=new double[ngrids]();
-			vscs=new double[ngrids]();
-			vlcs=new double[ngrids]();
-			vtcs=new double[ngrids]();
-		}
-		XCInfo(dfxid,rubbish,xkind,xfamily,kscale);
-		excs=new double[ngrids]();
-		vrxcs=new double[ngrids]();
-		vsxcs=new double[ngrids]();
-		vlxcs=new double[ngrids]();
-		vtxcs=new double[ngrids]();
-	}
+	XCInfo(dfxid,xname,xkind,xfamily,kscale);
 
 	// Initial guess
 	if (D.rows()){__Density_2_Fock__}
@@ -416,18 +355,6 @@ double RKS(int nele,double temperature,double chemicalpotential,
 		std::cout<<"Total number of electrons ... "<<occupancies.sum()*2<<std::endl;
 	}
 
-	if (ds) delete [] ds;
-	if (d2s) delete [] d2s;
-	if (ts) delete [] ts;
-	if (cgs) delete [] cgs;
-	if (ecs) delete [] ecs;
-	if (vrcs) delete [] vrcs;
-	if (vscs) delete [] vscs;
-	if (vlxcs) delete [] vlxcs;
-	if (vlcs) delete [] vlcs;
-	if (vtxcs) delete [] vtxcs;
-	if (vtcs) delete [] vtcs;
-
 	for (int i=0;i<__diis_space_size__;i++){
 		Fs[i].resize(0,0);
 		Gs[i].resize(0,0);
@@ -452,7 +379,6 @@ double RHF(int nele,double temperature,double chemicalpotential,
            EigenVector & orbitalenergies,EigenMatrix & coefficients,
            EigenVector & occupancies,EigenMatrix & D,EigenMatrix & F,
            const int nprocs,const bool output){
-	double * dummy=nullptr;
 	return RKS(nele,temperature,chemicalpotential,
 	           overlap,hcore,
                    repulsion,indices,n2integrals,
@@ -460,8 +386,6 @@ double RHF(int nele,double temperature,double chemicalpotential,
 	           nullptr,
 	           nullptr,nullptr,nullptr,
 	           nullptr,
-	           dummy,dummy,dummy,
-	           dummy,dummy,
                    orbitalenergies,coefficients,
 	           occupancies,D,F,
                    nprocs,output);

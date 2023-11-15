@@ -7,6 +7,8 @@
 #include <iomanip>
 #include <omp.h>
 #include "Aliases.h"
+#include "GridIntegrals.h"
+#include "DensityFunctional.h"
 
 #define __Loop_Over_XYZ__(iatom,position)\
 	for (int t=0;t<3;t++){\
@@ -21,21 +23,13 @@
 		}\
 	}
 
-
-void Gskeletons(const int natoms,double * atoms,const char * basisset,
+void GhfSkeletons(const int natoms,double * atoms,const char * basisset,
 		EigenMatrix D,
-                double kscale,int ngrids,double * ws,
-                double * aos,
-                double * ao1xs,double * ao1ys,double * ao1zs,
-                double * ao2xxs,double * ao2yys,double * ao2zzs,
-                double * ao2xys,double * ao2xzs,double * ao2yzs,
-                double * d1xs,double * d1ys,double * d1zs,
-                double * vrxcs,double * vsxcs,
-                EigenMatrix * gskeletons){
+                double kscale,
+                EigenMatrix * ghfskeletons){
  __Basis_From_Atoms__
  __nBasis_From_OBS__
 
- // Hartree-Fock contributions
  EigenMatrix * rawjskeletons=new EigenMatrix[3*natoms];
  EigenMatrix * rawkskeletons=new EigenMatrix[3*natoms];
  for (int it=0;it<3*natoms;it++){
@@ -85,15 +79,13 @@ void Gskeletons(const int natoms,double * atoms,const char * basisset,
            for (int t=0;t<3;t++,pt++){
             tmp=abcd_deg*buf_vec[pt][f1234];
             xpert=3*(atomlist[p])+t;
-            if (gskeletons){
-             rawjskeletons[xpert](bf1,bf2)+=tmp*D(bf3,bf4);
-             rawjskeletons[xpert](bf3,bf4)+=tmp*D(bf1,bf2);
-             if (kscale>0){
-              rawkskeletons[xpert](bf1,bf3)+=tmp*D(bf2,bf4);
-              rawkskeletons[xpert](bf2,bf4)+=tmp*D(bf1,bf3);
-              rawkskeletons[xpert](bf1,bf4)+=tmp*D(bf2,bf3);
-              rawkskeletons[xpert](bf2,bf3)+=tmp*D(bf1,bf4);
-             }
+            rawjskeletons[xpert](bf1,bf2)+=tmp*D(bf3,bf4);
+            rawjskeletons[xpert](bf3,bf4)+=tmp*D(bf1,bf2);
+            if (kscale>0){
+             rawkskeletons[xpert](bf1,bf3)+=tmp*D(bf2,bf4);
+             rawkskeletons[xpert](bf2,bf4)+=tmp*D(bf1,bf3);
+             rawkskeletons[xpert](bf1,bf4)+=tmp*D(bf2,bf3);
+             rawkskeletons[xpert](bf2,bf3)+=tmp*D(bf1,bf4);
             }
            }
           }
@@ -110,14 +102,29 @@ void Gskeletons(const int natoms,double * atoms,const char * basisset,
  for (int it=0;it<3*natoms;it++){
   const EigenMatrix jskeleton=0.5*(rawjskeletons[it]+rawjskeletons[it].transpose());
   const EigenMatrix kskeleton=0.25*(rawkskeletons[it]+rawkskeletons[it].transpose());
-  gskeletons[it]=jskeleton-0.5*kscale*kskeleton;
+  ghfskeletons[it]+=jskeleton-0.5*kscale*kskeleton;
   rawjskeletons[it].resize(0,0);
   rawkskeletons[it].resize(0,0);
  }
  delete [] rawjskeletons;
  delete [] rawkskeletons;
+}
 
- // Exchange-correlation functional contributions
+void GxcSkeletons(const int natoms,double * atoms,const char * basisset,
+		EigenMatrix D,
+                int dfxid,int dfcid,int ngrids,double * ws,
+                double * aos,
+                double * ao1xs,double * ao1ys,double * ao1zs,
+                double * ao2xxs,double * ao2yys,double * ao2zzs,
+                double * ao2xys,double * ao2xzs,double * ao2yzs,
+                EigenMatrix * gxcskeletons){
+ __Basis_From_Atoms__
+ __nBasis_From_OBS__
+ if (!aos) return;
+ __Begin_KS__(aos,ao1xs,ao1ys,ao1zs,0,0)
+
+ auto shell2bf=obs.shell2bf();
+ auto shell2atom=obs.shell2atom(libint2atoms);
  for (short int s1=0;s1<(short int)obs.size() && aos && ao1xs;s1++){
   const short int atom1=shell2atom[s1];
   const short int bf1_first=shell2bf[s1];
@@ -162,33 +169,33 @@ void Gskeletons(const int natoms,double * atoms,const char * basisset,
      double tmp=114514;
      for (long int kgrid=0;kgrid<ngrids;kgrid++){
       tmp=-4*ws[kgrid]*vrxcs[kgrid];
-      gskeletons[3*atom1+0](bf1,bf2)+=tmp*thisao1xs[kgrid]*thataos[kgrid];
-      gskeletons[3*atom1+1](bf1,bf2)+=tmp*thisao1ys[kgrid]*thataos[kgrid];
-      gskeletons[3*atom1+2](bf1,bf2)+=tmp*thisao1zs[kgrid]*thataos[kgrid];
+      gxcskeletons[3*atom1+0](bf1,bf2)+=tmp*thisao1xs[kgrid]*thataos[kgrid];
+      gxcskeletons[3*atom1+1](bf1,bf2)+=tmp*thisao1ys[kgrid]*thataos[kgrid];
+      gxcskeletons[3*atom1+2](bf1,bf2)+=tmp*thisao1zs[kgrid]*thataos[kgrid];
       if (bf2!=bf1){
-       gskeletons[3*atom2+0](bf2,bf1)+=tmp*thatao1xs[kgrid]*thisaos[kgrid];
-       gskeletons[3*atom2+1](bf2,bf1)+=tmp*thatao1ys[kgrid]*thisaos[kgrid];
-       gskeletons[3*atom2+2](bf2,bf1)+=tmp*thatao1zs[kgrid]*thisaos[kgrid];
+       gxcskeletons[3*atom2+0](bf2,bf1)+=tmp*thatao1xs[kgrid]*thisaos[kgrid];
+       gxcskeletons[3*atom2+1](bf2,bf1)+=tmp*thatao1ys[kgrid]*thisaos[kgrid];
+       gxcskeletons[3*atom2+2](bf2,bf1)+=tmp*thatao1zs[kgrid]*thisaos[kgrid];
       }
       if (ao2xxs){
        tmp=-8*ws[kgrid]*vsxcs[kgrid];
-       gskeletons[3*atom1+0](bf1,bf2)+=tmp*(d1xs[kgrid]*(thisao2xxs[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1xs[kgrid])
+       gxcskeletons[3*atom1+0](bf1,bf2)+=tmp*(d1xs[kgrid]*(thisao2xxs[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1xs[kgrid])
                                            +d1ys[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1xs[kgrid])
                                            +d1zs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1xs[kgrid]));
-       gskeletons[3*atom1+1](bf1,bf2)+=tmp*(d1xs[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1ys[kgrid])
+       gxcskeletons[3*atom1+1](bf1,bf2)+=tmp*(d1xs[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1ys[kgrid])
                                            +d1ys[kgrid]*(thisao2yys[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1ys[kgrid])
                                            +d1zs[kgrid]*(thisao2yzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1ys[kgrid]));
-       gskeletons[3*atom1+2](bf1,bf2)+=tmp*(d1xs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1zs[kgrid])
+       gxcskeletons[3*atom1+2](bf1,bf2)+=tmp*(d1xs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1zs[kgrid])
                                            +d1ys[kgrid]*(thisao2yzs[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1zs[kgrid])
                                            +d1zs[kgrid]*(thisao2zzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1zs[kgrid]));
        if (bf2!=bf1){
-        gskeletons[3*atom2+0](bf2,bf1)+=tmp*(d1xs[kgrid]*(thatao2xxs[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1xs[kgrid])
+        gxcskeletons[3*atom2+0](bf2,bf1)+=tmp*(d1xs[kgrid]*(thatao2xxs[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1xs[kgrid])
                                             +d1ys[kgrid]*(thatao2xys[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1xs[kgrid])
                                             +d1zs[kgrid]*(thatao2xzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1xs[kgrid]));
-        gskeletons[3*atom2+1](bf2,bf1)+=tmp*(d1xs[kgrid]*(thatao2xys[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1ys[kgrid])
+        gxcskeletons[3*atom2+1](bf2,bf1)+=tmp*(d1xs[kgrid]*(thatao2xys[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1ys[kgrid])
                                             +d1ys[kgrid]*(thatao2yys[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1ys[kgrid])
                                             +d1zs[kgrid]*(thatao2yzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1ys[kgrid]));
-        gskeletons[3*atom2+2](bf2,bf1)+=tmp*(d1xs[kgrid]*(thatao2xzs[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1zs[kgrid])
+        gxcskeletons[3*atom2+2](bf2,bf1)+=tmp*(d1xs[kgrid]*(thatao2xzs[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1zs[kgrid])
                                             +d1ys[kgrid]*(thatao2yzs[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1zs[kgrid])
                                             +d1zs[kgrid]*(thatao2zzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1zs[kgrid]));
        }
@@ -198,26 +205,25 @@ void Gskeletons(const int natoms,double * atoms,const char * basisset,
    }
   }
  }
+ __Finalize_KS__;
 }
 
 // This one is slower but more concise in maths. It is used when G skeleton derivatives are requested.
-EigenMatrix RKSG_concise(const int natoms,double * atoms,const char * basisset,
-                         EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
-                         double kscale,int ngrids,double * ws,
-                         double * aos,
-                         double * ao1xs,double * ao1ys,double * ao1zs,
-                         double * ao2xxs,double * ao2yys,double * ao2zzs,
-                         double * ao2xys,double * ao2xzs,double * ao2yzs,
-                         double * d1xs,double * d1ys,double * d1zs,
-                         double * vrxcs,double * vsxcs,
-                         EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
-                         const int nprocs,const bool output){
+EigenMatrix RKSG_concise(
+		const int natoms,double * atoms,const char * basisset,
+		EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
+		int dfxid,int dfcid,int ngrids,double * ws,
+		double * aos,
+		double * ao1xs,double * ao1ys,double * ao1zs,
+		double * ao2xxs,double * ao2yys,double * ao2zzs,
+		double * ao2xys,double * ao2xzs,double * ao2yzs,
+		EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
+		const int nprocs,const bool output){
  if (output && aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RKS gradient ... ";
  if (output && !aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RHF gradient ... ";
  time_t start=time(0);
  __Basis_From_Atoms__
  __nBasis_From_OBS__
-
  // One-electron contributions
  EigenMatrix D=EigenZero(nbasis,nbasis);
  EigenMatrix W=EigenZero(nbasis,nbasis);
@@ -232,16 +238,28 @@ EigenMatrix RKSG_concise(const int natoms,double * atoms,const char * basisset,
 
  // Two-electron contributions
  EigenMatrix * gskeletons=new EigenMatrix[3*natoms];
- Gskeletons(natoms,atoms,basisset,
-            D,
-            kscale,ngrids,ws,
-            aos,
-            ao1xs,ao1ys,ao1zs,
-            ao2xxs,ao2yys,ao2zzs,
-            ao2xys,ao2xzs,ao2yzs,
-            d1xs,d1ys,d1zs,
-            vrxcs,vsxcs,
-            gskeletons);
+ for (int iatom=0,it=0;iatom<natoms;iatom++)
+  for (int t=0;t<3;t++,it++) gskeletons[it]=EigenZero(nbasis,nbasis);
+ char xname[64];
+ int xkind=1919;
+ int xfamily=810;
+ double kscale=1;
+ XCInfo(dfxid,xname,xkind,xfamily,kscale);
+ GhfSkeletons(
+		 natoms,atoms,basisset,
+		 D,
+		 kscale,
+		 gskeletons);
+
+ GxcSkeletons(
+		 natoms,atoms,basisset,
+	 	 D,
+		 dfxid,dfcid,ngrids,ws,
+		 aos,
+		 ao1xs,ao1ys,ao1zs,
+		 ao2xxs,ao2yys,ao2zzs,
+		 ao2xys,ao2xzs,ao2yzs,
+		 gskeletons);
  EigenMatrix gradient2=EigenZero(natoms,3);
  for (int iatom=0,it=0;iatom<natoms;iatom++)
   for (int t=0;t<3;t++,it++)
@@ -261,28 +279,30 @@ EigenMatrix RKSG_concise(const int natoms,double * atoms,const char * basisset,
 }
 
 // This one is faster but uglier. It is used when G matrix skeleton derivatives are not needed.
-EigenMatrix RKSG_fast(const int natoms,double * atoms,const char * basisset,
-                      EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,
-                      double kscale,int ngrids,double * ws,
-                      double * aos,
-                      double * ao1xs,double * ao1ys,double * ao1zs,
-                      double * ao2xxs,double * ao2yys,double * ao2zzs,
-                      double * ao2xys,double * ao2xzs,double * ao2yzs,
-                      double * d1xs,double * d1ys,double * d1zs,
-                      double * vrxcs,double * vsxcs,
-                      EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
-                      const int nprocs,const bool output){
+EigenMatrix RKSG_fast(
+		const int natoms,double * atoms,const char * basisset,
+		EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,
+		int dfxid,int dfcid,int ngrids,double * ws,
+		double * aos,
+		double * ao1xs,double * ao1ys,double * ao1zs,
+		double * ao2xxs,double * ao2yys,double * ao2zzs,
+		double * ao2xys,double * ao2xzs,double * ao2yzs,
+		EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
+		const int nprocs,const bool output){
  if (output && aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RKS gradient ... ";
- if (output && !aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RKS gradient ... ";
+ if (output && !aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RHF gradient ... ";
  time_t start=time(0);
  __Basis_From_Atoms__
  __nBasis_From_OBS__
+
  EigenMatrix D=EigenZero(nbasis,nbasis);
  EigenMatrix W=EigenZero(nbasis,nbasis);
  for (int i=0;i<nbasis;i++){
     D+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose();
     W+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose()*orbitalenergies[i];
  }
+
+ __Begin_KS__(aos,ao1xs,ao1ys,ao1zs,0,0)
  EigenMatrix Ghf=EigenZero(natoms,3);
  EigenMatrix Gxc=EigenZero(natoms,3);
  EigenMatrix * rawjskeletons=new EigenMatrix[3*natoms];
@@ -428,6 +448,7 @@ EigenMatrix RKSG_fast(const int natoms,double * atoms,const char * basisset,
   }
  }
  libint2::finalize();
+ __Finalize_KS__
  Ghf/=4;
  Gxc*=-4;
  for (int iatom=0;iatom<natoms;iatom++){
@@ -441,56 +462,51 @@ EigenMatrix RKSG_fast(const int natoms,double * atoms,const char * basisset,
  return Ghf+Gxc;
 }
 
-EigenMatrix RKSG(const int natoms,double * atoms,const char * basisset,
-                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
-                 double kscale,int ngrids,double * ws,
-                 double * aos,
-                 double * ao1xs,double * ao1ys,double * ao1zs,
-                 double * ao2xxs,double * ao2yys,double * ao2zzs,
-                 double * ao2xys,double * ao2xzs,double * ao2yzs,
-                 double * d1xs,double * d1ys,double * d1zs,
-                 double * vrxcs,double * vsxcs,
-                 EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
-                 const int nprocs,const bool output){
+EigenMatrix RKSG(
+		const int natoms,double * atoms,const char * basisset,
+		EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
+		int dfxid,int dfcid,int ngrids,double * ws,
+		double * aos,
+		double * ao1xs,double * ao1ys,double * ao1zs,
+		double * ao2xxs,double * ao2yys,double * ao2zzs,
+		double * ao2xys,double * ao2xzs,double * ao2yzs,
+		EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
+		const int nprocs,const bool output){
 	if (fskeletons)
-		return RKSG_concise(natoms,atoms,basisset,
-		                    ovlgrads,hcoregrads,fskeletons,
-		                    kscale,ngrids,ws,
-   				    aos,
-		                    ao1xs,ao1ys,ao1zs,
-		                    ao2xxs,ao2yys,ao2zzs,
-		                    ao2xys,ao2xzs,ao2yzs,
-		                    d1xs,d1ys,d1zs,
-		                    vrxcs,vsxcs,
-		                    coefficients,orbitalenergies,occupancies,
-		                    nprocs,output);
+		return RKSG_concise(
+				natoms,atoms,basisset,
+				ovlgrads,hcoregrads,fskeletons,
+				dfxid,dfcid,ngrids,ws,
+   				aos,
+				ao1xs,ao1ys,ao1zs,
+				ao2xxs,ao2yys,ao2zzs,
+				ao2xys,ao2xzs,ao2yzs,
+				coefficients,orbitalenergies,occupancies,
+				nprocs,output);
 	else
 		return RKSG_fast(natoms,atoms,basisset,
-		                 ovlgrads,hcoregrads,
-		                 kscale,ngrids,ws,
-		                 aos,
-		                 ao1xs,ao1ys,ao1zs,
-		                 ao2xxs,ao2yys,ao2zzs,
-		                 ao2xys,ao2xzs,ao2yzs,
-		                 d1xs,d1ys,d1zs,
-		                 vrxcs,vsxcs,
-		                 coefficients,orbitalenergies,occupancies,
-		                 nprocs,output);
+				ovlgrads,hcoregrads,
+				dfxid,dfcid,ngrids,ws,
+				aos,
+				ao1xs,ao1ys,ao1zs,
+				ao2xxs,ao2yys,ao2zzs,
+				ao2xys,ao2xzs,ao2yzs,
+				coefficients,orbitalenergies,occupancies,
+				nprocs,output);
 }
 
-EigenMatrix RHFG(const int natoms,double * atoms,const char * basisset,
-                 EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
-                 EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
-                 const int nprocs,const bool output){
+EigenMatrix RHFG(
+		const int natoms,double * atoms,const char * basisset,
+		EigenMatrix * ovlgrads,EigenMatrix * hcoregrads,EigenMatrix * fskeletons,
+		EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
+		const int nprocs,const bool output){
  return RKSG(natoms,atoms,basisset,
              ovlgrads,hcoregrads,fskeletons,
-             1,0,nullptr,
+             0,0,0,nullptr,
              nullptr,
              nullptr,nullptr,nullptr,
              nullptr,nullptr,nullptr,
              nullptr,nullptr,nullptr,
-             nullptr,nullptr,nullptr,
-             nullptr,nullptr,
              coefficients,orbitalenergies,occupancies,
              nprocs,output);
 }

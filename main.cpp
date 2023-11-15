@@ -136,7 +136,6 @@ int main(int argc,char *argv[]){
 		KntGrads(natoms,atoms,basisset,kntgrads,1);
 		NclGrads(natoms,atoms,basisset,nclgrads,1);
 	}
-	if (derivative>=2){;}
 
 	// Initial guess
 	EigenMatrix density,fock;
@@ -153,8 +152,6 @@ int main(int argc,char *argv[]){
 	EigenVector occupancies(nbasis);occupancies.setZero();
 
 	// KS preparation
-	double * d1xs,*d1ys,*d1zs,*vrxcs,*vsxcs;
-	d1xs=d1ys=d1zs=vrxcs=vsxcs=nullptr;
 	double energy=114514;
 	if (method.compare("rhf")==0)
 		energy=RHF(
@@ -173,8 +170,6 @@ int main(int argc,char *argv[]){
 			aos,
 			ao1xs,ao1ys,ao1zs,
 			ao2ls,
-			d1xs,d1ys,d1zs,
-			vrxcs,vsxcs,
 			orbitalenergies,coefficients,
 			occupancies,density,fock,
 			nprocs,1);
@@ -191,8 +186,11 @@ int main(int argc,char *argv[]){
 			hcoregrads[i]=kntgrads[i]+nclgrads[i];
 		__Delete_Matrices__(kntgrads,3*natoms);
 		__Delete_Matrices__(nclgrads,3*natoms);
-		if (derivative>=2)
+		if (derivative>=2){
 			fskeletons=new EigenMatrix[3*natoms];
+			for (int it=0;it<3*natoms;it++)
+				fskeletons[it]=EigenZero(nbasis,nbasis);
+		}
 		const EigenMatrix nrg=NRG(natoms,atoms,1);
 		EigenMatrix gele=EigenZero(natoms,3);
 		if (method.compare("rhf")==0)
@@ -205,13 +203,11 @@ int main(int argc,char *argv[]){
 			gele=RKSG(
 				natoms,atoms,basisset,
 				ovlgrads,hcoregrads,fskeletons,
-				kscale,ngrids,ws,
+				dfxid,dfcid,ngrids,ws,
 				aos,
 				ao1xs,ao1ys,ao1zs,
 				ao2xxs,ao2yys,ao2zzs,
 				ao2xys,ao2xzs,ao2yzs,
-				d1xs,d1ys,d1zs,
-				vrxcs,vsxcs,
 				coefficients,orbitalenergies,occupancies,
 				1,1);
 		const EigenMatrix g=nrg+gele;
