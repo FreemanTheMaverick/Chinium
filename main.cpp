@@ -10,7 +10,7 @@
 #include "AtoIntGradients.h"
 #include "HartreeFock.h"
 #include "InitialGuess.h"
-#include "GridIntegrals.h"
+#include "GridGeneration.h"
 #include "DensityFunctional.h"
 #include "HFGradient.h"
 #include "CoupledPerturbed.h"
@@ -247,7 +247,7 @@ int main(int argc,char *argv[]){
 			kscale,
 			nprocs,1);
 */		if (temperature>0)
-			hessian+=FockOccupationGradientCPSCF(
+			hessian+=DensityOccupationGradientCPSCF(
 				temperature,repulsion,indices,n2integrals,kscale,
 				ovlgrads,fskeletons,dxn,exn,natoms,
 				coefficients,occupancies,orbitalenergies,

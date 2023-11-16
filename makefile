@@ -21,8 +21,8 @@ SAPLib='-D__SAP_library_path__="$(PWD)/SAP/"'
 
 .PHONY: all
 
-all: main Gateway NuclearRepulsion InitialGuess Libint2 AtomicIntegrals AtoIntGradients HartreeFock Optimization OSQP LinearAlgebra GridIntegrals DensityFunctional Lebedev HFGradient CoupledPerturbed HFHessian
-	$(CXX) -o Chinium main.o Gateway.o NuclearRepulsion.o InitialGuess.o Libint2.o AtomicIntegrals.o AtoIntGradients.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o HFGradient.o CoupledPerturbed.o HFHessian.o $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
+all: main Gateway NuclearRepulsion InitialGuess Libint2 AtomicIntegrals AtoIntGradients HartreeFock Optimization OSQP LinearAlgebra GridGeneration GridIntegrals DensityFunctional Lebedev HFGradient CoupledPerturbed HFHessian
+	$(CXX) -o Chinium main.o Gateway.o NuclearRepulsion.o InitialGuess.o Libint2.o AtomicIntegrals.o AtoIntGradients.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridGeneration.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o HFGradient.o CoupledPerturbed.o HFHessian.o $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
 
 main: main.cpp
 	$(CXX) main.cpp -c $(GeneralFlags) $(EIGEN3Flags)
@@ -57,8 +57,11 @@ OSQP: OSQP.cpp
 LinearAlgebra: LinearAlgebra.cpp
 	$(CXX) LinearAlgebra.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
+GridGeneration: GridGeneration.cpp
+	$(CXX) GridGeneration.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(GridLib)
+
 GridIntegrals: GridIntegrals.cpp
-	$(CXX) GridIntegrals.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(GridLib)
+	$(CXX) GridIntegrals.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 DensityFunctional: DensityFunctional.cpp
 	$(CXX) DensityFunctional.cpp -c $(GeneralFlags) $(LIBXCFlags) $(DFLib)
@@ -77,7 +80,7 @@ HFHessian: HFHessian.cpp
 
 
 LD:
-	$(CXX) -o Chinium main.o Gateway.o NuclearRepulsion.o InitialGuess.o Libint2.o AtomicIntegrals.o AtoIntGradients.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o HFGradient.o CoupledPerturbed.o HFHessian.o $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
+	$(CXX) -o Chinium main.o Gateway.o NuclearRepulsion.o InitialGuess.o Libint2.o AtomicIntegrals.o AtoIntGradients.o HartreeFock.o Optimization.o OSQP.o LinearAlgebra.o GridGeneration.o GridIntegrals.o DensityFunctional.o sphere_lebedev_rule.o HFGradient.o CoupledPerturbed.o HFHessian.o $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(OSQPFlags) $(LIBXCFlags)
 
 
 ld: DensityFunctional.o

@@ -113,6 +113,34 @@ void getEVxc(int id,double * ds,double * cgs,double * d2s,double * ts,int ngrids
 		es[igrid]*=ds[igrid];
 }
 
+void getFxc(
+		int id,
+		double * ds, // Extra input for LDA
+		double * cgs, // Extra input for GGA
+		double * d2s,double * ts, // Extra input for mGGA
+		int ngrids,
+		double * vr2s, // Output for LDA
+		double * vrss,double * vs2s, // Extra output for GGA
+		double * vrls,double * vrts,double * vsls,double * vsts,double * vl2s,double * vlts,double * vt2s){ // Extra output for mGGA
+        xc_func_type func;
+        xc_func_init(&func,id,XC_UNPOLARIZED);
+	switch(func.info->family){
+		case XC_FAMILY_LDA:
+			xc_lda_fxc(&func,ngrids,ds,vr2s);
+			break;
+		case XC_FAMILY_GGA:
+		case XC_FAMILY_HYB_GGA:
+			xc_gga_fxc(&func,ngrids,ds,cgs,vr2s,vrss,vs2s);
+			break;
+		case XC_FAMILY_MGGA:
+		case XC_FAMILY_HYB_MGGA:
+			xc_mgga_fxc(&func,ngrids,ds,cgs,d2s,ts,vr2s,vrss,vrls,vrts,vs2s,vsls,vsts,vl2s,vlts,vt2s);
+			break;
+	}
+	xc_func_end(&func);
+}
+
+
 /*
 int main(){
 	std::string df="m06-2x";
