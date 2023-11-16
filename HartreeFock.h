@@ -8,7 +8,6 @@ EigenMatrix GxcMatrix(
 		double * aos,
 		double * ao1xs,double * ao1ys,double * ao1zs,
 		double * ao2ls,
-		double * ds,double * d2s,double * ts,double * cgs,
 		double * Exc_ptr,
 		const int nprocs);
 

@@ -231,6 +231,10 @@ int main(int argc,char *argv[]){
 			natoms,
 			ovlgrads,fskeletons,
 			repulsion,indices,n2integrals,kscale,
+			dfxid,dfcid,ngrids,ws,
+			aos,
+			ao1xs,ao1ys,ao1zs,
+			ao2ls,
 			coefficients,orbitalenergies,occupancies,
 			wxn,dxn,exn,
 			nprocs,1);

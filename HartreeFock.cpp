@@ -114,13 +114,13 @@ EigenMatrix GxcMatrix(
 		double * aos,
 		double * ao1xs,double * ao1ys,double * ao1zs,
 		double * ao2ls,
-		double & Exc,
+		double * Exc_ptr,
 		const int nprocs){
 	int nbasis=D.rows();
 	if (!dfxid) return EigenZero(nbasis,nbasis);
 
-	__Begin_KS__(aos,ao1xs,ao1ys,ao1zs,ao2ls,1)
-	Exc=SumUp(excs,ws,ngrids);
+	__Begin_KS__(aos,ao1xs,ao1ys,ao1zs,ao2ls,Exc_ptr)
+	if (Exc_ptr) *Exc_ptr=SumUp(excs,ws,ngrids);
 	EigenMatrix fxc=FxcMatrix(
 			aos,vrxcs,
 			d1xs,d1ys,d1zs,
@@ -139,7 +139,7 @@ EigenMatrix GxcMatrix(
 		aos,\
 		ao1xs,ao1ys,ao1zs,\
 		ao2ls,\
-		Exc,\
+		&Exc,\
 		nprocs);\
 	F=hcore+Ghf+Gxc;\
 	G=4*(overlap*D*F-F*D*overlap); // Electronic gradient of energy with respect to nonredundant orbital rotational parameters. [F(D),D] instead of [F,D(F)].

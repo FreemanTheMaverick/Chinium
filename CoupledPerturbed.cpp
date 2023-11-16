@@ -18,6 +18,10 @@
 void NonIdempotentCPSCF(int natoms,
                         EigenMatrix * ovlgrads,EigenMatrix * fskeletons,
                         double * repulsion,short int * indices,long int n2integrals,double kscale,
+			int dfxid,int dfcid,int ngrids,double * ws,
+			double * aos,
+			double * ao1xs,double * ao1ys,double * ao1zs,
+			double * ao2ls,
                         EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
                         EigenMatrix * wxn,EigenMatrix * dxn,EigenVector * exn,
                         const int nprocs,const bool output){
@@ -84,7 +88,17 @@ void NonIdempotentCPSCF(int natoms,
 					dxn[ipert]+=(occupancies[j]-occupancies[i])*U(i,j)*Mij;
 				}
 
-			B=B1-coefficients.transpose()*GhfMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs)*coefficients; // Forming a new B matrix.
+			EigenMatrix G=GhfMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs);
+			G+=GxcMatrix(
+					dxn[ipert],
+					dfxid,dfcid,ngrids,ws,
+					aos,
+					ao1xs,ao1ys,ao1zs,
+					ao2ls,
+					nullptr,
+					nprocs);
+
+			B=B1-coefficients.transpose()*G*coefficients; // Forming a new B matrix.
 			for (int i=0;i<nbasis;i++)
 				for (int j=0;j<nbasis;j++){
 					R(i,j)=B(i,j)-(orbitalenergies[i]-orbitalenergies[j])*U(i,j);
