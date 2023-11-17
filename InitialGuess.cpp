@@ -90,9 +90,14 @@ EigenMatrix SuperpositionAtomicPotential(const int natoms,double * atoms,int nba
 			vsap[igrid]+=bestvap;
 		}
 	}
-	return FxcMatrix(aos,vsap,
-	                 nullptr,nullptr,nullptr,
-	                 nullptr,nullptr,nullptr,nullptr,
-	                 nullptr,nullptr,nullptr,
-	                 ws,ngrids,nbasis);
+	return FxcMatrix(
+			0,ws,ngrids,nbasis,
+			aos,
+			nullptr,nullptr,nullptr,
+			nullptr,
+			nullptr,
+			nullptr,nullptr,nullptr,nullptr,
+			vsap,nullptr,
+			nullptr,nullptr,
+			nullptr,nullptr,nullptr);
 }

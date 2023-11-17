@@ -1,4 +1,4 @@
-#include <Eigen/Dense>
+#include <Eigen/Core>
 #include <libint2.hpp>
 #include <cmath>
 #include <ctime>

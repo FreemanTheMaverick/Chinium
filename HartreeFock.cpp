@@ -122,11 +122,15 @@ EigenMatrix GxcMatrix(
 	__Begin_KS__(aos,ao1xs,ao1ys,ao1zs,ao2ls,Exc_ptr)
 	if (Exc_ptr) *Exc_ptr=SumUp(excs,ws,ngrids);
 	EigenMatrix fxc=FxcMatrix(
-			aos,vrxcs,
-			d1xs,d1ys,d1zs,
-			ao1xs,ao1ys,ao1zs,vsxcs,
-			ao2ls,vlxcs,vtxcs,
-			ws,ngrids,nbasis);
+			0,ws,ngrids,nbasis,
+			aos,
+			ao1xs,ao1ys,ao1zs,
+			ao2ls,
+			nullptr,
+			d1xs,d1ys,d1zs,nullptr,
+			vrxcs,vsxcs,
+			vlxcs,vtxcs,
+			nullptr,nullptr,nullptr);
 	__Finalize_KS__
 	return fxc;
 }
