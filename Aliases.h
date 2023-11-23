@@ -52,7 +52,7 @@
 		vectors[ivector].resize(0);\
 	delete [] vectors;
 
-#define __Begin_KS__(aos,ao1xs,ao1ys,ao1zs,ao2ls,e)\
+#define __Initialize_KS__(aos,ao1xs,ao1ys,ao1zs,ao2ls,u,e)\
 	double * ds=nullptr;\
 	double * d1xs=nullptr;\
 	double * d1ys=nullptr;\
@@ -64,11 +64,32 @@
 	double * vsxcs=nullptr;\
 	double * vlxcs=nullptr;\
 	double * vtxcs=nullptr;\
+	double * vrrxcs=nullptr;\
+	double * vrsxcs=nullptr;\
+	double * vssxcs=nullptr;\
+	double * vrlxcs=nullptr;\
+	double * vrtxcs=nullptr;\
+	double * vslxcs=nullptr;\
+	double * vstxcs=nullptr;\
+	double * vllxcs=nullptr;\
+	double * vltxcs=nullptr;\
+	double * vttxcs=nullptr;\
+	\
 	double * excs=nullptr;\
 	double * vrcs=nullptr;\
 	double * vscs=nullptr;\
 	double * vlcs=nullptr;\
 	double * vtcs=nullptr;\
+	double * vrrcs=nullptr;\
+	double * vrscs=nullptr;\
+	double * vsscs=nullptr;\
+	double * vrlcs=nullptr;\
+	double * vrtcs=nullptr;\
+	double * vslcs=nullptr;\
+	double * vstcs=nullptr;\
+	double * vllcs=nullptr;\
+	double * vltcs=nullptr;\
+	double * vttcs=nullptr;\
 	double * ecs=nullptr;\
 	int xkind,ckind,xfamily,cfamily;\
 	xkind=ckind=xfamily=cfamily=114514;\
@@ -85,43 +106,70 @@
 			d2s=new double[ngrids]();\
 			ts=new double[ngrids]();\
 		}\
-		char rubbish[64];\
+		char rubbish[64]="1919810";\
 		if (dfcid && dfxid!=dfcid){\
 			XCInfo(dfcid,rubbish,ckind,cfamily,kscale);\
-			if (aos) vrcs=new double[ngrids]();\
-			if (ao1xs) vscs=new double[ngrids]();\
-			if (ao2ls){\
+			if (! u && aos) vrcs=new double[ngrids]();\
+			if (! u && ao1xs) vscs=new double[ngrids]();\
+			if (! u && ao2ls){\
 				vlcs=new double[ngrids]();\
 				vtcs=new double[ngrids]();\
 			}\
-			if (e) ecs=new double[ngrids]();\
+			if (! u && e) ecs=new double[ngrids]();\
+			if (u && aos) vrrcs=new double[ngrids]();\
+			if (u && ao1xs){\
+				vscs=new double[ngrids]();\
+				vrscs=new double[ngrids]();\
+				vsscs=new double[ngrids]();\
+			}\
 		}\
 		XCInfo(dfxid,rubbish,xkind,xfamily,kscale);\
-		if (aos) vrxcs=new double[ngrids]();\
-		if (ao1xs) vsxcs=new double[ngrids]();\
-		if (ao2ls){\
+		if (! u && aos) vrxcs=new double[ngrids]();\
+		if (! u && ao1xs) vsxcs=new double[ngrids]();\
+		if (! u && ao2ls){\
 			vlxcs=new double[ngrids]();\
 			vtxcs=new double[ngrids]();\
 		}\
-		if (e) excs=new double[ngrids]();\
-		GetDensity(\
-				aos,\
-				ao1xs,ao1ys,ao1zs,\
-				ao2ls,\
-				ngrids,2*D,\
+		if (! u && e) excs=new double[ngrids]();\
+		if (u && aos) vrrxcs=new double[ngrids]();\
+		if (u && ao1xs){\
+			vsxcs=new double[ngrids]();\
+			vrsxcs=new double[ngrids]();\
+			vssxcs=new double[ngrids]();\
+		}\
+	}
+
+#define __KS_Potential__(u,e)\
+	if (dfxid){\
+		if (! u && e) getEVxc(dfxid,ds,cgs,d2s,ts,ngrids,excs,vrxcs,vsxcs,vlxcs,vtxcs);\
+		if (! u && ! e) getVxc(dfxid,ds,cgs,d2s,ts,ngrids,vrxcs,vsxcs,vlxcs,vtxcs);\
+		if (u) getFxc(\
+				dfxid,ngrids,\
 				ds,\
-				d1xs,d1ys,d1zs,cgs,\
-				d2s,ts);\
-		if (e) getEVxc(dfxid,ds,cgs,d2s,ts,ngrids,excs,vrxcs,vsxcs,vlxcs,vtxcs);\
-		else getVxc(dfxid,ds,cgs,d2s,ts,ngrids,vrxcs,vsxcs,vlxcs,vtxcs);\
+				cgs,\
+				d2s,ts,\
+				vrrxcs,\
+				vrsxcs,vssxcs,\
+				vrlxcs,vrtxcs,vslxcs,vstxcs,vllxcs,vltxcs,vttxcs);\
 		if (dfcid && dfxid!=dfcid){\
-			if (e) getEVxc(dfcid,ds,cgs,d2s,ts,ngrids,ecs,vrcs,vscs,vlcs,vtcs);\
-			else getVxc(dfcid,ds,cgs,d2s,ts,ngrids,vrcs,vscs,vlcs,vtcs);\
-			VectorAddition(vrxcs,vrcs,ngrids);\
-			VectorAddition(vsxcs,vscs,ngrids);\
-			VectorAddition(vlxcs,vlcs,ngrids);\
-			VectorAddition(vtxcs,vtcs,ngrids);\
-			if (e) VectorAddition(excs,ecs,ngrids);\
+			if (! u && e) getEVxc(dfcid,ds,cgs,d2s,ts,ngrids,ecs,vrcs,vscs,vlcs,vtcs);\
+			if (! u && ! e) getVxc(dfcid,ds,cgs,d2s,ts,ngrids,vrcs,vscs,vlcs,vtcs);\
+			if (u) getFxc(\
+					dfcid,ngrids,\
+					ds,\
+					cgs,\
+					d2s,ts,\
+					vrrcs,\
+					vrscs,vsscs,\
+					vrlcs,vrtcs,vslcs,vstcs,vllcs,vltcs,vttcs);\
+			if (e) VectorAddition(excs,excs,ecs,ngrids);\
+			if (vrxcs) VectorAddition(vrxcs,vrxcs,vrcs,ngrids);\
+			if (vsxcs) VectorAddition(vsxcs,vsxcs,vscs,ngrids);\
+			if (vlxcs) VectorAddition(vlxcs,vlxcs,vlcs,ngrids);\
+			if (vtxcs) VectorAddition(vtxcs,vtxcs,vtcs,ngrids);\
+			if (vrrxcs) VectorAddition(vrrxcs,vrrxcs,vrrcs,ngrids);\
+			if (vrsxcs) VectorAddition(vrsxcs,vrsxcs,vrscs,ngrids);\
+			if (vssxcs) VectorAddition(vssxcs,vssxcs,vsscs,ngrids);\
 		}\
 	}
 
@@ -133,14 +181,34 @@
 	if (cgs) delete [] cgs;\
 	if (d2s) delete [] d2s;\
 	if (ts) delete [] ts;\
+	if (excs) delete [] excs;\
 	if (vrxcs) delete [] vrxcs;\
 	if (vsxcs) delete [] vsxcs;\
 	if (vlxcs) delete [] vlxcs;\
 	if (vtxcs) delete [] vtxcs;\
-	if (excs) delete [] excs;\
+	if (vrrxcs) delete [] vrrxcs;\
+	if (vrsxcs) delete [] vrsxcs;\
+	if (vssxcs) delete [] vssxcs;\
+	if (vrlxcs) delete [] vrlxcs;\
+	if (vrtxcs) delete [] vrtxcs;\
+	if (vslxcs) delete [] vslxcs;\
+	if (vstxcs) delete [] vstxcs;\
+	if (vllxcs) delete [] vllxcs;\
+	if (vltxcs) delete [] vltxcs;\
+	if (vttxcs) delete [] vttxcs;\
+	if (ecs) delete [] ecs;\
 	if (vrcs) delete [] vrcs;\
 	if (vscs) delete [] vscs;\
 	if (vlcs) delete [] vlcs;\
 	if (vtcs) delete [] vtcs;\
-	if (ecs) delete [] ecs;
+	if (vrrcs) delete [] vrrcs;\
+	if (vrscs) delete [] vrscs;\
+	if (vsscs) delete [] vsscs;\
+	if (vrlcs) delete [] vrlcs;\
+	if (vrtcs) delete [] vrtcs;\
+	if (vslcs) delete [] vslcs;\
+	if (vstcs) delete [] vstcs;\
+	if (vllcs) delete [] vllcs;\
+	if (vltcs) delete [] vltcs;\
+	if (vttcs) delete [] vttcs;
 

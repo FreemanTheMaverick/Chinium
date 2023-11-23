@@ -119,18 +119,26 @@ EigenMatrix GxcMatrix(
 	int nbasis=D.rows();
 	if (!dfxid) return EigenZero(nbasis,nbasis);
 
-	__Begin_KS__(aos,ao1xs,ao1ys,ao1zs,ao2ls,Exc_ptr)
+	__Initialize_KS__(aos,ao1xs,ao1ys,ao1zs,ao2ls,0,Exc_ptr)
+		GetDensity(
+				aos,
+				ao1xs,ao1ys,ao1zs,
+				ao2ls,
+				ngrids,2*D,
+				ds,
+				d1xs,d1ys,d1zs,cgs,
+				d2s,ts);
+	__KS_Potential__(0,Exc_ptr)
 	if (Exc_ptr) *Exc_ptr=SumUp(excs,ws,ngrids);
 	EigenMatrix fxc=FxcMatrix(
-			0,ws,ngrids,nbasis,
+			ws,ngrids,nbasis,
 			aos,
 			ao1xs,ao1ys,ao1zs,
 			ao2ls,
 			nullptr,
 			d1xs,d1ys,d1zs,nullptr,
 			vrxcs,vsxcs,
-			vlxcs,vtxcs,
-			nullptr,nullptr,nullptr);
+			vlxcs,vtxcs);
 	__Finalize_KS__
 	return fxc;
 }

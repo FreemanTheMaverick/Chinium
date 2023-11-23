@@ -13,8 +13,10 @@
 #include "GridGeneration.h"
 #include "DensityFunctional.h"
 #include "HFGradient.h"
+#include "Libint2.h"
 #include "CoupledPerturbed.h"
 #include "HFHessian.h"
+#include "GridIntegrals.h"
 
 int main(int argc,char *argv[]){
 
@@ -227,18 +229,28 @@ int main(int argc,char *argv[]){
 		EigenMatrix * dxn=new EigenMatrix[3*natoms];
 		EigenMatrix * wxn=new EigenMatrix[3*natoms];
 		EigenVector * exn=new EigenVector[3*natoms];
+		short int * bf2atom=nullptr;
+		if (dfxid){
+			bf2atom=new short int[nbasis];
+			BF2Atom(natoms,atoms,basisset,bf2atom);
+		}
 		NonIdempotentCPSCF(
-			natoms,
+			natoms,bf2atom,
 			ovlgrads,fskeletons,
-			repulsion,indices,n2integrals,kscale,
+			repulsion,indices,n2integrals,
 			dfxid,dfcid,ngrids,ws,
 			aos,
 			ao1xs,ao1ys,ao1zs,
-			ao2ls,
+			ao2xxs,ao2yys,ao2zzs,
+			ao2xys,ao2xzs,ao2yzs,
 			coefficients,orbitalenergies,occupancies,
 			wxn,dxn,exn,
 			nprocs,1);
 		EigenMatrix hessian=NRH(natoms,atoms,1);
+		//std::cout<<"dxn[0]"<<std::endl;
+		//std::cout<<dxn[0]<<std::endl;
+		//std::cout<<"density"<<std::endl;
+		//std::cout<<density<<std::endl;
 /*		hessian+=RKSH(
 			natoms,atoms,basisset,
 			density,dxn,
@@ -256,8 +268,7 @@ int main(int argc,char *argv[]){
 		__Delete_Matrices__(dxn,3*natoms);
 		__Delete_Matrices__(wxn,3*natoms);
 		__Delete_Vectors__(exn,3*natoms);
-		//std::cout<<"Total hessian:"<<std::endl;
-		//std::cout<<hessian<<std::endl;
+		if (bf2atom) delete [] bf2atom;
 	}
 
 	delete [] xs;

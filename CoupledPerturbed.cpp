@@ -7,6 +7,8 @@
 #include "HartreeFock.h"
 #include "Optimization.h"
 #include "LinearAlgebra.h"
+#include "GridIntegrals.h"
+#include "DensityFunctional.h"
 #include <iostream>
 
 #define __diis_start_iter__ 2
@@ -15,15 +17,16 @@
 #define __convergence_threshold__ 1.e-4
 #define __small_value__ 1.e-9
 
-void NonIdempotentCPSCF(int natoms,
+void NonIdempotentCPSCF(int natoms,short int * bf2atom,
                         EigenMatrix * ovlgrads,EigenMatrix * fskeletons,
-                        double * repulsion,short int * indices,long int n2integrals,double kscale,
+                        double * repulsion,short int * indices,long int n2integrals,
 			int dfxid,int dfcid,int ngrids,double * ws,
 			double * aos,
 			double * ao1xs,double * ao1ys,double * ao1zs,
-			double * ao2ls,
+			double * ao2xxs,double * ao2yys,double * ao2zzs,
+			double * ao2xys,double * ao2xzs,double * ao2yzs,
                         EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
-                        EigenMatrix * wxn,EigenMatrix * dxn,EigenVector * exn,
+                        EigenMatrix * Wxns,EigenMatrix * Dxns,EigenVector * exns,
                         const int nprocs,const bool output){
 	if (output){
 		std::printf("Non-idempotent CPSCF ...\n");
@@ -32,9 +35,51 @@ void NonIdempotentCPSCF(int natoms,
 
 	// Initialization
 	int nbasis=coefficients.cols();
-	EigenMatrix d=EigenZero(nbasis,nbasis);
-	d.diagonal()=occupancies;
-	d=coefficients*d*coefficients.transpose();
+	EigenMatrix D=EigenZero(nbasis,nbasis);
+	D.diagonal()=occupancies;
+	D=coefficients*D*coefficients.transpose();
+
+	// Generating vrrxcs
+	__Initialize_KS__(aos,ao1xs,ao1ys,ao1zs,0,1,0)
+	GetDensity(
+			aos,
+			ao1xs,ao1ys,ao1zs,
+			nullptr,
+			ngrids,2*D,
+			ds,
+			d1xs,d1ys,d1zs,cgs,
+			nullptr,nullptr);
+	__KS_Potential__(1,0)
+	double * dn1s=nullptr;
+	double * dn1xs,* dn1ys,* dn1zs;
+	dn1xs=dn1ys=dn1zs=nullptr;
+	double * dn2xs,* dn2ys,* dn2zs;
+	dn2xs=dn2ys=dn2zs=nullptr;
+	double * dn2xxs,* dn2xys,* dn2xzs,* dn2yxs,* dn2yys,* dn2yzs,* dn2zxs,* dn2zys,* dn2zzs;
+	dn2xxs=dn2xys=dn2xzs=dn2yxs=dn2yys=dn2yzs=dn2zxs=dn2zys=dn2zzs=nullptr;
+
+	if (dfxid){
+		if (aos && ao1xs){
+			dn1s=new double[ngrids]();
+			dn1xs=new double[ngrids]();
+			dn1ys=new double[ngrids]();
+			dn1zs=new double[ngrids]();
+		}
+		if (aos && ao1xs && ao2xxs){
+			dn2xs=new double[ngrids]();
+			dn2ys=new double[ngrids]();
+			dn2zs=new double[ngrids]();
+			dn2xxs=new double[ngrids]();
+			dn2xys=new double[ngrids]();
+			dn2xzs=new double[ngrids]();
+			dn2yxs=new double[ngrids]();
+			dn2yys=new double[ngrids]();
+			dn2yzs=new double[ngrids]();
+			dn2zxs=new double[ngrids]();
+			dn2zys=new double[ngrids]();
+			dn2zzs=new double[ngrids]();
+		}
+	}
 
 	for (int ipert=0;ipert<natoms*3;ipert++){
 
@@ -49,6 +94,36 @@ void NonIdempotentCPSCF(int natoms,
 			Rs[i]=EigenZero(nbasis,nbasis);
 		}
 		double error2norm=114514;
+
+		if (dfxid && ipert%3==0){
+			if (dn1xs){
+				memset(dn1xs,0,ngrids*sizeof(double));
+				memset(dn1ys,0,ngrids*sizeof(double));
+				memset(dn1zs,0,ngrids*sizeof(double));
+			}
+			if (dn2xxs){
+				memset(dn2xxs,0,ngrids*sizeof(double));
+				memset(dn2xys,0,ngrids*sizeof(double));
+				memset(dn2xzs,0,ngrids*sizeof(double));
+				memset(dn2yxs,0,ngrids*sizeof(double));
+				memset(dn2yys,0,ngrids*sizeof(double));
+				memset(dn2yzs,0,ngrids*sizeof(double));
+				memset(dn2zxs,0,ngrids*sizeof(double));
+				memset(dn2zys,0,ngrids*sizeof(double));
+				memset(dn2zzs,0,ngrids*sizeof(double));
+			}
+			GetDensitySkeleton( // Grid density skeleton derivatives
+				aos,
+				ao1xs,ao1ys,ao1zs,
+				ao2xxs,ao2yys,ao2zzs,
+				ao2xys,ao2xzs,ao2yzs,
+				ngrids,2*D,
+				ipert/3,bf2atom,
+				dn1xs,dn1ys,dn1zs,
+				dn2xxs,dn2xys,dn2xzs,
+				dn2yxs,dn2yys,dn2yzs,
+				dn2zxs,dn2zys,dn2zzs);
+		}
 
 		// Forming B1, common for all iterations.
 		const EigenMatrix csxc=coefficients.transpose()*ovlgrads[ipert]*coefficients;
@@ -75,7 +150,7 @@ void NonIdempotentCPSCF(int natoms,
 			assert("CPSCF does not converge." && jiter<__cpscf_max_iter__);
 			if (jiter>__diis_start_iter__)
 				B=DIIS(Bs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
-			dxn[ipert]=-N;
+			Dxns[ipert]=-N;
 			for (int i=0;i<nbasis;i++)
 				for (int j=0;j<=i;j++){
 					if (std::abs(orbitalenergies[i]-orbitalenergies[j])<__small_value__) // Avoiding "division by zero" error.
@@ -85,18 +160,55 @@ void NonIdempotentCPSCF(int natoms,
 						U(j,i)=-U(i,j)-csxc(i,j);
 					}
 					Mij=coefficients.col(i)*coefficients.col(j).transpose()+coefficients.col(j)*coefficients.col(i).transpose();
-					dxn[ipert]+=(occupancies[j]-occupancies[i])*U(i,j)*Mij;
+					Dxns[ipert]+=(occupancies[j]-occupancies[i])*U(i,j)*Mij;
 				}
 
-			EigenMatrix G=GhfMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs);
-			G+=GxcMatrix(
-					dxn[ipert],
-					dfxid,dfcid,ngrids,ws,
+			EigenMatrix G=GhfMatrix(repulsion,indices,n2integrals,Dxns[ipert],kscale,nprocs);
+			if (dfxid){
+				if (ipert%3==0){ // Grid density skeleton derivatives
+					if (dn1s)
+						memcpy(dn1s,dn1xs,sizeof(double)*ngrids);
+					if (dn2xs){
+						memcpy(dn2xs,dn2xxs,sizeof(double)*ngrids);
+						memcpy(dn2ys,dn2yxs,sizeof(double)*ngrids);
+						memcpy(dn2zs,dn2zxs,sizeof(double)*ngrids);
+					}
+				}else if (ipert%3==1){
+					if (dn1s)
+						memcpy(dn1s,dn1ys,sizeof(double)*ngrids);
+					if (dn2xs){
+						memcpy(dn2xs,dn2xys,sizeof(double)*ngrids);
+						memcpy(dn2ys,dn2yys,sizeof(double)*ngrids);
+						memcpy(dn2zs,dn2zys,sizeof(double)*ngrids);
+					}
+				}else if (ipert%3==2){
+					if (dn1s)
+						memcpy(dn1s,dn1zs,sizeof(double)*ngrids);
+					if (dn2xs){
+						memcpy(dn2xs,dn2xzs,sizeof(double)*ngrids);
+						memcpy(dn2ys,dn2yzs,sizeof(double)*ngrids);
+						memcpy(dn2zs,dn2zzs,sizeof(double)*ngrids);
+					}
+				}
+				GetDensity( // Grid density U derivatives
 					aos,
 					ao1xs,ao1ys,ao1zs,
-					ao2ls,
 					nullptr,
-					nprocs);
+					ngrids,2*Dxns[ipert],
+					dn1s,
+					dn2xs,dn2ys,dn2zs,nullptr,
+					nullptr,nullptr);
+				G+=FxcUMatrix( // KS part of Fock matrix U derivative
+					ws,ngrids,nbasis,
+					aos,
+					ao1xs,ao1ys,ao1zs,
+					d1xs,d1ys,d1zs,
+					vsxcs,
+					vrrxcs,
+					vrsxcs,vssxcs,
+					dn1s,
+					dn2xs,dn2ys,dn2zs);
+			}
 
 			B=B1-coefficients.transpose()*G*coefficients; // Forming a new B matrix.
 			for (int i=0;i<nbasis;i++)
@@ -110,27 +222,44 @@ void NonIdempotentCPSCF(int natoms,
 			PushMatrixQueue(R,Rs,__diis_space_size__);
 		}
 
-		if (wxn){
-			wxn[ipert]=EigenZero(nbasis,nbasis);
+		if (Wxns){
+			Wxns[ipert]=EigenZero(nbasis,nbasis);
 			for (int i=0;i<nbasis;i++){
-				wxn[ipert]-=occupancies[i]*B(i,i)*coefficients.col(i)*coefficients.col(i).transpose();
+				Wxns[ipert]-=occupancies[i]*B(i,i)*coefficients.col(i)*coefficients.col(i).transpose();
 				for (int j=0;j<nbasis;j++){
 					Mij=coefficients.col(i)*coefficients.col(j).transpose()+coefficients.col(j)*coefficients.col(i).transpose();
-					wxn[ipert]+=occupancies[j]*orbitalenergies[j]*U(i,j)*Mij;
+					Wxns[ipert]+=occupancies[j]*orbitalenergies[j]*U(i,j)*Mij;
 				}
 			}
 		}
 
-		if (exn) exn[ipert]=-B.diagonal();
-
+		if (exns) exns[ipert]=-B.diagonal();
+		
 		const std::chrono::duration<double> duration_wall=std::chrono::system_clock::now()-iterstart_wall;
 		if (output) std::printf("|    %6d    |     %7d     | %9.6f |\n",ipert,jiter,duration_wall.count());
 	}
+	__Finalize_KS__
+	delete [] dn1s;
+	delete [] dn1xs;
+	delete [] dn1ys;
+	delete [] dn1zs;
+	delete [] dn2xs;
+	delete [] dn2ys;
+	delete [] dn2zs;
+	delete [] dn2xxs;
+	delete [] dn2xys;
+	delete [] dn2xzs;
+	delete [] dn2yxs;
+	delete [] dn2yys;
+	delete [] dn2yzs;
+	delete [] dn2zxs;
+	delete [] dn2zys;
+	delete [] dn2zzs;
 }
 
 EigenMatrix FockOccupationGradientCPSCF(
 		double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
-		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * dxn,EigenVector * exn,int natoms,
+		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * Dxns,EigenVector * exns,int natoms,
 		EigenMatrix coefficients,EigenVector occupancies,EigenVector orbitalenergies,
 		const int nprocs,const bool output){
 	if (output) std::printf("Calculating Fock matrix derivative with respect to occupation numbers for Fock-matrix-based occupation-gradient CPSCF... ");
@@ -247,10 +376,10 @@ EigenMatrix FockOccupationGradientCPSCF(
 	EigenMatrix nxs=EigenZero(3*natoms,nbasis);
 	for (int ipert=0;ipert<3*natoms;ipert++){
 		auto pert_start=std::chrono::system_clock::now();
-		EigenMatrix fxn=fskeletons[ipert]+GhfMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs);
+		EigenMatrix fxn=fskeletons[ipert]+GhfMatrix(repulsion,indices,n2integrals,Dxns[ipert],kscale,nprocs);
 		EigenMatrix Fx=fxn;
 		EigenMatrix csxc=coefficients.transpose()*ovlgrads[ipert]*coefficients;
-		EigenMatrix R=EigenZero(nbasis,nbasis);R(0)=114514;
+		EigenMatrix R=EigenZero(nbasis,nbasis);R(0)=0;
 		EigenMatrix * Fxs=new EigenMatrix[__diis_space_size__];
 		EigenMatrix * Rs=new EigenMatrix[__diis_space_size__];
 		for (int i=0;i<__diis_space_size__;i++){
@@ -262,7 +391,7 @@ EigenMatrix FockOccupationGradientCPSCF(
 			assert("FOG-CPSCF does not converge." && jiter<__cpscf_max_iter__);
 			double error2norm=114514;
 			Fx=Fxs[0];
-			EigenMatrix dx=dxn[ipert];
+			EigenMatrix dx=Dxns[ipert];
 			if (jiter>__diis_start_iter__)
 				Fx=DIIS(Fxs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
 			for (int kbasis=0;kbasis<nbasis;kbasis++){
@@ -276,7 +405,6 @@ EigenMatrix FockOccupationGradientCPSCF(
 			R=Fx-Fxs[0];
 			PushMatrixQueue(Fx,Fxs,__diis_space_size__);
 			PushMatrixQueue(R,Rs,__diis_space_size__);
-			//std::cout<<(Fx*D*overlap+F*dx*overlap+F*D*ovlgrads[ipert]-overlap*D*Fx-overlap*dx*F-ovlgrads[ipert]*D*F).norm()<<std::endl;
 		}
 		const std::chrono::duration<double> duration=std::chrono::system_clock::now()-pert_start;
 		if (output) std::printf("|    %6d    |     %7d     | %9.6f |\n",ipert,jiter,duration.count());
@@ -286,7 +414,7 @@ EigenMatrix FockOccupationGradientCPSCF(
 	for (int ipert=0;ipert<3*natoms;ipert++)
 		for (int jpert=0;jpert<3*natoms;jpert++)
 			for (int kbasis=0;kbasis<nbasis;kbasis++)
-				hessian(ipert,jpert)+=exn[ipert](kbasis)*nxs(jpert,kbasis);
+				hessian(ipert,jpert)+=exns[ipert](kbasis)*nxs(jpert,kbasis);
 	//std::cout<<hessian<<std::endl;
 	return 0.5*(hessian+hessian.transpose());
 }
@@ -294,7 +422,7 @@ EigenMatrix FockOccupationGradientCPSCF(
 
 EigenMatrix DensityOccupationGradientCPSCF(
 		double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
-		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * dxn,EigenVector * exn,int natoms,
+		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * Dxns,EigenVector * exns,int natoms,
 		EigenMatrix coefficients,EigenVector occupancies,EigenVector orbitalenergies,
 		const int nprocs,const bool output){
 	if (output){
@@ -305,7 +433,7 @@ EigenMatrix DensityOccupationGradientCPSCF(
 	EigenMatrix nxs=EigenZero(3*natoms,nbasis);
 	for (int ipert=0;ipert<3*natoms;ipert++){
 		auto pert_start=std::chrono::system_clock::now();
-		EigenMatrix fxn=fskeletons[ipert]+GhfMatrix(repulsion,indices,n2integrals,dxn[ipert],kscale,nprocs);
+		EigenMatrix fxn=fskeletons[ipert]+GhfMatrix(repulsion,indices,n2integrals,Dxns[ipert],kscale,nprocs);
 		EigenMatrix Fx=fxn;
 		EigenMatrix csxc=coefficients.transpose()*ovlgrads[ipert]*coefficients;
 		EigenMatrix R=EigenZero(nbasis,nbasis);R(0)=114514;
@@ -322,7 +450,7 @@ EigenMatrix DensityOccupationGradientCPSCF(
 			Fx=Fxs[0];
 			if (jiter>__diis_start_iter__)
 				Fx=DIIS(Fxs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
-			EigenMatrix dx=dxn[ipert];
+			EigenMatrix dx=Dxns[ipert];
 			for (int kbasis=0;kbasis<nbasis;kbasis++){ // Fock 2 density
 				const double exs=coefficients.col(kbasis).transpose()*Fx*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
 				nxs(ipert,kbasis)=occupancies[kbasis]*(occupancies[kbasis]-1.)/temperature*exs;
@@ -341,7 +469,7 @@ EigenMatrix DensityOccupationGradientCPSCF(
 	for (int ipert=0;ipert<3*natoms;ipert++)
 		for (int jpert=0;jpert<3*natoms;jpert++)
 			for (int kbasis=0;kbasis<nbasis;kbasis++)
-				hessian(ipert,jpert)+=exn[ipert](kbasis)*nxs(jpert,kbasis);
+				hessian(ipert,jpert)+=exns[ipert](kbasis)*nxs(jpert,kbasis);
 	//std::cout<<hessian<<std::endl;
 	return 0.5*(hessian+hessian.transpose());
 }

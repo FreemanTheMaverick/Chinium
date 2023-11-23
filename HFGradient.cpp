@@ -121,7 +121,16 @@ void GxcSkeletons(const int natoms,double * atoms,const char * basisset,
  __Basis_From_Atoms__
  __nBasis_From_OBS__
  if (!aos) return;
- __Begin_KS__(aos,ao1xs,ao1ys,ao1zs,0,0)
+	__Initialize_KS__(aos,ao1xs,ao1ys,ao1zs,0,0,0)
+		GetDensity(
+				aos,
+				ao1xs,ao1ys,ao1zs,
+				0,
+				ngrids,2*D,
+				ds,
+				d1xs,d1ys,d1zs,cgs,
+				d2s,ts);
+	__KS_Potential__(0,0)
 
  auto shell2bf=obs.shell2bf();
  auto shell2atom=obs.shell2atom(libint2atoms);
@@ -180,24 +189,24 @@ void GxcSkeletons(const int natoms,double * atoms,const char * basisset,
       if (ao2xxs){
        tmp=-8*ws[kgrid]*vsxcs[kgrid];
        gxcskeletons[3*atom1+0](bf1,bf2)+=tmp*(d1xs[kgrid]*(thisao2xxs[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1xs[kgrid])
-                                           +d1ys[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1xs[kgrid])
-                                           +d1zs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1xs[kgrid]));
+                                             +d1ys[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1xs[kgrid])
+                                             +d1zs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1xs[kgrid]));
        gxcskeletons[3*atom1+1](bf1,bf2)+=tmp*(d1xs[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1ys[kgrid])
-                                           +d1ys[kgrid]*(thisao2yys[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1ys[kgrid])
-                                           +d1zs[kgrid]*(thisao2yzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1ys[kgrid]));
+                                             +d1ys[kgrid]*(thisao2yys[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1ys[kgrid])
+                                             +d1zs[kgrid]*(thisao2yzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1ys[kgrid]));
        gxcskeletons[3*atom1+2](bf1,bf2)+=tmp*(d1xs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1zs[kgrid])
-                                           +d1ys[kgrid]*(thisao2yzs[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1zs[kgrid])
-                                           +d1zs[kgrid]*(thisao2zzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1zs[kgrid]));
+                                             +d1ys[kgrid]*(thisao2yzs[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1zs[kgrid])
+                                             +d1zs[kgrid]*(thisao2zzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1zs[kgrid]));
        if (bf2!=bf1){
         gxcskeletons[3*atom2+0](bf2,bf1)+=tmp*(d1xs[kgrid]*(thatao2xxs[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1xs[kgrid])
-                                            +d1ys[kgrid]*(thatao2xys[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1xs[kgrid])
-                                            +d1zs[kgrid]*(thatao2xzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1xs[kgrid]));
+                                              +d1ys[kgrid]*(thatao2xys[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1xs[kgrid])
+                                              +d1zs[kgrid]*(thatao2xzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1xs[kgrid]));
         gxcskeletons[3*atom2+1](bf2,bf1)+=tmp*(d1xs[kgrid]*(thatao2xys[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1ys[kgrid])
-                                            +d1ys[kgrid]*(thatao2yys[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1ys[kgrid])
-                                            +d1zs[kgrid]*(thatao2yzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1ys[kgrid]));
+                                              +d1ys[kgrid]*(thatao2yys[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1ys[kgrid])
+                                              +d1zs[kgrid]*(thatao2yzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1ys[kgrid]));
         gxcskeletons[3*atom2+2](bf2,bf1)+=tmp*(d1xs[kgrid]*(thatao2xzs[kgrid]*thisaos[kgrid]+thisao1xs[kgrid]*thatao1zs[kgrid])
-                                            +d1ys[kgrid]*(thatao2yzs[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1zs[kgrid])
-                                            +d1zs[kgrid]*(thatao2zzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1zs[kgrid]));
+                                              +d1ys[kgrid]*(thatao2yzs[kgrid]*thisaos[kgrid]+thisao1ys[kgrid]*thatao1zs[kgrid])
+                                              +d1zs[kgrid]*(thatao2zzs[kgrid]*thisaos[kgrid]+thisao1zs[kgrid]*thatao1zs[kgrid]));
        }
       }
      }
@@ -206,6 +215,10 @@ void GxcSkeletons(const int natoms,double * atoms,const char * basisset,
   }
  }
  __Finalize_KS__;
+ for (int it=0;it<natoms*3;it++){
+  const EigenMatrix tmp=gxcskeletons[it];
+  gxcskeletons[it]=0.5*(tmp+tmp.transpose());
+ }
 }
 
 // This one is slower but more concise in maths. It is used when G skeleton derivatives are requested.
@@ -237,9 +250,11 @@ EigenMatrix RKSG_concise(
    gradient1(iatom,t)=2*(D*hcoregrads[it]).trace()-2*(W*ovlgrads[it]).trace();
 
  // Two-electron contributions
- EigenMatrix * gskeletons=new EigenMatrix[3*natoms];
+ EigenMatrix * ghfskeletons=new EigenMatrix[3*natoms];
+ EigenMatrix * gxcskeletons=new EigenMatrix[3*natoms];
  for (int iatom=0,it=0;iatom<natoms;iatom++)
-  for (int t=0;t<3;t++,it++) gskeletons[it]=EigenZero(nbasis,nbasis);
+  for (int t=0;t<3;t++,it++)
+   ghfskeletons[it]=gxcskeletons[it]=EigenZero(nbasis,nbasis);
  char xname[64];
  int xkind=1919;
  int xfamily=810;
@@ -249,7 +264,7 @@ EigenMatrix RKSG_concise(
 		 natoms,atoms,basisset,
 		 D,
 		 kscale,
-		 gskeletons);
+		 ghfskeletons);
 
  GxcSkeletons(
 		 natoms,atoms,basisset,
@@ -259,20 +274,19 @@ EigenMatrix RKSG_concise(
 		 ao1xs,ao1ys,ao1zs,
 		 ao2xxs,ao2yys,ao2zzs,
 		 ao2xys,ao2xzs,ao2yzs,
-		 gskeletons);
+		 gxcskeletons);
  EigenMatrix gradient2=EigenZero(natoms,3);
  for (int iatom=0,it=0;iatom<natoms;iatom++)
   for (int t=0;t<3;t++,it++)
-   gradient2(iatom,t)+=(D*gskeletons[it]).trace();
+   gradient2(iatom,t)+=(D*(ghfskeletons[it]+gxcskeletons[it])).trace();
 
  // Saving skeleton derivative of Fock matrix
  if (fskeletons)
   for (int it=0;it<3*natoms;it++)
-   fskeletons[it]=hcoregrads[it]+gskeletons[it];
+   fskeletons[it]=hcoregrads[it]+ghfskeletons[it]+gxcskeletons[it];
 
- for (int it=0;it<3*natoms;it++)
-  gskeletons[it].resize(0,0);
- delete [] gskeletons; 
+ __Delete_Matrices__(ghfskeletons,3*natoms);
+ __Delete_Matrices__(gxcskeletons,3*natoms);
  time_t end=time(0);
  if (output) std::cout<<"done "<<end-start<<" s"<<std::endl;
  return gradient1+gradient2;
@@ -289,28 +303,35 @@ EigenMatrix RKSG_fast(
 		double * ao2xys,double * ao2xzs,double * ao2yzs,
 		EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
 		const int nprocs,const bool output){
- if (output && aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RKS gradient ... ";
- if (output && !aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RHF gradient ... ";
- time_t start=time(0);
- __Basis_From_Atoms__
- __nBasis_From_OBS__
+	if (output && aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RKS gradient ... ";
+	if (output && !aos) std::cout<<"Calculating repulsion integral derivatives w.r.t nuclear coordinates and summing up RHF gradient ... ";
+	time_t start=time(0);
+	__Basis_From_Atoms__
+	__nBasis_From_OBS__
 
- EigenMatrix D=EigenZero(nbasis,nbasis);
- EigenMatrix W=EigenZero(nbasis,nbasis);
- for (int i=0;i<nbasis;i++){
-    D+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose();
-    W+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose()*orbitalenergies[i];
- }
+	EigenMatrix D=EigenZero(nbasis,nbasis);
+	EigenMatrix W=EigenZero(nbasis,nbasis);
+	for (int i=0;i<nbasis;i++){
+		D+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose();
+		W+=occupancies[i]*coefficients.col(i)*coefficients.col(i).transpose()*orbitalenergies[i];
+	}
 
- __Begin_KS__(aos,ao1xs,ao1ys,ao1zs,0,0)
- EigenMatrix Ghf=EigenZero(natoms,3);
- EigenMatrix Gxc=EigenZero(natoms,3);
- EigenMatrix * rawjskeletons=new EigenMatrix[3*natoms];
- EigenMatrix * rawkskeletons=new EigenMatrix[3*natoms];
- for (int i=0;i<3*natoms;i++){
-  rawjskeletons[i]=EigenZero(nbasis,nbasis);
-  rawkskeletons[i]=EigenZero(nbasis,nbasis);
- }
+	__Initialize_KS__(aos,ao1xs,ao1ys,ao1zs,0,0,0)
+		GetDensity(
+				aos,
+				ao1xs,ao1ys,ao1zs,
+				0,
+				ngrids,2*D,
+				ds,
+				d1xs,d1ys,d1zs,cgs,
+				d2s,ts);
+	__KS_Potential__(0,0)
+	EigenMatrix Ghf=EigenZero(natoms,3);
+	EigenMatrix Gxc=EigenZero(natoms,3);
+	EigenMatrix * rawjskeletons=new EigenMatrix[3*natoms];
+	EigenMatrix * rawkskeletons=new EigenMatrix[3*natoms];
+	for (int i=0;i<3*natoms;i++)
+		 rawjskeletons[i]=rawkskeletons[i]=EigenZero(nbasis,nbasis);
  libint2::initialize();
  libint2::Engine engine(libint2::Operator::coulomb,obs.max_nprim(),obs.max_l(),1);
  const auto & buf_vec=engine.results();

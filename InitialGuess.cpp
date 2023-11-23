@@ -91,13 +91,12 @@ EigenMatrix SuperpositionAtomicPotential(const int natoms,double * atoms,int nba
 		}
 	}
 	return FxcMatrix(
-			0,ws,ngrids,nbasis,
+			ws,ngrids,nbasis,
 			aos,
 			nullptr,nullptr,nullptr,
 			nullptr,
 			nullptr,
 			nullptr,nullptr,nullptr,nullptr,
 			vsap,nullptr,
-			nullptr,nullptr,
-			nullptr,nullptr,nullptr);
+			nullptr,nullptr);
 }

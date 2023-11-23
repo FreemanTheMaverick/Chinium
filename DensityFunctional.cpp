@@ -114,11 +114,10 @@ void getEVxc(int id,double * ds,double * cgs,double * d2s,double * ts,int ngrids
 }
 
 void getFxc(
-		int id,
+		int id,int ngrids,
 		double * ds, // Extra input for LDA
 		double * cgs, // Extra input for GGA
 		double * d2s,double * ts, // Extra input for mGGA
-		int ngrids,
 		double * vr2s, // Output for LDA
 		double * vrss,double * vs2s, // Extra output for GGA
 		double * vrls,double * vrts,double * vsls,double * vsts,double * vl2s,double * vlts,double * vt2s){ // Extra output for mGGA
