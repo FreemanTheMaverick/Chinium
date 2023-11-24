@@ -43,5 +43,5 @@ EigenMatrix FxcUMatrix(
 		double * vrrs,
 		double * vrss,double * vsss,
 		double * dns,
-		double * dn1xs,double * dn1ys,double * dn1zs);
+		double * dxns,double * dyns,double * dzns);
 

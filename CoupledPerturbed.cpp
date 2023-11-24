@@ -13,21 +13,22 @@
 
 #define __diis_start_iter__ 2
 #define __diis_space_size__ 6
-#define __cpscf_max_iter__ 50
+#define __cpscf_max_iter__ 1
 #define __convergence_threshold__ 1.e-4
 #define __small_value__ 1.e-9
 
-void NonIdempotentCPSCF(int natoms,short int * bf2atom,
-                        EigenMatrix * ovlgrads,EigenMatrix * fskeletons,
-                        double * repulsion,short int * indices,long int n2integrals,
-			int dfxid,int dfcid,int ngrids,double * ws,
-			double * aos,
-			double * ao1xs,double * ao1ys,double * ao1zs,
-			double * ao2xxs,double * ao2yys,double * ao2zzs,
-			double * ao2xys,double * ao2xzs,double * ao2yzs,
-                        EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
-                        EigenMatrix * Wxns,EigenMatrix * Dxns,EigenVector * exns,
-                        const int nprocs,const bool output){
+void NonIdempotentCPSCF(
+		int natoms,short int * bf2atom,
+		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,
+		double * repulsion,short int * indices,long int n2integrals,
+		int dfxid,int dfcid,int ngrids,double * ws,
+		double * aos,
+		double * ao1xs,double * ao1ys,double * ao1zs,
+		double * ao2xxs,double * ao2yys,double * ao2zzs,
+		double * ao2xys,double * ao2xzs,double * ao2yzs,
+		EigenMatrix coefficients,EigenVector orbitalenergies,EigenVector occupancies,
+		EigenMatrix * Wxns,EigenMatrix * Dxns,EigenVector * exns,
+		const int nprocs,const bool output){
 	if (output){
 		std::printf("Non-idempotent CPSCF ...\n");
 		std::printf("| Perturbation | # of iterations | Wall time |\n");
@@ -50,34 +51,34 @@ void NonIdempotentCPSCF(int natoms,short int * bf2atom,
 			d1xs,d1ys,d1zs,cgs,
 			nullptr,nullptr);
 	__KS_Potential__(1,0)
-	double * dn1s=nullptr;
-	double * dn1xs,* dn1ys,* dn1zs;
-	dn1xs=dn1ys=dn1zs=nullptr;
-	double * dn2xs,* dn2ys,* dn2zs;
-	dn2xs=dn2ys=dn2zs=nullptr;
-	double * dn2xxs,* dn2xys,* dn2xzs,* dn2yxs,* dn2yys,* dn2yzs,* dn2zxs,* dn2zys,* dn2zzs;
-	dn2xxs=dn2xys=dn2xzs=dn2yxs=dn2yys=dn2yzs=dn2zxs=dn2zys=dn2zzs=nullptr;
+	double * dns=nullptr;
+	double * dnxs,* dnys,* dnzs;
+	dnxs=dnys=dnzs=nullptr;
+	double * dxns,* dyns,* dzns;
+	dxns=dyns=dzns=nullptr;
+	double * dxnxs,* dxnys,* dxnzs,* dynxs,* dynys,* dynzs,* dznxs,* dznys,* dznzs;
+	dxnxs=dxnys=dxnzs=dynxs=dynys=dynzs=dznxs=dznys=dznzs=nullptr;
 
 	if (dfxid){
 		if (aos && ao1xs){
-			dn1s=new double[ngrids]();
-			dn1xs=new double[ngrids]();
-			dn1ys=new double[ngrids]();
-			dn1zs=new double[ngrids]();
+			dns=new double[ngrids]();
+			dnxs=new double[ngrids]();
+			dnys=new double[ngrids]();
+			dnzs=new double[ngrids]();
 		}
 		if (aos && ao1xs && ao2xxs){
-			dn2xs=new double[ngrids]();
-			dn2ys=new double[ngrids]();
-			dn2zs=new double[ngrids]();
-			dn2xxs=new double[ngrids]();
-			dn2xys=new double[ngrids]();
-			dn2xzs=new double[ngrids]();
-			dn2yxs=new double[ngrids]();
-			dn2yys=new double[ngrids]();
-			dn2yzs=new double[ngrids]();
-			dn2zxs=new double[ngrids]();
-			dn2zys=new double[ngrids]();
-			dn2zzs=new double[ngrids]();
+			dxns=new double[ngrids]();
+			dyns=new double[ngrids]();
+			dzns=new double[ngrids]();
+			dxnxs=new double[ngrids]();
+			dxnys=new double[ngrids]();
+			dxnzs=new double[ngrids]();
+			dynxs=new double[ngrids]();
+			dynys=new double[ngrids]();
+			dynzs=new double[ngrids]();
+			dznxs=new double[ngrids]();
+			dznys=new double[ngrids]();
+			dznzs=new double[ngrids]();
 		}
 	}
 
@@ -96,21 +97,21 @@ void NonIdempotentCPSCF(int natoms,short int * bf2atom,
 		double error2norm=114514;
 
 		if (dfxid && ipert%3==0){
-			if (dn1xs){
-				memset(dn1xs,0,ngrids*sizeof(double));
-				memset(dn1ys,0,ngrids*sizeof(double));
-				memset(dn1zs,0,ngrids*sizeof(double));
+			if (dnxs){
+				memset(dnxs,0,ngrids*sizeof(double));
+				memset(dnys,0,ngrids*sizeof(double));
+				memset(dnzs,0,ngrids*sizeof(double));
 			}
-			if (dn2xxs){
-				memset(dn2xxs,0,ngrids*sizeof(double));
-				memset(dn2xys,0,ngrids*sizeof(double));
-				memset(dn2xzs,0,ngrids*sizeof(double));
-				memset(dn2yxs,0,ngrids*sizeof(double));
-				memset(dn2yys,0,ngrids*sizeof(double));
-				memset(dn2yzs,0,ngrids*sizeof(double));
-				memset(dn2zxs,0,ngrids*sizeof(double));
-				memset(dn2zys,0,ngrids*sizeof(double));
-				memset(dn2zzs,0,ngrids*sizeof(double));
+			if (dxnxs){
+				memset(dxnxs,0,ngrids*sizeof(double));
+				memset(dxnys,0,ngrids*sizeof(double));
+				memset(dxnzs,0,ngrids*sizeof(double));
+				memset(dynxs,0,ngrids*sizeof(double));
+				memset(dynys,0,ngrids*sizeof(double));
+				memset(dynzs,0,ngrids*sizeof(double));
+				memset(dznxs,0,ngrids*sizeof(double));
+				memset(dznys,0,ngrids*sizeof(double));
+				memset(dznzs,0,ngrids*sizeof(double));
 			}
 			GetDensitySkeleton( // Grid density skeleton derivatives
 				aos,
@@ -119,10 +120,10 @@ void NonIdempotentCPSCF(int natoms,short int * bf2atom,
 				ao2xys,ao2xzs,ao2yzs,
 				ngrids,2*D,
 				ipert/3,bf2atom,
-				dn1xs,dn1ys,dn1zs,
-				dn2xxs,dn2xys,dn2xzs,
-				dn2yxs,dn2yys,dn2yzs,
-				dn2zxs,dn2zys,dn2zzs);
+				dnxs,dnys,dnzs,
+				dxnxs,dxnys,dxnzs,
+				dynxs,dynys,dynzs,
+				dznxs,dznys,dznzs);
 		}
 
 		// Forming B1, common for all iterations.
@@ -166,39 +167,39 @@ void NonIdempotentCPSCF(int natoms,short int * bf2atom,
 			EigenMatrix G=GhfMatrix(repulsion,indices,n2integrals,Dxns[ipert],kscale,nprocs);
 			if (dfxid){
 				if (ipert%3==0){ // Grid density skeleton derivatives
-					if (dn1s)
-						memcpy(dn1s,dn1xs,sizeof(double)*ngrids);
-					if (dn2xs){
-						memcpy(dn2xs,dn2xxs,sizeof(double)*ngrids);
-						memcpy(dn2ys,dn2yxs,sizeof(double)*ngrids);
-						memcpy(dn2zs,dn2zxs,sizeof(double)*ngrids);
+					if (dns)
+						memcpy(dns,dnxs,sizeof(double)*ngrids);
+					if (dxns){
+						memcpy(dxns,dxnxs,sizeof(double)*ngrids);
+						memcpy(dyns,dynxs,sizeof(double)*ngrids);
+						memcpy(dzns,dznxs,sizeof(double)*ngrids);
 					}
 				}else if (ipert%3==1){
-					if (dn1s)
-						memcpy(dn1s,dn1ys,sizeof(double)*ngrids);
-					if (dn2xs){
-						memcpy(dn2xs,dn2xys,sizeof(double)*ngrids);
-						memcpy(dn2ys,dn2yys,sizeof(double)*ngrids);
-						memcpy(dn2zs,dn2zys,sizeof(double)*ngrids);
+					if (dns)
+						memcpy(dns,dnys,sizeof(double)*ngrids);
+					if (dxns){
+						memcpy(dxns,dxnys,sizeof(double)*ngrids);
+						memcpy(dyns,dynys,sizeof(double)*ngrids);
+						memcpy(dzns,dznys,sizeof(double)*ngrids);
 					}
 				}else if (ipert%3==2){
-					if (dn1s)
-						memcpy(dn1s,dn1zs,sizeof(double)*ngrids);
-					if (dn2xs){
-						memcpy(dn2xs,dn2xzs,sizeof(double)*ngrids);
-						memcpy(dn2ys,dn2yzs,sizeof(double)*ngrids);
-						memcpy(dn2zs,dn2zzs,sizeof(double)*ngrids);
+					if (dns)
+						memcpy(dns,dnzs,sizeof(double)*ngrids);
+					if (dxns){
+						memcpy(dxns,dxnzs,sizeof(double)*ngrids);
+						memcpy(dyns,dynzs,sizeof(double)*ngrids);
+						memcpy(dzns,dznzs,sizeof(double)*ngrids);
 					}
 				}
-				GetDensity( // Grid density U derivatives
+				/*GetDensity( // Grid density U derivatives
 					aos,
 					ao1xs,ao1ys,ao1zs,
 					nullptr,
 					ngrids,2*Dxns[ipert],
-					dn1s,
-					dn2xs,dn2ys,dn2zs,nullptr,
+					dns,
+					dxns,dyns,dzns,nullptr,
 					nullptr,nullptr);
-				G+=FxcUMatrix( // KS part of Fock matrix U derivative
+				*/std::cout<<FxcUMatrix( // KS part of Fock matrix U derivative
 					ws,ngrids,nbasis,
 					aos,
 					ao1xs,ao1ys,ao1zs,
@@ -206,8 +207,8 @@ void NonIdempotentCPSCF(int natoms,short int * bf2atom,
 					vsxcs,
 					vrrxcs,
 					vrsxcs,vssxcs,
-					dn1s,
-					dn2xs,dn2ys,dn2zs);
+					dns,
+					dxns,dyns,dzns)<<std::endl;
 			}
 
 			B=B1-coefficients.transpose()*G*coefficients; // Forming a new B matrix.
@@ -239,22 +240,22 @@ void NonIdempotentCPSCF(int natoms,short int * bf2atom,
 		if (output) std::printf("|    %6d    |     %7d     | %9.6f |\n",ipert,jiter,duration_wall.count());
 	}
 	__Finalize_KS__
-	delete [] dn1s;
-	delete [] dn1xs;
-	delete [] dn1ys;
-	delete [] dn1zs;
-	delete [] dn2xs;
-	delete [] dn2ys;
-	delete [] dn2zs;
-	delete [] dn2xxs;
-	delete [] dn2xys;
-	delete [] dn2xzs;
-	delete [] dn2yxs;
-	delete [] dn2yys;
-	delete [] dn2yzs;
-	delete [] dn2zxs;
-	delete [] dn2zys;
-	delete [] dn2zzs;
+	delete [] dns;
+	delete [] dnxs;
+	delete [] dnys;
+	delete [] dnzs;
+	delete [] dxns;
+	delete [] dyns;
+	delete [] dzns;
+	delete [] dxnxs;
+	delete [] dxnys;
+	delete [] dxnzs;
+	delete [] dynxs;
+	delete [] dynys;
+	delete [] dynzs;
+	delete [] dznxs;
+	delete [] dznys;
+	delete [] dznzs;
 }
 
 EigenMatrix FockOccupationGradientCPSCF(

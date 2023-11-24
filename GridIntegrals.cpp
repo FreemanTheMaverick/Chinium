@@ -9,10 +9,10 @@ void GetDensitySkeleton(
 		double * ao2xys,double * ao2xzs,double * ao2yzs,
 		int ngrids,EigenMatrix D,
 		short int atom,short int * bf2atom,
-		double * d1nxs,double * d1nys,double * d1nzs,
-		double * d2nxxs,double * d2nxys,double * d2nxzs, // For example, d2nxys is the x component of grid density gradient derivative with respect to a nuclear y coordinate perturbation.
-		double * d2nyxs,double * d2nyys,double * d2nyzs,
-		double * d2nzxs,double * d2nzys,double * d2nzzs){
+		double * dnxs,double * dnys,double * dnzs,
+		double * dxnxs,double * dxnys,double * dxnzs, // For example, dxnys is the x component of grid density gradient derivative with respect to a nuclear y coordinate perturbation.
+		double * dynxs,double * dynys,double * dynzs,
+		double * dznxs,double * dznys,double * dznzs){
 	double * iao=aos; // AOs
 	double * jao=aos;
 	double * ix=ao1xs; // AO first derivatives
@@ -66,21 +66,21 @@ void GetDensitySkeleton(
 				jyz=ao2yzs+ibasis*ngrids;
 			}*/
 			for (long int kgrid=0;kgrid<ngrids;kgrid++){
-				if (aos && ao1xs && d1nxs){
-					d1nxs[kgrid]-=Dij*((bf2atom[ibasis]==atom)*ix[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iao[kgrid]*jx[kgrid]);
-					d1nys[kgrid]-=Dij*((bf2atom[ibasis]==atom)*iy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iao[kgrid]*jy[kgrid]);
-					d1nzs[kgrid]-=Dij*((bf2atom[ibasis]==atom)*iz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iao[kgrid]*jz[kgrid]);
+				if (aos && ao1xs && dnxs){
+					dnxs[kgrid]-=Dij*((bf2atom[ibasis]==atom)*ix[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iao[kgrid]*jx[kgrid]);
+					dnys[kgrid]-=Dij*((bf2atom[ibasis]==atom)*iy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iao[kgrid]*jy[kgrid]);
+					dnzs[kgrid]-=Dij*((bf2atom[ibasis]==atom)*iz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iao[kgrid]*jz[kgrid]);
 				}
-				if (aos && ao1xs && ao2xxs && d2nxxs){
-					d2nxxs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixx[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*ix[kgrid]*jx[kgrid]);
-					d2nxys[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*ix[kgrid]*jy[kgrid]);
-					d2nxzs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*ix[kgrid]*jz[kgrid]);
-					d2nyxs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iy[kgrid]*jx[kgrid]);
-					d2nyys[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*iyy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iy[kgrid]*jy[kgrid]);
-					d2nyzs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*iyz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iy[kgrid]*jz[kgrid]);
-					d2nzxs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iz[kgrid]*jx[kgrid]);
-					d2nzys[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*iyz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iz[kgrid]*jy[kgrid]);
-					d2nzzs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*izz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iz[kgrid]*jz[kgrid]);
+				if (aos && ao1xs && ao2xxs && dxnxs){
+					dxnxs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixx[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*ix[kgrid]*jx[kgrid]);
+					dxnys[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*ix[kgrid]*jy[kgrid]);
+					dxnzs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*ix[kgrid]*jz[kgrid]);
+					dynxs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iy[kgrid]*jx[kgrid]);
+					dynys[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*iyy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iy[kgrid]*jy[kgrid]);
+					dynzs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*iyz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iy[kgrid]*jz[kgrid]);
+					dznxs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iz[kgrid]*jx[kgrid]);
+					dznys[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*iyz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iz[kgrid]*jy[kgrid]);
+					dznzs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*izz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iz[kgrid]*jz[kgrid]);
 				}
 			}
 		}
@@ -253,7 +253,7 @@ EigenMatrix FxcUMatrix(
 		double * vrrs,
 		double * vrss,double * vsss,
 		double * dns,
-		double * dn1xs,double * dn1ys,double * dn1zs){
+		double * dxns,double * dyns,double * dzns){
 	double * iao=aos;
 	double * jao=aos;
 	double * ix=ao1xs;
@@ -279,17 +279,17 @@ EigenMatrix FxcUMatrix(
 			}
 			double fij=0;
 			for (int kgrid=0;kgrid<ngrids;kgrid++){
-				if (! dn1xs)
+				if (! dxns)
 					fij+=ws[kgrid]*vrrs[kgrid]*dns[kgrid]*iao[kgrid]*jao[kgrid];
-				else if (dn1xs){
-					const double tmp1=d1xs[kgrid]*dn1xs[kgrid]+d1ys[kgrid]*dn1ys[kgrid]+d1zs[kgrid]*dn1zs[kgrid];
+				else if (dxns){
+					const double tmp1=d1xs[kgrid]*dxns[kgrid]+d1ys[kgrid]*dyns[kgrid]+d1zs[kgrid]*dzns[kgrid];
 					const double tmp2=d1xs[kgrid]*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid])
 					                 +d1ys[kgrid]*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid])
 					                 +d1zs[kgrid]*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid]);
-					const double tmp3=dn1xs[kgrid]*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid])
-					                 +dn1ys[kgrid]*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid])
-					                 +dn1zs[kgrid]*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid]);
-					fij+=ws[kgrid]*(vrrs[kgrid]*dns[kgrid]+2*vrss[kgrid]*tmp1*iao[kgrid]*jao[kgrid]);
+					const double tmp3=dxns[kgrid]*(ix[kgrid]*jao[kgrid]+iao[kgrid]*jx[kgrid])
+					                 +dyns[kgrid]*(iy[kgrid]*jao[kgrid]+iao[kgrid]*jy[kgrid])
+					                 +dzns[kgrid]*(iz[kgrid]*jao[kgrid]+iao[kgrid]*jz[kgrid]);
+					fij+=ws[kgrid]*(vrrs[kgrid]*dns[kgrid]+2*vrss[kgrid]*tmp1)*iao[kgrid]*jao[kgrid];
 					fij+=ws[kgrid]*2*(vrss[kgrid]*dns[kgrid]+2*vsss[kgrid]*tmp1)*tmp2;
 					fij+=ws[kgrid]*2*vss[kgrid]*tmp3;
 				}

@@ -118,6 +118,7 @@
 			if (! u && e) ecs=new double[ngrids]();\
 			if (u && aos) vrrcs=new double[ngrids]();\
 			if (u && ao1xs){\
+				vrcs=new double[ngrids]();\
 				vscs=new double[ngrids]();\
 				vrscs=new double[ngrids]();\
 				vsscs=new double[ngrids]();\
@@ -133,6 +134,7 @@
 		if (! u && e) excs=new double[ngrids]();\
 		if (u && aos) vrrxcs=new double[ngrids]();\
 		if (u && ao1xs){\
+			vrxcs=new double[ngrids]();\
 			vsxcs=new double[ngrids]();\
 			vrsxcs=new double[ngrids]();\
 			vssxcs=new double[ngrids]();\
@@ -143,7 +145,9 @@
 	if (dfxid){\
 		if (! u && e) getEVxc(dfxid,ds,cgs,d2s,ts,ngrids,excs,vrxcs,vsxcs,vlxcs,vtxcs);\
 		if (! u && ! e) getVxc(dfxid,ds,cgs,d2s,ts,ngrids,vrxcs,vsxcs,vlxcs,vtxcs);\
-		if (u) getFxc(\
+		if (u){\
+			getVxc(dfxid,ds,cgs,d2s,ts,ngrids,vrxcs,vsxcs,vlxcs,vtxcs);\
+			getFxc(\
 				dfxid,ngrids,\
 				ds,\
 				cgs,\
@@ -151,10 +155,13 @@
 				vrrxcs,\
 				vrsxcs,vssxcs,\
 				vrlxcs,vrtxcs,vslxcs,vstxcs,vllxcs,vltxcs,vttxcs);\
+		}\
 		if (dfcid && dfxid!=dfcid){\
 			if (! u && e) getEVxc(dfcid,ds,cgs,d2s,ts,ngrids,ecs,vrcs,vscs,vlcs,vtcs);\
 			if (! u && ! e) getVxc(dfcid,ds,cgs,d2s,ts,ngrids,vrcs,vscs,vlcs,vtcs);\
-			if (u) getFxc(\
+			if (u){\
+				getVxc(dfcid,ds,cgs,d2s,ts,ngrids,vrcs,vscs,vlcs,vtcs);\
+				getFxc(\
 					dfcid,ngrids,\
 					ds,\
 					cgs,\
@@ -162,6 +169,7 @@
 					vrrcs,\
 					vrscs,vsscs,\
 					vrlcs,vrtcs,vslcs,vstcs,vllcs,vltcs,vttcs);\
+			}\
 			if (e) VectorAddition(excs,excs,ecs,ngrids);\
 			if (vrxcs) VectorAddition(vrxcs,vrxcs,vrcs,ngrids);\
 			if (vsxcs) VectorAddition(vsxcs,vsxcs,vscs,ngrids);\

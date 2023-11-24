@@ -121,16 +121,16 @@ void GxcSkeletons(const int natoms,double * atoms,const char * basisset,
  __Basis_From_Atoms__
  __nBasis_From_OBS__
  if (!aos) return;
-	__Initialize_KS__(aos,ao1xs,ao1ys,ao1zs,0,0,0)
-		GetDensity(
-				aos,
-				ao1xs,ao1ys,ao1zs,
-				0,
-				ngrids,2*D,
-				ds,
-				d1xs,d1ys,d1zs,cgs,
-				d2s,ts);
-	__KS_Potential__(0,0)
+ __Initialize_KS__(aos,ao1xs,ao1ys,ao1zs,0,0,0)
+	GetDensity(
+			aos,
+			ao1xs,ao1ys,ao1zs,
+			0,
+			ngrids,2*D,
+			ds,
+			d1xs,d1ys,d1zs,cgs,
+			d2s,ts);
+ __KS_Potential__(0,0)
 
  auto shell2bf=obs.shell2bf();
  auto shell2atom=obs.shell2atom(libint2atoms);
