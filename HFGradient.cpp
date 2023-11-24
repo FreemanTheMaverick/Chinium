@@ -177,7 +177,7 @@ void GxcSkeletons(const int natoms,double * atoms,const char * basisset,
      }
      double tmp=114514;
      for (long int kgrid=0;kgrid<ngrids;kgrid++){
-      tmp=-4*ws[kgrid]*vrxcs[kgrid];
+      tmp=-2*ws[kgrid]*vrxcs[kgrid];
       gxcskeletons[3*atom1+0](bf1,bf2)+=tmp*thisao1xs[kgrid]*thataos[kgrid];
       gxcskeletons[3*atom1+1](bf1,bf2)+=tmp*thisao1ys[kgrid]*thataos[kgrid];
       gxcskeletons[3*atom1+2](bf1,bf2)+=tmp*thisao1zs[kgrid]*thataos[kgrid];
@@ -187,7 +187,7 @@ void GxcSkeletons(const int natoms,double * atoms,const char * basisset,
        gxcskeletons[3*atom2+2](bf2,bf1)+=tmp*thatao1zs[kgrid]*thisaos[kgrid];
       }
       if (ao2xxs){
-       tmp=-8*ws[kgrid]*vsxcs[kgrid];
+       tmp=-4*ws[kgrid]*vsxcs[kgrid];
        gxcskeletons[3*atom1+0](bf1,bf2)+=tmp*(d1xs[kgrid]*(thisao2xxs[kgrid]*thataos[kgrid]+thatao1xs[kgrid]*thisao1xs[kgrid])
                                              +d1ys[kgrid]*(thisao2xys[kgrid]*thataos[kgrid]+thatao1ys[kgrid]*thisao1xs[kgrid])
                                              +d1zs[kgrid]*(thisao2xzs[kgrid]*thataos[kgrid]+thatao1zs[kgrid]*thisao1xs[kgrid]));
@@ -261,24 +261,24 @@ EigenMatrix RKSG_concise(
  double kscale=1;
  XCInfo(dfxid,xname,xkind,xfamily,kscale);
  GhfSkeletons(
-		 natoms,atoms,basisset,
-		 D,
-		 kscale,
-		 ghfskeletons);
-
+		natoms,atoms,basisset,
+		D,
+		kscale,
+		ghfskeletons);
  GxcSkeletons(
-		 natoms,atoms,basisset,
-	 	 D,
-		 dfxid,dfcid,ngrids,ws,
-		 aos,
-		 ao1xs,ao1ys,ao1zs,
-		 ao2xxs,ao2yys,ao2zzs,
-		 ao2xys,ao2xzs,ao2yzs,
-		 gxcskeletons);
+		natoms,atoms,basisset,
+	 	D,
+		dfxid,dfcid,ngrids,ws,
+		aos,
+		ao1xs,ao1ys,ao1zs,
+		ao2xxs,ao2yys,ao2zzs,
+		ao2xys,ao2xzs,ao2yzs,
+		gxcskeletons);
  EigenMatrix gradient2=EigenZero(natoms,3);
+ //std::cout<<hcoregrads[0]+ghfskeletons[0]+0.5*gxcskeletons[0]<<std::endl;
  for (int iatom=0,it=0;iatom<natoms;iatom++)
   for (int t=0;t<3;t++,it++)
-   gradient2(iatom,t)+=(D*(ghfskeletons[it]+gxcskeletons[it])).trace();
+   gradient2(iatom,t)+=(D*(ghfskeletons[it]+2*gxcskeletons[it])).trace(); // The factor 2 stems from two Gxc skeleton matrices, Gxc^alpha and Gxc^beta.
 
  // Saving skeleton derivative of Fock matrix
  if (fskeletons)

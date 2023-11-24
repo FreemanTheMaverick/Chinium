@@ -13,7 +13,7 @@
 
 #define __diis_start_iter__ 2
 #define __diis_space_size__ 6
-#define __cpscf_max_iter__ 1
+#define __cpscf_max_iter__ 50
 #define __convergence_threshold__ 1.e-4
 #define __small_value__ 1.e-9
 
@@ -191,7 +191,7 @@ void NonIdempotentCPSCF(
 						memcpy(dzns,dznzs,sizeof(double)*ngrids);
 					}
 				}
-				/*GetDensity( // Grid density U derivatives
+				GetDensity( // Grid density U derivatives
 					aos,
 					ao1xs,ao1ys,ao1zs,
 					nullptr,
@@ -199,7 +199,7 @@ void NonIdempotentCPSCF(
 					dns,
 					dxns,dyns,dzns,nullptr,
 					nullptr,nullptr);
-				*/std::cout<<FxcUMatrix( // KS part of Fock matrix U derivative
+				G+=FxcUMatrix( // KS part of Fock matrix U derivative
 					ws,ngrids,nbasis,
 					aos,
 					ao1xs,ao1ys,ao1zs,
@@ -208,7 +208,7 @@ void NonIdempotentCPSCF(
 					vrrxcs,
 					vrsxcs,vssxcs,
 					dns,
-					dxns,dyns,dzns)<<std::endl;
+					dxns,dyns,dzns);
 			}
 
 			B=B1-coefficients.transpose()*G*coefficients; // Forming a new B matrix.
