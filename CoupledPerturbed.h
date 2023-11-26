@@ -12,13 +12,12 @@ void NonIdempotentCPSCF(int natoms,short int * bf2atoms,
 
 EigenMatrix FockOccupationGradientCPSCF(
 		double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
-		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * dxn,EigenVector * exn,int natoms,
+		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * Dxns,EigenVector * exns,int natoms,
 		EigenMatrix coefficients,EigenVector occupancies,EigenVector orbitalenergies,
 		const int nprocs,const bool output);
 
 EigenMatrix DensityOccupationGradientCPSCF(
 		double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
-		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * dxn,EigenVector * exn,int natoms,
+		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * Dxns,EigenVector * exns,int natoms,
 		EigenMatrix coefficients,EigenVector occupancies,EigenVector orbitalenergies,
 		const int nprocs,const bool output);
-	

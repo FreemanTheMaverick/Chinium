@@ -226,9 +226,9 @@ int main(int argc,char *argv[]){
 	}
 
 	if (derivative>=2){
-		EigenMatrix * dxn=new EigenMatrix[3*natoms];
-		EigenMatrix * wxn=new EigenMatrix[3*natoms];
-		EigenVector * exn=new EigenVector[3*natoms];
+		EigenMatrix * Dxns=new EigenMatrix[3*natoms];
+		EigenMatrix * Wxns=new EigenMatrix[3*natoms];
+		EigenVector * exns=new EigenVector[3*natoms];
 		short int * bf2atom=nullptr;
 		if (dfxid){
 			bf2atom=new short int[nbasis];
@@ -244,30 +244,30 @@ int main(int argc,char *argv[]){
 			ao2xxs,ao2yys,ao2zzs,
 			ao2xys,ao2xzs,ao2yzs,
 			coefficients,orbitalenergies,occupancies,
-			wxn,dxn,exn,
+			Wxns,Dxns,exns,
 			nprocs,1);
 		EigenMatrix hessian=NRH(natoms,atoms,1);
-		//std::cout<<"dxn[0]"<<std::endl;
-		//std::cout<<dxn[0]<<std::endl;
+		//std::cout<<"Wxns[0]"<<std::endl;
+		//std::cout<<Wxns[0]<<std::endl;
 		//std::cout<<"density"<<std::endl;
-		//std::cout<<density<<std::endl;
-/*		hessian+=RKSH(
+		//std::cout<<W<<std::endl;
+		/*hessian+=RKSH(
 			natoms,atoms,basisset,
-			density,dxn,
-			W,wxn,
+			density,Dxns,
+			W,Wxns,
 			ovlgrads,fskeletons,
 			kscale,
 			nprocs,1);
-*/		if (temperature>0)
-			hessian+=DensityOccupationGradientCPSCF(
+		*/if (temperature>0)
+			hessian+=FockOccupationGradientCPSCF(
 				temperature,repulsion,indices,n2integrals,kscale,
-				ovlgrads,fskeletons,dxn,exn,natoms,
+				ovlgrads,fskeletons,Dxns,exns,natoms,
 				coefficients,occupancies,orbitalenergies,
 				nprocs,1);
 
-		__Delete_Matrices__(dxn,3*natoms);
-		__Delete_Matrices__(wxn,3*natoms);
-		__Delete_Vectors__(exn,3*natoms);
+		__Delete_Matrices__(Dxns,3*natoms);
+		__Delete_Matrices__(Wxns,3*natoms);
+		__Delete_Vectors__(exns,3*natoms);
 		if (bf2atom) delete [] bf2atom;
 	}
 
