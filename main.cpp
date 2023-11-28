@@ -15,6 +15,7 @@
 #include "HFGradient.h"
 #include "Libint2.h"
 #include "CoupledPerturbed.h"
+#include "OccupationGradient.h"
 #include "HFHessian.h"
 #include "GridIntegrals.h"
 
@@ -247,10 +248,10 @@ int main(int argc,char *argv[]){
 			Wxns,Dxns,exns,
 			nprocs,1);
 		EigenMatrix hessian=NRH(natoms,atoms,1);
-		//std::cout<<"Wxns[0]"<<std::endl;
-		//std::cout<<Wxns[0]<<std::endl;
-		//std::cout<<"density"<<std::endl;
-		//std::cout<<W<<std::endl;
+		//std::cout<<"Wxns[8]"<<std::endl;
+		//std::cout<<Wxns[8]<<std::endl;
+		//std::cout<<"occupancies"<<std::endl;
+		//std::cout<<occupancies<<std::endl;
 		/*hessian+=RKSH(
 			natoms,atoms,basisset,
 			density,Dxns,
@@ -259,12 +260,23 @@ int main(int argc,char *argv[]){
 			kscale,
 			nprocs,1);
 		*/if (temperature>0)
-			hessian+=FockOccupationGradientCPSCF(
+		/*	hessian+=FockOccupationGradientCPSCF(
 				temperature,repulsion,indices,n2integrals,kscale,
 				ovlgrads,fskeletons,Dxns,exns,natoms,
 				coefficients,occupancies,orbitalenergies,
 				nprocs,1);
-
+		*/
+			hessian+=DensityOccupationGradientCPSCF(
+				natoms,bf2atom,temperature,
+				ovlgrads,fskeletons,Dxns,exns,
+				repulsion,indices,n2integrals,
+				dfxid,dfcid,ngrids,ws,
+				aos,
+				ao1xs,ao1ys,ao1zs,
+				ao2xxs,ao2yys,ao2zzs,
+				ao2xys,ao2xzs,ao2yzs,
+				coefficients,occupancies,orbitalenergies,
+				nprocs,1);
 		__Delete_Matrices__(Dxns,3*natoms);
 		__Delete_Matrices__(Wxns,3*natoms);
 		__Delete_Vectors__(exns,3*natoms);
