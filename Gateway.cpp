@@ -137,13 +137,14 @@ std::string ReadGrid(char * inp,const bool output){
 			ss>>grid;
 		}
 	}
+	std::string path=std::getenv("CHINIUM_PATH");
+	path+="/Grids/";
 	if (!grid.empty()){
-		std::string filename=std::string(__Grid_library_path__)+grid;
+		std::string filename=path+grid;
 		std::ifstream gridfile(filename);
-		assert("Cannot find the grid folder in " __Grid_library_path__ && gridfile.good());
-
+		assert("Grid file folder is missing!" && gridfile.good());
 		if (output)
-			std::cout<<"Grid ... "<<grid<<" found in "<<std::string(__Grid_library_path__)<<std::endl;
+			std::cout<<"Grid ... "<<grid<<" found in "<<path<<std::endl;
 	}
 	return grid;
 }
@@ -161,11 +162,14 @@ std::string ReadMethod(char * inp,const bool output){
 			ss>>method;
 		}
 	}
+	std::string path=std::getenv("CHINIUM_PATH");
+	path+="/DensityFunctionals/";
+	std::cout<<path<<std::endl;
 	if (method!="rhf"){
-		std::string filename=std::string(__DF_library_path__)+method+".df";
+		std::string filename=path+method+".df";
 		std::ifstream dffile(filename);
-		assert("Cannot find the DF file in " __DF_library_path__ && dffile.good());
-		if (output) std::cout<<"Computational method ... "<<method<<" found in "<<std::string(__DF_library_path__)<<std::endl;
+		assert("DF file is missing!" && dffile.good());
+		if (output) std::cout<<"Computational method ... "<<method<<" found in "<<path<<std::endl;
 	}
 	else if (output) std::cout<<"Computational method ... RHF"<<std::endl;
 	return method;

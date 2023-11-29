@@ -40,7 +40,8 @@
 #define __Basis_From_Atoms__\
 	__Libint2_Atoms__\
 	libint2::BasisSet obs(basisset,libint2atoms);\
-	obs.set_pure(1);
+	obs.set_pure(1);\
+
 
 #define __Delete_Matrices__(matrices,size)\
 	for (int imatrix=0;imatrix<size;imatrix++)\

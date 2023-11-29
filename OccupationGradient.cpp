@@ -336,9 +336,10 @@ EigenMatrix DensityOccupationGradientCPSCF(
 			if (jiter>__diis_start_iter__)
 				Fx=DIIS(Fxs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
 			EigenMatrix Dx=Dxns[ipert];
+			EigenVector exs(nbasis);
 			for (int kbasis=0;kbasis<nbasis;kbasis++){ // Fock 2 density
-				const double exs=coefficients.col(kbasis).transpose()*Fx*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
-				nxs(ipert,kbasis)=occupancies[kbasis]*(occupancies[kbasis]-1.)/temperature*exs;
+				exs[kbasis]=coefficients.col(kbasis).transpose()*Fx*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
+				nxs(ipert,kbasis)=occupancies[kbasis]*(occupancies[kbasis]-1.)/temperature*exs[kbasis];
 				Dx+=coefficients.col(kbasis)*coefficients.col(kbasis).transpose()*nxs(ipert,kbasis);
 			}
 			Fx=fskeletons[ipert]+GhfMatrix(repulsion,indices,n2integrals,Dx,kscale,nprocs); // Density 2 Fock
@@ -390,7 +391,8 @@ EigenMatrix DensityOccupationGradientCPSCF(
 			R=Fx-Fxs[0];
 			PushMatrixQueue(Fx,Fxs,__diis_space_size__);
 			PushMatrixQueue(R,Rs,__diis_space_size__);
-			//std::cout<<(Fx*D*overlap+F*dx*overlap+F*D*ovlgrads[ipert]-overlap*D*Fx-overlap*dx*F-ovlgrads[ipert]*D*F).norm()<<std::endl;
+			//std::cout<<R.norm()<<std::endl;
+			//std::cout<<(Fx*Dx*overlap+F*Dx*overlap+F*D*ovlgrads[ipert]-overlap*D*Fx-overlap*Dx*F-ovlgrads[ipert]*D*F).norm()<<std::endl;
 		}
 		const std::chrono::duration<double> duration=std::chrono::system_clock::now()-pert_start;
 		if (output) std::printf("|    %6d    |     %7d     | %9.6f |\n",ipert,jiter,duration.count());
@@ -400,10 +402,11 @@ EigenMatrix DensityOccupationGradientCPSCF(
 		for (int jpert=0;jpert<3*natoms;jpert++)
 			for (int kbasis=0;kbasis<nbasis;kbasis++)
 				hessian(ipert,jpert)+=exns[ipert](kbasis)*nxs(jpert,kbasis);
-	std::cout<<"occupancy"<<std::endl;
+	/*std::cout<<"occupancies"<<std::endl;
 	std::cout<<occupancies<<std::endl;
 	std::cout<<"nxs.row(8)"<<std::endl;
 	std::cout<<nxs.row(8).transpose()<<std::endl;
+	*/
 	__Finalize_KS__
 	delete [] dns;
 	delete [] dnxs;

@@ -15,10 +15,6 @@ LIBINT2Flags=-isystem $(LIBINT2)/include -L$(LIBINT2)/lib -lint2
 OSQPFlags=-isystem $(OSQP)/include/osqp -L$(OSQP)/lib64 -losqpstatic
 LIBXCFlags=-isystem $(LIBXC)/include -L$(LIBXC)/lib -lxc
 
-DFLib='-D__DF_library_path__="$(PWD)/DensityFunctionals/"'
-GridLib='-D__Grid_library_path__="$(PWD)/Grids/"'
-SAPLib='-D__SAP_library_path__="$(PWD)/SAP/"'
-
 .PHONY: all
 
 all: main Gateway NuclearRepulsion InitialGuess Libint2 AtomicIntegrals AtoIntGradients HartreeFock Optimization OSQP LinearAlgebra GridGeneration GridIntegrals DensityFunctional Lebedev HFGradient CoupledPerturbed OccupationGradient HFHessian
@@ -28,7 +24,7 @@ main: main.cpp
 	$(CXX) main.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 Gateway: Gateway.cpp
-	$(CXX) Gateway.cpp -c $(GeneralFlags) $(DFLib) $(GridLib)
+	$(CXX) Gateway.cpp -c $(GeneralFlags)
 
 NuclearRepulsion: NuclearRepulsion.cpp
 	$(CXX) NuclearRepulsion.cpp -c $(GeneralFlags) $(EIGEN3Flags)
@@ -58,13 +54,13 @@ LinearAlgebra: LinearAlgebra.cpp
 	$(CXX) LinearAlgebra.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 GridGeneration: GridGeneration.cpp
-	$(CXX) GridGeneration.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags) $(GridLib)
+	$(CXX) GridGeneration.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(LIBINT2Flags)
 
 GridIntegrals: GridIntegrals.cpp
 	$(CXX) GridIntegrals.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 DensityFunctional: DensityFunctional.cpp
-	$(CXX) DensityFunctional.cpp -c $(GeneralFlags) $(LIBXCFlags) $(DFLib)
+	$(CXX) DensityFunctional.cpp -c $(GeneralFlags) $(LIBXCFlags)
 
 Lebedev: sphere_lebedev_rule.cpp
 	$(CXX) sphere_lebedev_rule.cpp -c $(GeneralFlags)

@@ -60,13 +60,15 @@ EigenMatrix SuperpositionAtomicPotential(const int natoms,double * atoms,int nba
                                          double * xs,double * ys,double * zs,double * ws,int ngrids,double * aos){
 	__Z_2_Name__
 	double * vsap=new double[ngrids]();
+	std::string path=std::getenv("CHINIUM_PATH");
+	path+="/SAP/";
 	for (int iatom=0;iatom<natoms;iatom++){
 		const std::string atomname=Z2Name[(int)atoms[iatom*4]];
 		const double atomx=atoms[iatom*4+1];
 		const double atomy=atoms[iatom*4+2];
 		const double atomz=atoms[iatom*4+3];
-		std::ifstream sapfile(std::string(__SAP_library_path__)+"/v_"+atomname+".dat");
-		assert("Missing element SAP file in" __SAP_library_path__ && sapfile.good());
+		std::ifstream sapfile(path+"/v_"+atomname+".dat");
+		assert("SAP file is missing!" && sapfile.good());
 		double Rs[__nlines__];
 		double Zs[__nlines__];
 		for (int iline=0;iline<__nlines__;iline++){

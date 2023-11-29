@@ -16,8 +16,10 @@ int SphericalGridNumber(std::string grid,const int natoms,double * atoms,const b
 	__Z_2_Name__
 	for (int iatom=0;iatom<natoms;iatom++){
 		int ngroups;
-		std::ifstream gridfile(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
-		assert("Missing element grid file" && gridfile.good());
+		std::string path=std::getenv("CHINIUM_PATH");
+		path+="/Grids/";
+		std::ifstream gridfile(path+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
+		assert("Missing element grid file in folder!" && gridfile.good());
 		std::string thisline;
 		getline(gridfile,thisline);
 		std::stringstream ss_(thisline);
@@ -58,9 +60,11 @@ void SphericalGrid(std::string grid,const int natoms,double * atoms,
 	double * z_ranger=zs;
 	double * w_ranger=ws;
 	__Z_2_Name__
+	std::string path=std::getenv("CHINIUM_PATH");
+	path+="/Grids/";
 	for (int iatom=0;iatom<natoms;iatom++){
-		std::ifstream gridfile(std::string(__Grid_library_path__)+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
-		assert("Missing element grid file in" __Grid_library_path__ && gridfile.good());
+		std::ifstream gridfile(path+"/"+grid+"/"+Z2Name[(int)(atoms[4*iatom])]+".grid");
+		assert("Missing element grid file in folder!" && gridfile.good());
 		std::string thisline;
 		getline(gridfile,thisline);
 		std::stringstream ss_(thisline);

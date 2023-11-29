@@ -2,6 +2,7 @@
 #include <cmath>
 #include <string>
 #include <cassert>
+#include <fstream>
 #include <iostream>
 #include "Aliases.h"
 #include "Gateway.h"
@@ -23,6 +24,11 @@ int main(int argc,char *argv[]){
 
 	std::cout<<"*** Chinium started ***"<<std::endl;
 	assert("Running Chinium requires an input file!" && argc>1);
+	std::string filename(argv[1]);
+	std::ifstream filename_(filename);
+	assert("This input file does not exist!" && filename_.good());
+	char * path=std::getenv("CHINIUM_PATH");
+	assert("The environment variable CHINIUM_PATH is empty!" && path);
 
 	// Gateway
 	const int nprocs=ReadNProcs(argv[1],1);
