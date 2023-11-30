@@ -164,7 +164,6 @@ std::string ReadMethod(char * inp,const bool output){
 	}
 	std::string path=std::getenv("CHINIUM_PATH");
 	path+="/DensityFunctionals/";
-	std::cout<<path<<std::endl;
 	if (method!="rhf"){
 		std::string filename=path+method+".df";
 		std::ifstream dffile(filename);

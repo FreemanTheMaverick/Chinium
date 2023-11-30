@@ -283,6 +283,7 @@ int main(int argc,char *argv[]){
 				ao2xys,ao2xzs,ao2yzs,
 				coefficients,occupancies,orbitalenergies,
 				nprocs,1);
+		//std::cout<<hessian<<std::endl;
 		__Delete_Matrices__(Dxns,3*natoms);
 		__Delete_Matrices__(Wxns,3*natoms);
 		__Delete_Vectors__(exns,3*natoms);

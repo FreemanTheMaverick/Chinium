@@ -9,8 +9,8 @@
 
 EigenMatrix RKSH(
 		const int natoms,double * atoms,const char * basisset,
-		EigenMatrix d,EigenMatrix * Dxns,
-		EigenMatrix w,EigenMatrix * Wxns,
+		EigenMatrix D,EigenMatrix * Dxns,
+		EigenMatrix W,EigenMatrix * Wxns,
 		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,
 		double kscale,
 		const int nprocs,const bool output){
@@ -25,12 +25,12 @@ EigenMatrix RKSH(
 	auto small_start=std::chrono::system_clock::now();
 	for (int x=0;x<3*natoms;x++)
 		for (int y=0;y<3*natoms;y++)
-			hessian1(x,y)+=2*(Dxns[y]*fskeletons[x]).trace()-(Wxns[y]*ovlgrads[x]).trace();
+			hessian1(x,y)+=(Dxns[y]*fskeletons[x]).trace()-(Wxns[y]*ovlgrads[x]).trace();
 	std::chrono::duration<double> duration=std::chrono::system_clock::now()-small_start;
 	if (output) std::printf("%f s\n",duration.count());
-	tmp=0.5*(hessian1+hessian1.transpose());
+	tmp=hessian1+hessian1.transpose();
 	hessian1=tmp;
-	std::cout<<hessian1<<std::endl;
+	
 
 	if (output) std::printf("| Calculating second-order one-electron integral derivative contributions ... ");
 	small_start=std::chrono::system_clock::now();
@@ -57,14 +57,13 @@ EigenMatrix RKSH(
 
 	  // Overlap
 	  ovl_engine.compute(obs[s1],obs[s2]);
-	  //if (ovl_buf[0]){
 	  if (ovl_buf[0] && atomlist[0]!=atomlist[1]){
 	   for (short int f1=0,f12=0;f1!=n1;f1++){
 	    const short int bf1=bf1_first+f1;
 	    for (short int f2=0;f2!=n2;f2++,f12++){
 	     const short int bf2=bf2_first+f2;
 	     if (bf2<=bf1){
-	      const double tmp=((bf1==bf2)?1:2)*w(bf1,bf2);
+	      const double tmp=((bf1==bf2)?1:2)*W(bf1,bf2);
 	      int xpert=114514;
 	      int ypert=1919810;
 	      for (int p=0,ptqs=0;p<2;p++) for (int t=0;t<3;t++){
@@ -87,7 +86,7 @@ EigenMatrix RKSH(
 	    for (short int f2=0;f2!=n2;f2++,f12++){
 	     const short int bf2=bf2_first+f2;
 	     if (bf2<=bf1){
-	      const double tmp=((bf1==bf2)?1:2)*d(bf1,bf2);
+	      const double tmp=((bf1==bf2)?1:2)*D(bf1,bf2);
 	      int xpert=114514;
 	      int ypert=1919810;
 	      for (int p=0,ptqs=0;p<2;p++) for (int t=0;t<3;t++){
@@ -110,7 +109,7 @@ EigenMatrix RKSH(
 	    for (short int f2=0;f2!=n2;f2++,f12++){
 	     const short int bf2=bf2_first+f2;
 	     if (bf2<=bf1){
-	      const double tmp=((bf1==bf2)?1:2)*d(bf1,bf2);
+	      const double tmp=((bf1==bf2)?1:2)*D(bf1,bf2);
 	      int xpert=114514;
 	      int ypert=1919810;
 	      for (int p=0,ptqs=0;p<2+natoms;p++) for (int t=0;t<3;t++){
@@ -135,7 +134,6 @@ EigenMatrix RKSH(
 	hessian21*=2;
 	duration=std::chrono::system_clock::now()-small_start;
 	if (output) std::printf("%f s\n",duration.count());
-	std::cout<<hessian21<<std::endl;
  
 	if (output) std::printf("| Calculating second-order two-electron integral derivative contributions ... ");
 	small_start=std::chrono::system_clock::now();
@@ -182,15 +180,16 @@ EigenMatrix RKSH(
 	          xpert=3*atomlist[p]+t;
 	          for (int q=p;q<4;q++) for (int s=((q==p)?t:0);s<3;s++,ptqs++){
 	           ypert=3*atomlist[q]+s;
-		   if (atomlist[0]==atomlist[1] && atomlist[1]==atomlist[2] && atomlist[2]==atomlist[3]) continue;
-	           tmp=abcd_deg*buf_vec[ptqs][f1234];
-	           hessianj(xpert,ypert)+=d(bf1,bf2)*tmp*d(bf3,bf4);
-	           hessianj(xpert,ypert)+=d(bf3,bf4)*tmp*d(bf1,bf2);
+		   double scale=1;
+		   if (xpert==ypert && p!=q) scale=2;
+	           tmp=scale*abcd_deg*buf_vec[ptqs][f1234];
+	           hessianj(xpert,ypert)+=D(bf1,bf2)*tmp*D(bf3,bf4);
+	           hessianj(xpert,ypert)+=D(bf3,bf4)*tmp*D(bf1,bf2);
 	           if (kscale>0){
-	            hessiank(xpert,ypert)+=d(bf1,bf3)*tmp*d(bf2,bf4);
-	            hessiank(xpert,ypert)+=d(bf2,bf4)*tmp*d(bf1,bf3);
-	            hessiank(xpert,ypert)+=d(bf1,bf4)*tmp*d(bf2,bf3);
-	            hessiank(xpert,ypert)+=d(bf2,bf3)*tmp*d(bf1,bf4);
+	            hessiank(xpert,ypert)+=D(bf1,bf3)*tmp*D(bf2,bf4);
+	            hessiank(xpert,ypert)+=D(bf2,bf4)*tmp*D(bf1,bf3);
+	            hessiank(xpert,ypert)+=D(bf1,bf4)*tmp*D(bf2,bf3);
+	            hessiank(xpert,ypert)+=D(bf2,bf3)*tmp*D(bf1,bf4);
 	           }
 	          }
 	         }
@@ -211,8 +210,13 @@ EigenMatrix RKSH(
 	hessiang2=tmp-0.5*diagonalg2;
 	duration=std::chrono::system_clock::now()-small_start;
 	if (output) std::printf("%f s\n",duration.count());
+	/*std::cout<<"hessian1"<<std::endl;
+	std::cout<<hessian1<<std::endl;
+	std::cout<<"hessian21"<<std::endl;
+	std::cout<<hessian21<<std::endl;
+	std::cout<<"hessiang2"<<std::endl;
 	std::cout<<hessiang2<<std::endl;
-
+	*/
 	duration=std::chrono::system_clock::now()-big_start;
 	if (output) std::printf("| Done; %f s\n",duration.count());
 	return hessian1+hessian21+hessiang2;
