@@ -94,7 +94,7 @@ EigenMatrix RKSH(
 	       xpert=3*atomlist[p]+t;
 	       for (int q=p;q<2;q++) for (int s=((q==p)?t:0);s<3;s++,ptqs++){
 	        ypert=3*atomlist[q]+s;
-	        hessian21(xpert,ypert)+=0*tmp*knt_buf[ptqs][f12];
+	        hessian21(xpert,ypert)+=tmp*knt_buf[ptqs][f12];
 	       }
 	      }
 	     }
@@ -117,7 +117,9 @@ EigenMatrix RKSH(
 	       xpert=3*(p<2?atomlist[p]:p-2)+t;
 	       for (int q=p;q<2+natoms;q++) for (int s=((q==p)?t:0);s<3;s++,ptqs++){
 	        ypert=3*(q<2?atomlist[q]:q-2)+s;
-	        hessian21(xpert,ypert)+=0*tmp*ncl_buf[ptqs][f12];
+		double scale=1;
+		if (xpert==ypert && p!=q && (p<2 || q<2)) scale=2;
+	        hessian21(xpert,ypert)+=scale*tmp*ncl_buf[ptqs][f12];
 	       }
 	      }
 	     }

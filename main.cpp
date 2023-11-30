@@ -258,14 +258,14 @@ int main(int argc,char *argv[]){
 		//std::cout<<Wxns[8]<<std::endl;
 		//std::cout<<"occupancies"<<std::endl;
 		//std::cout<<occupancies<<std::endl;
-		/*hessian+=RKSH(
+		hessian+=RKSH(
 			natoms,atoms,basisset,
 			density,Dxns,
 			W,Wxns,
 			ovlgrads,fskeletons,
 			kscale,
 			nprocs,1);
-		*/if (temperature>0)
+		if (temperature>0)
 		/*	hessian+=FockOccupationGradientCPSCF(
 				temperature,repulsion,indices,n2integrals,kscale,
 				ovlgrads,fskeletons,Dxns,exns,natoms,

@@ -2,7 +2,7 @@ CXX=g++
 # The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
 EIGEN3=/home/yzhangnn/eigen3/include/eigen3
 # The path where you can find "include/", "lib/" and "share/".
-LIBINT2=/home/yzhangnn/scratch/libint_2.7.2
+LIBINT2=/home/yzhangnn/scratch/libint_2.8.0
 # The path where you can find "include/" and "lib64/".
 OSQP=/home/yzhangnn/osqp_0.6.3
 # The path where you can find "bin/", "include/" and "lib/".
