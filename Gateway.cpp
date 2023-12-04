@@ -77,7 +77,7 @@ int ReadNElectrons(char * inp,const bool output){
 			ss>>charge;
 		}
 	}
-	ne+=charge;
+	ne-=charge;
 	if (output) std::cout<<"Charge ... "<<charge<<std::endl;
 	if (output) std::cout<<"Number of electrons ... "<<ne<<std::endl;
 	return ne;

@@ -12,9 +12,8 @@
 #include "Optimization.h"
 
 #define __damping_start_threshold__ 100.
-#define __damping_factor__ 0.25
-#define __adiis_start_iter__ 1
-#define __diis_start_iter__ 4
+#define __damping_factor__ 0.
+#define __diis_start_threshold__ 1.
 #define __diis_space_size__ 6
 #define __lbfgs_start_threshold__ -1.e-3
 #define __lbfgs_space_size__ 10
@@ -285,19 +284,20 @@ double RKS(int nele,double temperature,double chemicalpotential,
 			if (output) std::printf("    naive    |");
 			update='f';
 			F=Fs[0];
-		}else if (abs(Es[0]-Es[1])>__damping_start_threshold__ && nlbfgs==-1){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
+		/*}else if (abs(Es[0]-Es[1])>__damping_start_threshold__ && nlbfgs==-1){ // Using damping in the beginning and when energy oscillates in a large number of iterations.
 			if (output) std::printf("   damping   |");
 			update='f';
 			F=(1.-__damping_factor__)*Fs[0]+__damping_factor__*Fs[1];
-		}else if (__diis_start_iter__>=iiteration && iiteration>__adiis_start_iter__ && nlbfgs==-1){ // Starting A-DIIS in the beginning to facilitate (but not necesarily accelerate) convergence.
+		*/
+		}else if (pG.norm()>__diis_start_threshold__ && nlbfgs==-1){ // Starting A-DIIS in the beginning to facilitate (but not necesarily accelerate) convergence.
 			if (output) std::printf("    ADIIS    |");
 			update='f';
 			F=AEDIIS('a',Es,Ds,Fs,iiteration<__diis_space_size__?iiteration:__diis_space_size__);
-		}else if (iiteration>__diis_start_iter__ && pG.norm()>__lbfgs_start_threshold__ && nlbfgs==-1){ // Starting DIIS after A-DIIS to accelerate convergence in the medium-gradient area.
+		}else if (pG.norm()<=__diis_start_threshold__ && pG.norm()>__lbfgs_start_threshold__ && nlbfgs==-1){ // Starting DIIS after A-DIIS to accelerate convergence in the medium-gradient area.
 			if (output) std::printf("    CDIIS    |");
 			update='f';
 			F=DIIS(Fs,Gs,iiteration<__diis_space_size__?iiteration:__diis_space_size__,error2norm); // error2norm is updated.
-		}else if ((iiteration>__diis_start_iter__ && pG.norm()<__lbfgs_start_threshold__) || nlbfgs>=0){ // Stopping DIIS for ASOSCF (or simply L-BFGS) in the final part to prevent trailing.
+		}else if ((pG.norm()<__lbfgs_start_threshold__) || nlbfgs>=0){ // Stopping DIIS for ASOSCF (or simply L-BFGS) in the final part to prevent trailing.
 			EigenVector hessiandiag(nocc*(nbasis-nocc));
 			hessiandiag.setZero();
 			if (output) std::printf("    L-BFGS   |");
