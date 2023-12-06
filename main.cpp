@@ -19,6 +19,7 @@
 #include "OccupationGradient.h"
 #include "HFHessian.h"
 #include "GridIntegrals.h"
+#include "Multiwfn.h"
 
 int main(int argc,char *argv[]){
 
@@ -29,6 +30,10 @@ int main(int argc,char *argv[]){
 	assert("This input file does not exist!" && filename_.good());
 	char * path=std::getenv("CHINIUM_PATH");
 	assert("The environment variable CHINIUM_PATH is empty!" && path);
+
+	std::string::size_type pos=filename.find_last_of(".");
+	std::string mwfnname=filename.substr(0,pos)+".mwfn";
+	Mwfn mwfn(mwfnname,1);
 
 	// Gateway
 	const int nprocs=ReadNProcs(argv[1],1);
@@ -47,6 +52,8 @@ int main(int argc,char *argv[]){
 	const double temperature=ReadTemperature(argv[1],1);
 	const double chemicalpotential=ReadChemicalPotential(argv[1],1);
 	const std::string scf="rijcosx";
+
+	mwfn.Nbasis=nbasis;
 
 	// Density functional (if any)
 	int dfxid=0;
@@ -123,8 +130,11 @@ int main(int argc,char *argv[]){
 
 	// Storable electron integrals 
 	const EigenMatrix overlap=Overlap(natoms,atoms,basisset,1);
+	mwfn.Overlap_matrix=overlap;
 	const EigenMatrix kinetic=Kinetic(natoms,atoms,basisset,1);
+	mwfn.Kinetic_energy_matrix=kinetic;
 	const EigenMatrix nuclear=Nuclear(natoms,atoms,basisset,1);
+	mwfn.Potential_energy_matrix=nuclear;
 	const EigenMatrix hcore=kinetic+nuclear;
 	const EigenMatrix repulsiondiag=RepulsionDiag(natoms,atoms,basisset,1);
 	int nshellquartets;
@@ -153,8 +163,13 @@ int main(int argc,char *argv[]){
 	else if (guess.compare("sad")==0)
 		density=SuperpositionAtomicDensity(natoms,atoms,basisset);
 	else if (guess.compare("sap")==0)
-		fock=hcore+SuperpositionAtomicPotential(natoms,atoms,nbasis,
-                                                        xs,ys,zs,ws,ngrids,aos);
+		fock=hcore+SuperpositionAtomicPotential(
+				natoms,atoms,nbasis,
+				xs,ys,zs,ws,ngrids,aos);
+	else if (guess.compare("read")==0){
+		assert("Density matrix is missing in .mwfn file!" && mwfn.Total_density_matrix.rows()>0);
+		density=mwfn.Total_density_matrix;
+	}
 
 	EigenMatrix coefficients(nbasis,nbasis);
 	EigenVector orbitalenergies(nbasis);
@@ -182,6 +197,14 @@ int main(int argc,char *argv[]){
 			orbitalenergies,coefficients,
 			occupancies,density,fock,
 			nprocs,1);
+
+	mwfn.Type.assign(nbasis,0);
+	mwfn.Energy=orbitalenergies;
+	mwfn.Occ=occupancies*2;
+	mwfn.Sym.assign(nbasis,"A");
+	mwfn.Coeff=coefficients;
+	mwfn.Total_density_matrix=density;
+	mwfn.Hamiltonian_matrix=fock;
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
@@ -289,6 +312,8 @@ int main(int argc,char *argv[]){
 		__Delete_Vectors__(exns,3*natoms);
 		if (bf2atom) delete [] bf2atom;
 	}
+
+	mwfn.Save(mwfnname,1);
 
 	delete [] xs;
 	delete [] ys;

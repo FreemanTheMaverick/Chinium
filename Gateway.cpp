@@ -119,8 +119,8 @@ std::string ReadGuess(char * inp,const bool output){
 		std::cout<<"Initial guessed density matrix ... Superposition of atomic density"<<std::endl;
 	else if (guess.compare("sap")==0 && output)
 		std::cout<<"Initial guessed density matrix ... Superposition of atomic potentials"<<std::endl;
-	else if (output)
-		std::cout<<"Initial guessed density matrix ... taken from '"<<guess<<"'"<<std::endl;
+	else if (guess.compare("read")==0 && output)
+		std::cout<<"Initial guessed density matrix ... read from .mwfn file"<<std::endl;
 	return guess;
 }
 
