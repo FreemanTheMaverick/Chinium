@@ -23,13 +23,13 @@
 	int total=(lower?(1+ncols)*ncols/2:nrows*ncols);\
 	__Read_Array_Head__\
 		if (lower){\
-			mat(irow,jcol)=mat(jcol,irow)=std::stof(word);\
+			mat(irow,jcol)=mat(jcol,irow)=SafeStof(word);\
 			if (irow==jcol){\
 				irow++;\
 				jcol=0;\
 			}else jcol++;\
 		}else{\
-			mat(irow,jcol)=std::stof(word);\
+			mat(irow,jcol)=SafeStof(word);\
 			if (jcol+1==ncols){\
 				irow++;\
 				jcol=0;\
@@ -108,6 +108,16 @@ EigenMatrix MwfnMatrixTransform(std::vector<int> shelltypes){ // Chinium orders 
 	return transform;
 }
 
+double SafeStof(std::string word){ // In FT theory, some occupation numbers can be of dimension of 1E-50 or less. These small values cannot be stored as doubles and are likely to cause "out_of_range" error.
+	double value=1919810;
+	try{
+		value=std::stof(word);
+	}catch (const std::out_of_range& e){
+		value=0;
+	}
+	return value;
+}
+
 Mwfn::Mwfn(std::string filename,const bool output){
 	std::ifstream file(filename.c_str());
 	if (!file.good()) return;
@@ -155,20 +165,22 @@ Mwfn::Mwfn(std::string filename,const bool output){
 					this->Shell_types[k]=std::stoi(word);
 				__Read_Array_Tail__
 				mwfntransform=MwfnMatrixTransform(this->Shell_types);
+				continue;
 			}else if (word.compare("centers")==0){
 				int total=this->Nshell;
 				this->Shell_centers.resize(total,-114514);
 				__Read_Array_Head__
 					this->Shell_centers[k]=std::stoi(word);
 				__Read_Array_Tail__
+				continue;
 			}else if (word.compare("contraction")==0){
 				int total=this->Nshell;
 				this->Shell_contraction_degrees.resize(total,-114514);
 				__Read_Array_Head__
 					this->Shell_contraction_degrees[k]=std::stoi(word);
 				__Read_Array_Tail__
+				continue;
 			}
-			continue;
 		}
 			
 		// Field 4
@@ -182,15 +194,11 @@ Mwfn::Mwfn(std::string filename,const bool output){
 			continue;
 		}else if (word.compare("Energy=")==0){
 			ss>>word;
-			this->Energy[tmp_int]=std::stof(word);
+			this->Energy[tmp_int]=SafeStof(word);
 			continue;
 		}else if (word.compare("Occ=")==0){
 			ss>>word;
-			try{ // In FT theory, some occupation numbers can be of dimension of 1E-50 or less. These small values cannot be stored as doubles and are likely to cause "out_of_range" error.
-				this->Occ[tmp_int]=std::stof(word);
-			}catch (const std::out_of_range& e){
-				this->Occ[tmp_int]=0;
-			}
+			this->Occ[tmp_int]=SafeStof(word);
 			continue;
 		}else if (word.compare("Sym=")==0){
 			ss>>word;
@@ -200,7 +208,7 @@ Mwfn::Mwfn(std::string filename,const bool output){
 			int ibasis=0;
 			int total=this->Nbasis;
 			__Read_Array_Head__
-				this->Coeff(ibasis,tmp_int)=std::stof(word);
+				this->Coeff(ibasis,tmp_int)=SafeStof(word);
 				ibasis++;
 			__Read_Array_Tail__
 			this->Coeff=mwfntransform.transpose()*this->Coeff;
