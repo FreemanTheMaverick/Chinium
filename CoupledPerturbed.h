@@ -1,4 +1,4 @@
-void NonIdempotentCPSCF(int natoms,short int * bf2atoms,
+void NonIdempotentCPSCF(int natoms,int * bf2atoms,
                         EigenMatrix * ovlgrads,EigenMatrix * fskeletons,
                         double * repulsion,short int * indices,long int n2integrals,
 			int dfxid,int dfcid,int ngrids,double * ws,

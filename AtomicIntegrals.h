@@ -1,5 +1,3 @@
-int nBasis(const int natoms,double * atoms,const char * basisset,const bool output);
-
 int nOneElectronIntegrals(const int natoms,double * atoms,const char * basisset,const bool output);
 
 EigenMatrix Overlap(const int natoms,double * atoms,const char * basisset,const bool output);

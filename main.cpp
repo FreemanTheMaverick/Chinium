@@ -33,6 +33,7 @@ int main(int argc,char *argv[]){
 
 	std::string::size_type pos=filename.find_last_of(".");
 	std::string mwfnname=filename.substr(0,pos)+".mwfn";
+	std::ifstream mwfnname_(mwfnname);
 	Mwfn mwfn(mwfnname,1);
 
 	// Gateway
@@ -42,7 +43,10 @@ int main(int argc,char *argv[]){
 	const std::string basisset_=ReadBasisSet(argv[1],1);
 	const char * basisset=basisset_.data();
 	const int ne=ReadNElectrons(argv[1],1);
+	const int nshell=nShell(natoms,atoms,basisset,1);
 	const int nbasis=nBasis(natoms,atoms,basisset,1);
+	const int nprimshell=nPrimShell(natoms,atoms,basisset,1);
+	const int nprim=nPrim(natoms,atoms,basisset,1);
 	nOneElectronIntegrals(natoms,atoms,basisset,1);
 	const double nuclearrepulsion=NuclearRepulsion(natoms,atoms,1);
 	const int derivative=ReadDerivative(argv[1],1);
@@ -53,7 +57,40 @@ int main(int argc,char *argv[]){
 	const double chemicalpotential=ReadChemicalPotential(argv[1],1);
 	const std::string scf="rijcosx";
 
+	mwfn.Ncenter=natoms;
+	mwfn.Centers.resize(4*natoms);
+	std::memcpy(&mwfn.Centers[0],atoms,4*natoms*sizeof(double));
+
 	mwfn.Nbasis=nbasis;
+	mwfn.Nindbasis=nbasis;
+	mwfn.Nprims=nprim;
+	mwfn.Nshell=nshell;
+	mwfn.Nprimshell=nprimshell;
+
+	int * bf2shell=new int[nbasis];
+	int * bf2atom=new int[nbasis];
+	int * shell2type=new int[nshell];
+	int * shell2atom=new int[nshell];
+	int * shell2cd=new int[nshell];
+	double * primexp=new double[nprim];
+	double * primcontr=new double[nprim];
+	ShellInfo(
+			natoms,atoms,basisset,
+			bf2shell,bf2atom,
+			shell2type,shell2atom,shell2cd,
+			primexp,primcontr);
+
+	mwfn.Shell_types.resize(nshell);
+	mwfn.Shell_centers.resize(nshell);
+	mwfn.Shell_contraction_degrees.resize(nshell);
+	mwfn.Primitive_exponents.resize(nprimshell);
+	mwfn.Contraction_coefficients.resize(nprimshell);
+	std::memcpy(&mwfn.Shell_types[0],shell2type,nshell*sizeof(int));
+	std::memcpy(&mwfn.Shell_centers[0],shell2atom,nshell*sizeof(int));
+	std::memcpy(&mwfn.Shell_contraction_degrees[0],shell2cd,nshell*sizeof(int));
+	std::memcpy(&mwfn.Primitive_exponents[0],primexp,nprimshell*sizeof(double));
+	std::memcpy(&mwfn.Contraction_coefficients[0],primcontr,nprimshell*sizeof(double));
+
 
 	// Density functional (if any)
 	int dfxid=0;
@@ -205,6 +242,7 @@ int main(int argc,char *argv[]){
 	mwfn.Coeff=coefficients;
 	mwfn.Total_density_matrix=density;
 	mwfn.Hamiltonian_matrix=fock;
+	mwfn.E_tot=nuclearrepulsion+energy;
 
 	std::cout<<"Total energy ... "<<nuclearrepulsion+energy<<" a.u."<<std::endl;
 
@@ -259,11 +297,6 @@ int main(int argc,char *argv[]){
 		EigenMatrix * Dxns=new EigenMatrix[3*natoms];
 		EigenMatrix * Wxns=new EigenMatrix[3*natoms];
 		EigenVector * exns=new EigenVector[3*natoms];
-		short int * bf2atom=nullptr;
-		if (dfxid){
-			bf2atom=new short int[nbasis];
-			BF2Atom(natoms,atoms,basisset,bf2atom);
-		}
 		NonIdempotentCPSCF(
 			natoms,bf2atom,
 			ovlgrads,fskeletons,
@@ -313,7 +346,11 @@ int main(int argc,char *argv[]){
 		if (bf2atom) delete [] bf2atom;
 	}
 
-	mwfn.Save(mwfnname,1);
+	mwfn.Charge=0;
+	mwfn.Naelec=ne/2;
+	mwfn.Nbelec=ne/2;
+	mwfn.VT_ratio=2;
+	mwfn.Export(mwfnname,1);
 
 	delete [] xs;
 	delete [] ys;

@@ -37,6 +37,24 @@
 	for (const auto& shell:obs)\
 		nbasis+=shell.size(); // Size of basis set directly derived from libint2::BasisSet.
 
+#define __nPrim_From_OBS__\
+	int nprim=0;\
+	for (const auto& shell:obs)\
+		switch (shell.contr[0].l){\
+			case 0: nprim+=1*shell.nprim();break;\
+			case 1: nprim+=3*shell.nprim();break;\
+			case 2: nprim+=6*shell.nprim();break;\
+			case 3: nprim+=10*shell.nprim();break;\
+			case 4: nprim+=15*shell.nprim();break;\
+			case 5: nprim+=21*shell.nprim();break;\
+			case 6: nprim+=28*shell.nprim();break;\
+		} // Number of primitive gaussians assuming that all are cartesian
+
+#define __nPrimShell_From_OBS__\
+	int nprimshell=0;\
+	for (const auto& shell:obs)\
+		nprimshell+=shell.nprim(); // Number of primitive gaussians
+
 #define __Basis_From_Atoms__\
 	__Libint2_Atoms__\
 	libint2::BasisSet obs(basisset,libint2atoms);\

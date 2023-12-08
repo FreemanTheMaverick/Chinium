@@ -8,13 +8,6 @@
 
 #define __integral_threshold__ -1.e-12
 
-int nBasis(const int natoms,double * atoms,const char * basisset,const bool output){ // Size of basis set.
-	__Basis_From_Atoms__
-	__nBasis_From_OBS__
-	if (output) std::cout<<"Number of atomic bases ... "<<nbasis<<std::endl;
-	return nbasis;
-}
-
 int nOneElectronIntegrals(const int natoms,double * atoms,const char * basisset,const bool output){ // Number of one-electron integrals.
 	__Basis_From_Atoms__
 	__nBasis_From_OBS__

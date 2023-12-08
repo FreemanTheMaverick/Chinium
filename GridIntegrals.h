@@ -12,7 +12,7 @@ void GetDensitySkeleton(
 		double * ao2xxs,double * ao2yys,double * ao2zzs,
 		double * ao2xys,double * ao2xzs,double * ao2yzs,
 		int ngrids,EigenMatrix D,
-		short int atom,short int * bf2atom,
+		int atom,int * bf2atom,
 		double * d1nxs,double * d1nys,double * d1nzs,
 		double * d2nxxs,double * d2nxys,double * d2nxzs, // For example, d2nxys is the x component of grid density gradient derivative with respect to a nuclear y coordinate perturbation.
 		double * d2nyxs,double * d2nyys,double * d2nyzs,

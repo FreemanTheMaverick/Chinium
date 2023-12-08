@@ -10,6 +10,7 @@
 #include "AtomicIntegrals.h"
 #include "HartreeFock.h"
 #include "GridIntegrals.h"
+#include "Libint2.h"
 
 EigenMatrix SuperpositionAtomicDensity(const int natoms,double * atoms,const char * basisset){
 	const int nbasis=nBasis(natoms,atoms,basisset,0);

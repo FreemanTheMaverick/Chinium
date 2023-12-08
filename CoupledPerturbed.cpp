@@ -18,7 +18,7 @@
 #define __small_value__ 1.e-9
 
 void NonIdempotentCPSCF(
-		int natoms,short int * bf2atom,
+		int natoms,int * bf2atom,
 		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,
 		double * repulsion,short int * indices,long int n2integrals,
 		int dfxid,int dfcid,int ngrids,double * ws,

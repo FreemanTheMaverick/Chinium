@@ -5,7 +5,7 @@ EigenMatrix FockOccupationGradientCPSCF(
 		const int nprocs,const bool output);
 
 EigenMatrix DensityOccupationGradientCPSCF(
-		int natoms,short int * bf2atom,double temperature,
+		int natoms,int * bf2atom,double temperature,
 		EigenMatrix * ovlgrads,EigenMatrix * fskeletons,EigenMatrix * Dxns,EigenVector * exns,
 		double * repulsion,short int * indices,long int n2integrals,
 		int dfxid,int dfcid,int ngrids,double * ws,
