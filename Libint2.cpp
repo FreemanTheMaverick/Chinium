@@ -26,7 +26,7 @@ int nPrim(const int natoms,double * atoms,const char * basisset,const bool outpu
 int nPrimShell(const int natoms,double * atoms,const char * basisset,const bool output){ // Size of basis set.
 	__Basis_From_Atoms__
 	__nPrimShell_From_OBS__
-	if (output) std::cout<<"Number of primitive gaussians ... "<<nprimshell<<std::endl;
+	if (output) std::cout<<"Number of primitive shells ... "<<nprimshell<<std::endl;
 	return nprimshell;
 }
 
@@ -48,8 +48,7 @@ void ShellInfo(
 		}
 		for (int jprim=0;jprim<(int)obs[ishell].nprim();jprim++,kprim++){
 			if (primexp) primexp[kprim]=(double)obs[ishell].alpha[jprim];
-			if (primcontr) primcontr[kprim]=(double)obs[ishell].contr[0].coeff[jprim];
+			if (primcontr) primcontr[kprim]=(double)obs[ishell].coeff_normalized(0,jprim);
 		}
-		//std::cout<<obs[ishell]<<std::endl;
 	}
 }
