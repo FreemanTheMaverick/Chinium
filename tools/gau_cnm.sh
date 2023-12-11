@@ -24,9 +24,9 @@
 # 4. In the process, a temporary file tmp_xyz will be created and deleted automatically. If the job terminates abnormally, delete the temporary file before restarting a new job.
 
 
-########################
-# Locations of Chinium #
-########################
+#######################
+# Location of Chinium #
+#######################
 
 Chinium=$CHINIUM_PATH/Chinium
 
@@ -35,7 +35,7 @@ Chinium=$CHINIUM_PATH/Chinium
 # Parameters #
 ##############
 
-# Initial guess
+# Wavefunction file name
 mwfn=$1
 
 # Files interfacing to Gaussian
