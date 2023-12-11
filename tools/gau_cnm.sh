@@ -14,7 +14,7 @@
 # 3. Create a Gaussian input file with the keyword external. For example, an optimization job input file should look like:
 # %nproc=1 ! Only 1 thread is needed, because intensive computation is done by Chinium instead of Gaussian.
 # %chk=job.chk ! The final geometry will be stored in this file, but the wavefunction will not.
-# # opt(micro) nosym external='bash $CHINIUM_PATH/tools/gau_cnm.sh job.mwfn' ! The option micro and the keyword nosym are NECESSARY. job.mwfn will be used to store the final wavefunction. You can also cp another existent mwfn file to job.mwfn to let Chinium read it as initial guess for the first frame.
+# # opt(micro) nosym external='bash $CHINIUM_PATH/tools/gau_cnm.sh job.mwfn' ! The option micro and the keyword nosym are NECESSARY. job.mwfn will be used to store the final wavefunction. If job.mwfn exists when this job starts, it will be read as initial guess for the first frame.
 # [ Blank line ]
 # Job title
 # [ Blank line ]
@@ -98,11 +98,11 @@ rm ../tmp_xyz
 echo -e "\nderivative" >> ${step_name}.inp
 echo $derivative >> ${step_name}.inp
 echo -e "\nguess" >> ${step_name}.inp
-if [ -f $mwfn ] && [ $step_name == step_0000 ]; then
-	echo "sap" >> ${step_name}.inp
-else
+if [ -f ../$mwfn ]; then
 	echo "read" >> ${step_name}.inp
 	cp ../$mwfn ${step_name}.mwfn
+else
+	echo "sap" >> ${step_name}.inp
 fi
 
 
@@ -110,7 +110,7 @@ fi
 # Running Chinium #
 ###################
 
-$Chinium ${step_name}.inp > ${step_name}.out
+$Chinium ${step_name}.inp > ${step_name}.out 2>&1
 cp ${step_name}.mwfn ../$mwfn
 
 
@@ -134,3 +134,26 @@ done
 printf "%20.12e%20.12e%20.12e\n" 0 0 0 >> $output_file
 printf "%20.12e%20.12e%20.12e\n" 0 0 0 >> $output_file
 
+# Dipole derivatives, which are not given
+for i in `seq 1 $natoms`; do
+	printf "%20.12e%20.12e%20.12e\n" 0 0 0 >> $output_file
+	printf "%20.12e%20.12e%20.12e\n" 0 0 0 >> $output_file
+	printf "%20.12e%20.12e%20.12e\n" 0 0 0 >> $output_file
+done
+
+# Hessian
+if [[ $derivative -eq 2 ]]; then
+	line=`grep -n 'Total hessian:' ${step_name}.out | cut -d ':' -f 1`
+	xypert=1
+	for xpert in `seq 1 $((3*$natoms))`; do
+		thisline=`sed -n $(($line+$xpert))p ${step_name}.out`
+		for ypert in `seq 1 $xpert`; do
+			word=`echo $thisline | tr -s ' ' | cut -d ' ' -f $ypert`
+			printf "%20.12e" $word >> $output_file
+			if [[ $(($xypert%3)) -eq 0 ]]; then
+				printf "\n" >> $output_file
+			fi
+			xypert=$(($xypert+1))
+		done
+	done
+fi
