@@ -14,7 +14,7 @@
 #define __diis_start_iter__ 2
 #define __diis_space_size__ 6
 #define __cpscf_max_iter__ 50
-#define __convergence_threshold__ 1.e-4
+#define __convergence_threshold__ 1.e-5
 
 EigenMatrix FockOccupationGradientCPSCF(
 		double temperature,double * repulsion,short int * indices,long int n2integrals,double kscale,
@@ -149,22 +149,27 @@ EigenMatrix FockOccupationGradientCPSCF(
 		for (jiter=0;R.norm()>__convergence_threshold__;jiter++){
 			assert("FOG-CPSCF does not converge." && jiter<__cpscf_max_iter__);
 			double error2norm=114514;
-			Fx=Fxs[0];
+			EigenMatrix initialFx=Fxs[0];
 			EigenMatrix Dx=Dxns[ipert];
 			if (jiter>__diis_start_iter__)
-				Fx=DIIS(Fxs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
+				initialFx=DIIS(Fxs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
 			for (int kbasis=0;kbasis<nbasis;kbasis++){
-				const double exs=coefficients.col(kbasis).transpose()*Fx*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
+				const double exs=coefficients.col(kbasis).transpose()*initialFx*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
 				nxs(ipert,kbasis)=occupancies[kbasis]*(occupancies[kbasis]-1.)/temperature*exs;
 				Dx+=coefficients.col(kbasis)*coefficients.col(kbasis).transpose()*nxs(ipert,kbasis);
 			}
 			Fx=fxn;
 			for (int kbasis=0;kbasis<nbasis;kbasis++)
 				Fx+=fn[kbasis]*nxs(ipert,kbasis);
-			R=Fx-Fxs[0];
+			R=Fx-initialFx;
 			PushMatrixQueue(Fx,Fxs,__diis_space_size__);
 			PushMatrixQueue(R,Rs,__diis_space_size__);
-			//std::cout<<(Fx*D*overlap+F*dx*overlap+F*D*ovlgrads[ipert]-overlap*D*Fx-overlap*dx*F-ovlgrads[ipert]*D*F).norm()<<std::endl;
+	/*std::cout<<"Fx"<<std::endl;
+	std::cout<<Fx<<std::endl;
+	std::cout<<"Dx"<<std::endl;
+	std::cout<<Dx<<std::endl;
+
+	*/		//std::cout<<(Fx*D*overlap+F*dx*overlap+F*D*ovlgrads[ipert]-overlap*D*Fx-overlap*dx*F-ovlgrads[ipert]*D*F).norm()<<std::endl;
 		}
 		const std::chrono::duration<double> duration=std::chrono::system_clock::now()-pert_start;
 		if (output) std::printf("|    %6d    |     %7d     | %9.6f |\n",ipert,jiter,duration.count());
@@ -175,6 +180,10 @@ EigenMatrix FockOccupationGradientCPSCF(
 		for (int jpert=0;jpert<3*natoms;jpert++)
 			for (int kbasis=0;kbasis<nbasis;kbasis++)
 				hessian(ipert,jpert)+=exns[ipert](kbasis)*nxs(jpert,kbasis);
+	//std::cout<<"occupancies"<<std::endl;
+	//std::cout<<occupancies<<std::endl;
+	//std::cout<<"nxs.row(8)"<<std::endl;
+	//std::cout<<nxs.row(8).transpose()<<std::endl;
 	return 0.5*(hessian+hessian.transpose());
 }
 
@@ -332,13 +341,13 @@ EigenMatrix DensityOccupationGradientCPSCF(
 		int jiter=0;
 		for (jiter=0;R.norm()>__convergence_threshold__;jiter++){
 			assert("DOG-CPSCF does not converge." && jiter<__cpscf_max_iter__);
-			Fx=Fxs[0];
+			EigenMatrix initialFx=Fxs[0];
 			if (jiter>__diis_start_iter__)
-				Fx=DIIS(Fxs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
+				initialFx=DIIS(Fxs,Rs,jiter<__diis_space_size__?jiter:__diis_space_size__,error2norm);
 			EigenMatrix Dx=Dxns[ipert];
 			EigenVector exs(nbasis);
 			for (int kbasis=0;kbasis<nbasis;kbasis++){ // Fock 2 density
-				exs[kbasis]=coefficients.col(kbasis).transpose()*Fx*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
+				exs[kbasis]=coefficients.col(kbasis).transpose()*initialFx*coefficients.col(kbasis)-csxc(kbasis,kbasis)*orbitalenergies[kbasis];
 				nxs(ipert,kbasis)=occupancies[kbasis]*(occupancies[kbasis]-1.)/temperature*exs[kbasis];
 				Dx+=coefficients.col(kbasis)*coefficients.col(kbasis).transpose()*nxs(ipert,kbasis);
 			}
@@ -388,7 +397,7 @@ EigenMatrix DensityOccupationGradientCPSCF(
 					dns,
 					dxns,dyns,dzns);
 			}
-			R=Fx-Fxs[0];
+			R=Fx-initialFx;
 			PushMatrixQueue(Fx,Fxs,__diis_space_size__);
 			PushMatrixQueue(R,Rs,__diis_space_size__);
 			//std::cout<<R.norm()<<std::endl;
@@ -402,11 +411,12 @@ EigenMatrix DensityOccupationGradientCPSCF(
 		for (int jpert=0;jpert<3*natoms;jpert++)
 			for (int kbasis=0;kbasis<nbasis;kbasis++)
 				hessian(ipert,jpert)+=exns[ipert](kbasis)*nxs(jpert,kbasis);
-	/*std::cout<<"occupancies"<<std::endl;
-	std::cout<<occupancies<<std::endl;
-	std::cout<<"nxs.row(8)"<<std::endl;
-	std::cout<<nxs.row(8).transpose()<<std::endl;
-	*/
+	//std::cout<<"occupancies"<<std::endl;
+	//std::cout<<occupancies<<std::endl;
+	//std::cout<<"nxs.row(8)"<<std::endl;
+	//std::cout<<nxs.row(8).transpose()<<std::endl;
+	//std::cout<<2*hessian<<std::endl;
+	
 	__Finalize_KS__
 	delete [] dns;
 	delete [] dnxs;
