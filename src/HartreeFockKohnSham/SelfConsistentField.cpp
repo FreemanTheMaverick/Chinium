@@ -53,5 +53,5 @@ void Multiwfn::HartreeFockKohnSham(double temperature, double chemicalpotential,
 	};
 
 	//assert( Tiger( cfunc, {1.e-8, 1.e-5, 1.e-5}, 20, 100, this->E_tot, Dprime, output) && "Convergence failed!" );
-	assert( Mouse( ffunc, {1.e3, 1., 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, this->E_tot, F, output) && "Convergence failed!" );
+	assert( Mouse( ffunc, {1.e3, 0.000005, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, this->E_tot, F, output) && "Convergence failed!" );
 }

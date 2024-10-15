@@ -9,6 +9,8 @@
 
 #include "../Macro.h"
 
+#include "Loong.h"
+
 #include <iostream>
 
 
@@ -39,21 +41,20 @@ EigenVector SimplexGrad(EigenVector p, EigenVector Ge){
 	return SimplexProj(p, p.cwiseProduct(Ge));
 }
 
-EigenVector SimplexNewton(EigenMatrix M, EigenMatrix N, EigenVector Gr, EigenMatrix He){
-	EigenMatrix LHS = EigenZero(M.rows() + 1, M.cols());
-	EigenMatrix hess = M * He + N;
-	LHS.topRows(M.rows()) = hess;
-	LHS.bottomRows(1) = EigenZero(1, M.cols()).array() + 1;
-	EigenVector RHS(M.rows() + 1);
-	RHS.topRows(M.rows()) = - Gr;
-	RHS(M.rows()) = 0;
-	return LHS.colPivHouseholderQr().solve(RHS);
+double SimplexInner(EigenVector p, EigenVector X, EigenVector Y){
+	return p.cwiseInverse().cwiseProduct(X.cwiseProduct(Y)).sum();
 }
 
-bool Ox(std::function<std::tuple<double, EigenVector, EigenMatrix> (EigenVector)>& func,
+bool Ox(
+		std::function<
+			std::tuple<
+				double,
+				EigenMatrix,
+				std::function<EigenMatrix (EigenMatrix)>
+			> (EigenMatrix)>& func,
 		std::tuple<double, double, double> tol,
 		int max_iter,
-		double& L, EigenVector& C, bool output){
+		double& L, EigenMatrix& C, bool output){
 	if (output){
 		std::printf("Using Ox optimizer\n");
 		std::printf("Convergence threshold:\n");
@@ -63,24 +64,21 @@ bool Ox(std::function<std::tuple<double, EigenVector, EigenMatrix> (EigenVector)
 		std::printf("| Itn. |       Target        |   T. C.  |  Grad.  | Update |  V. U.  |  Time  |\n");
 	}
 
-	EigenMatrix Gr;
-	double Llast = 0;
-	EigenMatrix Clast = EigenZero(C.rows(), C.cols());
+	const auto start = __now__;
+	const double R0 = 1;
+	const double rho_thres = 0.1;
+	EigenMatrix Ge;
+	std::function<EigenMatrix (EigenMatrix)> He;
+	std::tie(L, Ge, He) = func(C);
+	double deltaL = L;
+	double R = R0;
 	
 	for ( int iiter = 0; iiter < max_iter; iiter++ ){
-		if (output) std::printf("| %4d |", iiter);
-		const auto start = __now__;
 
-		EigenVector Ge;
-		EigenMatrix He;
-		std::tie(L, Ge, He) = func(C);
-		Gr = SimplexGrad(C, Ge);
+		const EigenVector Gr = SimplexGrad(C, Ge);
+		if (output) std::printf("| %4d |  %17.10f  | % 5.1E | %5.1E |", iiter, L, deltaL, Gr.norm());
 
-		const double deltaL = L - Llast;
-		Llast = L;
-
-		if (output) std::printf("  %17.10f  | % 5.1E | %5.1E |", L, deltaL, Gr.norm());
-
+		// Riemannian hessian
 		const EigenMatrix ones = EigenZero(C.size(), C.size()).array() + 1;
 		const EigenMatrix proj = SimplexProj(C);
 		const EigenMatrix M = proj * (EigenMatrix)C.asDiagonal();
@@ -89,11 +87,44 @@ bool Ox(std::function<std::tuple<double, EigenVector, EigenMatrix> (EigenVector)
 				- ones * Ge.cwiseProduct(C)
 				- 0.5 * Gr.cwiseProduct(C.cwiseInverse())
 		).asDiagonal();
-		const EigenMatrix Cnew = SimplexExp(C, SimplexNewton(M, N, Gr, He));
-		const double deltaC = (Cnew - C).norm();
-		C = Cnew;
 
-		if (output) std::printf(" RieNew | %5.1E | %6.3f |\n", deltaC, __duration__(start, __now__));
+		std::function<EigenMatrix (EigenMatrix)> Hr = [&He, M, N](EigenMatrix v_){
+			return (EigenMatrix)(M * He(v_) + N * v_); // The forced conversion "(EigenMatrix)" is necessary. Without it the result will be wrong. I do not know why. Then I forced convert every EigenMatrix return value in std::function for ensurance.
+		};
+		std::function<double (EigenMatrix, EigenMatrix)> Inner = [C](EigenMatrix v1_, EigenMatrix v2_){
+			return SimplexInner(C, v1_, v2_);
+		};
+		std::function<EigenMatrix (EigenMatrix)> Proj = [C](EigenMatrix v_){
+			return SimplexProj(C, v_);
+		};
+
+		// Truncated conjugate gradient and rating the new step
+		const EigenMatrix S = Loong(Inner, Hr, -Gr, R, C.size()-1, 1);
+		const double S2 = SimplexInner(C, S, S);
+		const EigenMatrix Cnew = SimplexExp(C, S);
+		double Lnew;
+		EigenMatrix Genew;
+		std::function<EigenMatrix (EigenMatrix)> Henew;
+		std::tie(Lnew, Genew, Henew) = func(Cnew);
+		const double top = Lnew - L;
+		const double bottom = SimplexInner(C, Gr + 0.5 * Hr(S), S);
+		const double rho = top / bottom;
+
+		// Determining whether to accept or reject the step
+		const double deltaC = (Cnew - C).norm();
+		if ( rho > rho_thres ){
+			C = Cnew;
+			L = Lnew;
+			deltaL = Lnew - L;
+			Ge = Genew;
+			He = Henew;
+			if (output) std::printf(" Accept |");
+		}else if (output) std::printf(" Reject |");
+		if (output) std::printf(" %5.1E | %6.3f |\n", deltaC, __duration__(start, __now__));
+
+		// Adjusting the trust radius according to the score
+		if ( rho < 0.25 ) R = 0.25 * R;
+		else if ( rho > 0.75 || std::abs(S2 - R * R) < 1.e-10 ) R = std::min(2 * R, R0);
 
 		if ( Gr.norm() < std::get<1>(tol) ){
 			if ( iiter == 0 ){

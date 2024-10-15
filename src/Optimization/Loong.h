@@ -1,9 +1,6 @@
-bool Loong(
-		std::function<
-			EigenMatrix
-			(
-				EigenMatrix,
-				std::vector<EigenMatrix>
-			)
-		>& newton_update, std::vector<EigenMatrix> params,
-		double tol, int diis_space, int maxiter, EigenMatrix& D, bool output);
+EigenMatrix Loong(
+		std::function<double (EigenMatrix, EigenMatrix)>& Inner,
+		std::function<EigenMatrix (EigenMatrix)>& Hess,
+		EigenMatrix b, double R, int ndim, bool output);
+
+

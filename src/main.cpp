@@ -15,8 +15,8 @@ int main(){
 	mwfn.GenerateGrid("SG-1",0,1);
 	mwfn.GuessSCF("sap");
 	mwfn.HartreeFockKohnSham(0,0,1,8);
-	mwfn.Localize("fock", "occ", 1);
-	mwfn.Export("chain.mwfn", 1);
+	//mwfn.Localize("fock", "occ", 1);
+	//mwfn.Export("chain.mwfn", 1);
 	return 0;
 }
 

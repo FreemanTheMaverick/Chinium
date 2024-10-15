@@ -20,7 +20,7 @@ EigenMatrix OrthogonalExp(EigenMatrix p, EigenMatrix X){
 	// p - Point of tangency
 	// X - Point to retract
 	const EigenMatrix A = 0.5 * ( X * p.transpose() - p * X.transpose() );
-	return A.exp() * p;
+	return p * A.exp();
 }
 
 EigenMatrix OrthogonalProj(EigenMatrix p, EigenMatrix X){

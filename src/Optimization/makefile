@@ -2,7 +2,7 @@ Flags = $(GeneralFlags) $(EIGEN3Flags)
 
 .PHONY: all
 
-all: DIIS Mouse Ox Rabbit Loong
+all: DIIS Mouse Ox Loong
 
 DIIS: DIIS.cpp
 	$(CXX) -o ../../obj/DIIS.o DIIS.cpp -c $(Flags)
