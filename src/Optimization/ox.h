@@ -8,4 +8,4 @@ bool Ox(
 		>& func,
 		std::tuple<double, double, double> tol,
 		int max_iter,
-		double& L, Manifold& M, int output);
+		double& L, EigenMatrix& C, bool output);

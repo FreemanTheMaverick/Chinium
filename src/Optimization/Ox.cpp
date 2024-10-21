@@ -1,49 +1,17 @@
 #include <Eigen/Dense>
-#include <unsupported/Eigen/MatrixFunctions>
 #include <cmath>
 #include <functional>
 #include <tuple>
 #include <cstdio>
 #include <chrono>
-#include <cassert>
+#include <string>
 
 #include "../Macro.h"
-
+#include "../Manifold/Manifold.h"
 #include "Loong.h"
 
 #include <iostream>
 
-
-EigenVector SimplexExp(EigenVector p, EigenVector X){
-	// p - Point of tangency
-	// X - Point to retract
-	const EigenVector Xp = X.cwiseProduct(p.array().rsqrt().matrix());
-	const double norm = Xp.norm();
-	const EigenVector Xpn = Xp / norm;
-	const EigenVector tmp1 = 0.5 * (p + Xpn.cwiseProduct(Xpn));
-	const EigenVector tmp2 = 0.5 * (p - Xpn.cwiseProduct(Xpn)) * std::cos(norm);
-	const EigenVector tmp3 = Xpn.cwiseProduct(p.array().sqrt().matrix()) * std::sin(norm);
-	return tmp1 + tmp2 + tmp3;
-}
-
-EigenMatrix SimplexProj(EigenVector p){
-	const int n = p.size();
-	const EigenMatrix ones = EigenZero(n, n).array() + 1;
-	const EigenMatrix tmp2 = ones.array().colwise() * p.array();
-	return EigenOne(n, n) - tmp2;
-}
-
-EigenVector SimplexProj(EigenVector p, EigenVector X){
-	return SimplexProj(p) * X;
-}
-
-EigenVector SimplexGrad(EigenVector p, EigenVector Ge){
-	return SimplexProj(p, p.cwiseProduct(Ge));
-}
-
-double SimplexInner(EigenVector p, EigenVector X, EigenVector Y){
-	return p.cwiseInverse().cwiseProduct(X.cwiseProduct(Y)).sum();
-}
 
 bool Ox(
 		std::function<
@@ -51,86 +19,75 @@ bool Ox(
 				double,
 				EigenMatrix,
 				std::function<EigenMatrix (EigenMatrix)>
-			> (EigenMatrix)>& func,
+			> (EigenMatrix)
+		>& func,
 		std::tuple<double, double, double> tol,
 		int max_iter,
-		double& L, EigenMatrix& C, bool output){
-	if (output){
-		std::printf("Using Ox optimizer\n");
+		double& L, Manifold& M, int output){
+
+	const double tol0 = std::get<0>(tol) * M.getDimension();
+	const double tol1 = std::get<1>(tol) * M.P.size();
+	const double tol2 = std::get<2>(tol) * M.P.size();
+	if (output > 0){
+		std::printf("Using Ox optimizer on %s manifold\n", M.Name.c_str());
 		std::printf("Convergence threshold:\n");
-		std::printf("| Target change (T. C.)               : %E\n", std::get<0>(tol));
-		std::printf("| Gradient norm (Grad.)               : %E\n", std::get<1>(tol));
-		std::printf("| Independent variable update (V. U.) : %E\n", std::get<2>(tol));
+		std::printf("| Target change (T. C.)               : %E\n", tol0);
+		std::printf("| Gradient norm (Grad.)               : %E\n", tol1);
+		std::printf("| Independent variable update (V. U.) : %E\n", tol2);
 		std::printf("| Itn. |       Target        |   T. C.  |  Grad.  | Update |  V. U.  |  Time  |\n");
 	}
 
 	const auto start = __now__;
 	const double R0 = 1;
 	const double rho_thres = 0.1;
-	EigenMatrix Ge;
-	std::function<EigenMatrix (EigenMatrix)> He;
-	std::tie(L, Ge, He) = func(C);
+	std::tie(L, M.Ge, M.He) = func(M.P);
 	double deltaL = L;
 	double R = R0;
 	
 	for ( int iiter = 0; iiter < max_iter; iiter++ ){
 
-		const EigenVector Gr = SimplexGrad(C, Ge);
-		if (output) std::printf("| %4d |  %17.10f  | % 5.1E | %5.1E |", iiter, L, deltaL, Gr.norm());
-
-		// Riemannian hessian
-		const EigenMatrix ones = EigenZero(C.size(), C.size()).array() + 1;
-		const EigenMatrix proj = SimplexProj(C);
-		const EigenMatrix M = proj * (EigenMatrix)C.asDiagonal();
-		const EigenMatrix N = proj * (EigenMatrix)(
-				Ge
-				- ones * Ge.cwiseProduct(C)
-				- 0.5 * Gr.cwiseProduct(C.cwiseInverse())
-		).asDiagonal();
-
-		std::function<EigenMatrix (EigenMatrix)> Hr = [&He, M, N](EigenMatrix v_){
-			return (EigenMatrix)(M * He(v_) + N * v_); // The forced conversion "(EigenMatrix)" is necessary. Without it the result will be wrong. I do not know why. Then I forced convert every EigenMatrix return value in std::function for ensurance.
-		};
-		std::function<double (EigenMatrix, EigenMatrix)> Inner = [C](EigenMatrix v1_, EigenMatrix v2_){
-			return SimplexInner(C, v1_, v2_);
-		};
-		std::function<EigenMatrix (EigenMatrix)> Proj = [C](EigenMatrix v_){
-			return SimplexProj(C, v_);
-		};
+		M.ManifoldPurification();
+		M.getGradient();
+		if (output > 0) std::printf("| %4d |  %17.10f  | % 5.1E | %5.1E |", iiter, L, deltaL, M.Gr.norm());
+		M.getHessian();
 
 		// Truncated conjugate gradient and rating the new step
-		const EigenMatrix S = Loong(Inner, Hr, -Gr, R, C.size()-1, 1);
-		const double S2 = SimplexInner(C, S, S);
-		const EigenMatrix Cnew = SimplexExp(C, S);
+		const std::tuple<double, double, double> loong_tol = {
+			tol0/M.getDimension(),
+			std::sqrt(M.Inner(M.Gr,M.Gr))/M.getDimension(),
+			0.1*tol2/M.getDimension()
+		};
+		const EigenMatrix S = Loong(M, R, loong_tol, output-1);
+
+		const double S2 = M.Inner(S, S);
+		const EigenMatrix Pnew = M.Exponential(S);
 		double Lnew;
 		EigenMatrix Genew;
 		std::function<EigenMatrix (EigenMatrix)> Henew;
-		std::tie(Lnew, Genew, Henew) = func(Cnew);
+		std::tie(Lnew, Genew, Henew) = func(Pnew);
 		const double top = Lnew - L;
-		const double bottom = SimplexInner(C, Gr + 0.5 * Hr(S), S);
+		const double bottom = M.Inner(M.Gr + 0.5 * M.Hr(S), S);
 		const double rho = top / bottom;
 
 		// Determining whether to accept or reject the step
-		const double deltaC = (Cnew - C).norm();
 		if ( rho > rho_thres ){
-			C = Cnew;
-			L = Lnew;
 			deltaL = Lnew - L;
-			Ge = Genew;
-			He = Henew;
-			if (output) std::printf(" Accept |");
-		}else if (output) std::printf(" Reject |");
-		if (output) std::printf(" %5.1E | %6.3f |\n", deltaC, __duration__(start, __now__));
+			L = Lnew;
+			M.P = Pnew;
+			M.Ge = Genew;
+			M.He = Henew;
+			if (output > 0) std::printf(" Accept |");
+		}else if (output > 0) std::printf(" Reject |");
+		if (output > 0) std::printf(" %5.1E | %6.3f |\n", std::sqrt(S2), __duration__(start, __now__));
 
 		// Adjusting the trust radius according to the score
-		if ( rho < 0.25 ) R = 0.25 * R;
+		if ( rho < 0.25 ) R *= 0.25;
 		else if ( rho > 0.75 || std::abs(S2 - R * R) < 1.e-10 ) R = std::min(2 * R, R0);
-
-		if ( Gr.norm() < std::get<1>(tol) ){
+		if ( M.Gr.norm() < tol1 ){
 			if ( iiter == 0 ){
-				if ( deltaC < std::get<2>(tol) ) return 1;
+				if ( std::sqrt(S2) < tol2 ) return 1;
 			}else{
-				if ( std::abs(deltaL) < std::get<0>(tol) && deltaC < std::get<2>(tol) ) return 1;
+				if ( std::abs(deltaL) < tol0 && std::sqrt(S2) < tol2 ) return 1;
 			}
 		}
 

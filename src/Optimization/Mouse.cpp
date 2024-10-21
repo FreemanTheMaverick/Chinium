@@ -21,8 +21,8 @@ bool Mouse(
 		std::tuple<double, double, double> adtol,
 		std::tuple<double, double, double> tol,
 		int diis_space, int max_iter,
-		double& E, EigenMatrix& F, bool output){
-	if (output){
+		double& E, EigenMatrix& F, int output){
+	if (output > 0){
 		std::printf("Using Mouse optimizer\n");
 		std::printf("Convergence threshold:\n");
 		std::printf("| Target change (T. C.)               : %E\n", std::get<0>(tol));
@@ -32,21 +32,21 @@ bool Mouse(
 	}
 
 	EigenMatrix Fupdate = F;
-	EigenMatrix G;
-	EigenMatrix D;
-	std::deque<double> Es;
-	std::deque<EigenMatrix> Fs;
-	std::deque<EigenMatrix> Gs;
-	std::deque<EigenMatrix> Ds;
+	EigenMatrix G = EigenZero(F.cols(), F.cols());
+	EigenMatrix D = EigenZero(F.cols(), F.cols());
+	std::deque<double> Es = {};
+	std::deque<EigenMatrix> Fs = {};
+	std::deque<EigenMatrix> Gs = {};
+	std::deque<EigenMatrix> Ds = {};
 	const auto start = __now__;
 	
 	for ( int iiter = 0; iiter < max_iter; iiter++ ){
-		if (output) std::printf("| %4d |", iiter);
+		if (output > 0) std::printf("| %4d |", iiter);
 
 		std::tie(E, F, G, D) = ffunc(F);
 		const double deltaE = ( iiter == 0 ) ? E : ( E - Es.back() );
 
-		if (output) std::printf("  %17.10f  | % 5.1E | %5.1E |", E, deltaE, G.norm());
+		if (output > 0) std::printf("  %17.10f  | % 5.1E | %5.1E |", E, deltaE, G.norm());
 
 		Es.push_back(E);
 		Fs.push_back(F);
@@ -60,9 +60,9 @@ bool Mouse(
 		}
 
 		if ( Es.size() < 2 ){
-			std::printf("  Naive |");
+			if (output > 0) std::printf("  Naive |");
 		}else if ( G.norm() > std::get<1>(adtol) ){
-			std::printf("  ADIIS |");
+			if (output > 0) std::printf("  ADIIS |");
 			EigenMatrix AD1s = EigenZero(Ds.size(), 1);
 			EigenMatrix AD2s = EigenZero(Ds.size(), Ds.size());
 			for ( int i = 0; i < (int)Ds.size(); i++ ){
@@ -70,14 +70,14 @@ bool Mouse(
 				for ( int j = 0; j < (int)Ds.size(); j++ )
 					AD2s(i, j) = ( ( Ds[i] - D ) * ( Fs[j] - F ).transpose() ).trace();
 			}
-			F = ADIIS(AD1s, AD2s, Fs);
+			F = ADIIS(AD1s, AD2s, Fs, output-1);
 		}else{
-			std::printf("  CDIIS |");
+			if (output > 0) std::printf("  CDIIS |");
 			F = CDIIS(Gs, Fs);
 		}
 
 		const double deltaF = ( F - Fs.back() ).norm();
-		if (output) std::printf(" %5.1E | %6.3f |\n", deltaF, __duration__(start, __now__));
+		if (output > 0) std::printf(" %5.1E | %6.3f |\n", deltaF, __duration__(start, __now__));
 
 		if ( G.norm() < std::get<2>(tol) ){
 			if ( iiter == 0 ) return 1;

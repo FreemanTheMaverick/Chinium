@@ -3,4 +3,4 @@ bool Mouse(
 		std::tuple<double, double, double> adtol,
 		std::tuple<double, double, double> tol,
 		int diis_space, int max_iter,
-		double& L, EigenMatrix& X, bool output);
+		double& L, EigenMatrix& X, int output);

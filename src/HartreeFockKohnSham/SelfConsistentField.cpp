@@ -6,6 +6,7 @@
 #include <tuple>
 #include <cassert>
 #include <chrono>
+#include <cstdio>
 
 #include "../Macro.h"
 #include "../Multiwfn.h"
@@ -15,7 +16,9 @@
 #include <iostream>
 
 
-void Multiwfn::HartreeFockKohnSham(double temperature, double chemicalpotential, bool output, int nthreads){
+void Multiwfn::HartreeFockKohnSham(double temperature, double chemicalpotential, int output, int nthreads){
+
+	if (output > 0) std::printf("Self-consistent field\n");
 
 	const EigenMatrix S = this->Overlap;
 	const int nbasis = this->getNumBasis();
@@ -52,6 +55,6 @@ void Multiwfn::HartreeFockKohnSham(double temperature, double chemicalpotential,
 		return std::make_tuple(this->E_tot, F_, G, D_);
 	};
 
-	//assert( Tiger( cfunc, {1.e-8, 1.e-5, 1.e-5}, 20, 100, this->E_tot, Dprime, output) && "Convergence failed!" );
-	assert( Mouse( ffunc, {1.e3, 0.000005, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, this->E_tot, F, output) && "Convergence failed!" );
+	assert( Mouse( ffunc, {1.e3, 0.5, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, this->E_tot, F, output-1) && "Convergence failed!" );
+	if (output > 0) std::printf("Converged!\n");
 }

@@ -8,6 +8,15 @@
 	EigenMatrix Kinetic;
 	EigenMatrix Nuclear;
 	*/
+	EigenMatrix DipoleX;
+	EigenMatrix DipoleY;
+	EigenMatrix DipoleZ;
+	EigenMatrix QuadrapoleXX;
+	EigenMatrix QuadrapoleXY;
+	EigenMatrix QuadrapoleXZ;
+	EigenMatrix QuadrapoleYY;
+	EigenMatrix QuadrapoleYZ;
+	EigenMatrix QuadrapoleZZ;
 	void getTwoCenter(int order, const bool output);
 
 	// Four-center integrals

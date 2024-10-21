@@ -7,15 +7,17 @@
 #include <tuple>
 #include <cassert>
 #include <chrono>
+#include <cstdio>
 
 #include "../Macro.h"
 #include "../Multiwfn.h"
 
 #include "Fock.h"
+#include "FosterBoys.h"
 
 #include <iostream>
 
-void Multiwfn::Localize(std::string scheme, std::string range, bool output){
+void Multiwfn::Localize(std::string scheme, std::string range, int output){
 
 	std::transform(scheme.begin(), scheme.end(), scheme.begin(), ::toupper);
 	std::transform(range.begin(), range.end(), range.begin(), ::toupper);
@@ -35,6 +37,7 @@ void Multiwfn::Localize(std::string scheme, std::string range, bool output){
 
 	std::vector<EigenMatrix> Us = {};
 	if ( scheme.compare("FOCK") == 0 ){
+		if (output > 0) std::printf("Fock localization:\n");
 		const EigenMatrix Fao = this->getFock();
 		const EigenVector E = this->getEnergy();
 		const EigenVector E2 = E.cwiseProduct(E);
@@ -42,7 +45,15 @@ void Multiwfn::Localize(std::string scheme, std::string range, bool output){
 		const EigenMatrix F2ao = this->getFock();
 		this->setEnergy(E);
 		for ( EigenMatrix Cref : Crefs )
-			Us.push_back(Fock(Cref, Fao, F2ao, output));
+			Us.push_back(Fock(Cref, Fao, F2ao, output-1));
+	} else if ( scheme.compare("FOSTER") == 0 ){
+		if (output > 0) std::printf("Foster-Boys localization:\n");
+		const EigenMatrix Wxao = this->DipoleX;
+		const EigenMatrix Wyao = this->DipoleY;
+		const EigenMatrix Wzao = this->DipoleZ;
+		const EigenMatrix W2aoSum = this->QuadrapoleXX + this->QuadrapoleYY + this-> QuadrapoleZZ;
+		for ( EigenMatrix Cref : Crefs )
+			Us.push_back(FosterBoys(Cref, Wxao, Wyao, Wzao, W2aoSum, output-1));
 	}
 
 	if ( range.compare("OCC") == 0 )

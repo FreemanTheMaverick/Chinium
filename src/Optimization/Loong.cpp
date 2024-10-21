@@ -4,60 +4,85 @@
 #include <cstdio>
 #include <chrono>
 #include <cassert>
+#include <string>
+#include <tuple>
 
 #include "../Macro.h"
+#include "../Manifold/Manifold.h"
 
 #include <iostream>
 
 
 EigenMatrix Loong(
-		std::function<double (EigenMatrix, EigenMatrix)>& Inner,
-		std::function<EigenMatrix (EigenMatrix)>& Hess,
-		EigenMatrix b, double R, int ndim, bool output){
+		Manifold& M, double R,
+		std::tuple<double, double, double> tol, int output){
 
-	const double b2 = Inner(b, b);
-	const double tol = std::max(1e-8, std::sqrt(b2 * std::min(b2, 0.1)));
-
-	if (output){
-		std::printf("Using Loong optimizer\n");
+	const double tol0 = std::get<0>(tol) * M.getDimension();
+	const double tol1 = std::get<1>(tol) * M.P.size();
+	const double tol2 = std::get<2>(tol) * M.P.size();
+	if (output > 0){
+		std::printf("Using Loong optimizer on the tangent space of %s manifold\n", M.Name.c_str());
 		std::printf("Convergence threshold:\n");
-		std::printf("| Error                               : %E\n", tol);
-		std::printf("| Itn. |       Residual      |  Time  |\n");
+        std::printf("| Target change (T. C.)               : %E\n", tol0);
+		std::printf("| Gradient norm (Grad.)               : %E\n", tol1);
+		std::printf("| Independent variable update (V. U.) : %E\n", tol2);
+		std::printf("| Itn. |       Target        |   T. C.  |  Grad.  |  V. U.  |  Time  |\n");
 	}
 
-	EigenMatrix v = EigenZero(b.rows(), b.cols());
-	EigenMatrix r = b;
-	EigenMatrix p = b;
+	const double b2 = M.Inner(M.Gr, M.Gr);
+	EigenMatrix v = EigenZero(M.Gr.rows(), M.Gr.cols());
+	EigenMatrix r = -M.Gr;
+	EigenMatrix p = -M.Gr;
 	double r2 = b2;
+	double L = 0;
 	const auto start = __now__;
 
-	for ( int iiter = 0; iiter < ndim; iiter++ ){
-		if (output) std::printf("| %4d |  %17.10f  | %6.3f |\n", iiter, std::sqrt(r2), __duration__(start, __now__));
-		const EigenMatrix Hp = Hess(p);
-		const double pHp = Inner(p, Hp);
+	EigenMatrix Hp = EigenZero(M.Gr.rows(), M.Gr.cols());
+	EigenMatrix vplus = EigenZero(M.Gr.rows(), M.Gr.cols());
+
+	for ( int iiter = 0; iiter < M.getDimension(); iiter++ ){
+		if (output > 0) std::printf("| %4d |", iiter);
+		Hp = M.TangentPurification(M.Hr(p));
+		const double pHp = M.Inner(p, Hp);
+		const double Llast = L;
+		L = 0.5 * M.Inner(M.Hr(v), v) + M.Inner(M.Gr, v);
+		const double deltaL = L - Llast;
+		if (output > 0) std::printf("  %17.10f  | % 5.1E | %5.1E |", L, deltaL, std::sqrt(r2));
+
 		const double alpha = r2 / pHp;
-		const EigenMatrix vplus = v + alpha * p;
-		if ( pHp <= 0 || Inner(vplus, vplus) >= R * R ){
-			const double A = Inner(p, p);
-			const double B = Inner(v, p) * 2.;
-			const double C = Inner(v, v) - R * R;
+		vplus = M.TangentPurification(v + alpha * p);
+		const double step = std::abs(alpha) * std::sqrt(M.Inner(p, p));
+		if (output > 0) std::printf(" %5.1E | %6.3f |\n", step, __duration__(start, __now__));
+		if (
+				iiter > 0 && (
+					(
+						std::abs(deltaL) < tol0
+						&& r2 < std::pow(tol1, 2)
+						&& step < tol2
+					) || std::abs(deltaL) < tol0 * tol0 /1000
+				)
+		){
+			if (output > 0) std::printf("Tolerance met!\n");
+			return v;
+		}
+
+		if ( pHp <= 0 || M.Inner(vplus, vplus) >= R * R ){
+			const double A = M.Inner(p, p);
+			const double B = M.Inner(v, p) * 2.;
+			const double C = M.Inner(v, v) - R * R;
 			const double t = ( std::sqrt( B * B - 4. * A * C ) - B ) / 2. / A;
-			if (output && pHp <= 0) std::printf("Non-positive curvature!\n");
-			if (output && Inner(vplus, vplus) >= R * R) std::printf("Out of trust region!\n");
+			if (output > 0 && pHp <= 0) std::printf("Non-positive curvature!\n");
+			if (output > 0 && M.Inner(vplus, vplus) >= R * R) std::printf("Out of trust region!\n");
 			return v + t * p;
 		}
 		v = vplus;
 		const double r2old = r2;
-		r -= alpha * Hp;
-		r2 = Inner(r, r);
-		if ( r2 <= tol * tol ){
-			if (output) std::printf("Tolerance met!\n");
-			return v;
-		}
+		r = M.TangentPurification(r - alpha * Hp);
+		r2 = M.Inner(r, r);
 		const double beta = r2 / r2old;
-		p = r + beta * p;
+		p = M.TangentPurification(r + beta * p);
 	}
-	if (output) std::printf("Dimension completed!\n");
+	if (output > 0) std::printf("Dimension completed!\n");
 	return v;
 }
 
