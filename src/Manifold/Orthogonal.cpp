@@ -25,6 +25,13 @@ double Orthogonal::Inner(EigenMatrix X, EigenMatrix Y){
 	return 0.5 * Dot(X, Y);
 }
 
+std::function<double (EigenMatrix, EigenMatrix)> Orthogonal::getInner(){
+	const std::function<double (EigenMatrix, EigenMatrix)> inner = [](EigenMatrix X, EigenMatrix Y){
+		return 0.5 * Dot(X, Y);
+	};
+	return inner;
+}
+
 double Orthogonal::Distance(EigenMatrix q){
 	assert( 0 && "Geodesic length on Orthogonal manifold is not implemented!" );
 	return q.sum() * 0;
@@ -48,9 +55,22 @@ EigenMatrix Orthogonal::TangentPurification(EigenMatrix A){
 	return this->P * Zpurified;
 }
 
-void Orthogonal::ManifoldPurification(){
-	Eigen::BDCSVD<EigenMatrix> svd(this->P, Eigen::ComputeFullU | Eigen::ComputeFullV);
-	this->P = svd.matrixU() * svd.matrixV().transpose();
+EigenMatrix Orthogonal::TransportTangent(EigenMatrix X, EigenMatrix Y){
+	assert( 0 && "Parallel transport on Orthogonal manifold is not implemented!" );
+	return (X + Y) * 0;
+}
+
+EigenMatrix Orthogonal::TransportManifold(EigenMatrix X, EigenMatrix q){
+	assert( 0 && "Parallel transport on Orthogonal manifold is not implemented!" );
+	return (X + q) * 0;
+}
+
+void Orthogonal::Update(EigenMatrix p, bool purify){
+	this->P = p;
+	if (purify){
+		Eigen::BDCSVD<EigenMatrix> svd(this->P, Eigen::ComputeFullU | Eigen::ComputeFullV);
+		this->P = svd.matrixU() * svd.matrixV().transpose();
+	}
 }
 
 void Orthogonal::getGradient(){

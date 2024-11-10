@@ -1,1 +1,1 @@
-EigenMatrix Fock(EigenMatrix Cref, EigenMatrix Fao, EigenMatrix F2ao, int output);
+EigenMatrix Fock(EigenMatrix Fref, EigenMatrix F2ref, int output);

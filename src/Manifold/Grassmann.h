@@ -1,7 +1,7 @@
 #include "Manifold.h"
 
-class Orthogonal: public Manifold{ public:
-	Orthogonal(EigenMatrix p);
+class Grassmann: public Manifold{ public:
+	Grassmann(EigenMatrix p);
 
 	int getDimension();
 	double Inner(EigenMatrix X, EigenMatrix Y);

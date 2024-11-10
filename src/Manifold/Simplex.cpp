@@ -25,6 +25,14 @@ double Simplex::Inner(EigenMatrix X, EigenMatrix Y){
 	return this->P.cwiseInverse().cwiseProduct(X.cwiseProduct(Y)).sum();
 }
 
+std::function<double (EigenMatrix, EigenMatrix)> Simplex::getInner(){
+	const EigenMatrix P = this->P;
+	const std::function<double (EigenMatrix, EigenMatrix)> inner = [P](EigenMatrix X, EigenMatrix Y){
+		return P.cwiseInverse().cwiseProduct(X.cwiseProduct(Y)).sum();
+	};
+	return inner;
+}
+
 double Simplex::Distance(EigenMatrix q){
 	return 2 * std::acos( this->P.cwiseProduct(q).cwiseSqrt().sum() );
 }
@@ -60,9 +68,22 @@ EigenMatrix Simplex::TangentPurification(EigenMatrix A){
 	return A.array() - A.mean();
 }
 
-void Simplex::ManifoldPurification(){
-	const EigenMatrix Pabs = this->P.cwiseAbs();
-	this->P = Pabs / Pabs.sum();
+EigenMatrix Simplex::TransportTangent(EigenMatrix X, EigenMatrix Y){
+	assert( 0 && "Parallel transport on Simplex manifold is not implemented!" );
+	return (X + Y) * 0;
+}
+
+EigenMatrix Simplex::TransportManifold(EigenMatrix X, EigenMatrix q){
+	assert( 0 && "Parallel transport on Simplex manifold is not implemented!" );
+	return (X + q) * 0;
+}
+
+void Simplex::Update(EigenMatrix p, bool purify){
+	this->P = p;
+	if (purify){
+		const EigenMatrix Pabs = this->P.cwiseAbs();
+		this->P /= Pabs.sum();
+	}
 }
 
 void Simplex::getGradient(){

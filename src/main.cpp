@@ -9,14 +9,16 @@
 
 int main(){
 	
-	Multiwfn mwfn=Multiwfn("chain.mwfn",1);
+	Multiwfn mwfn=Multiwfn("h2o.mwfn",1);
 	mwfn.getTwoCenter(0, 1);
 	mwfn.getRepulsion(-1., 8, 1);
 	mwfn.GenerateGrid("SG-1",0,1);
 	mwfn.GuessSCF("sap");
-	mwfn.HartreeFockKohnSham(0,0,4,8);
-	mwfn.Localize("FOSTER", "both", 3);
-	mwfn.Export("chain_fb.mwfn", 1);
+	mwfn.HartreeFockKohnSham(0,0,3,8);
+	//mwfn.Localize("Foster", "both", 2);
+	//mwfn.Export("chainene_fb.mwfn", 1);
+	mwfn.Localize("Pipek", "both", 2);
+	mwfn.Export("h2o.mwfn", 1);
 	return 0;
 }
 

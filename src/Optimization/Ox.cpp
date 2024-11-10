@@ -38,7 +38,7 @@ bool Ox(
 	}
 
 	const auto start = __now__;
-	const double R0 = 1;
+	const double R0 = 3;
 	const double rho_thres = 0.1;
 	std::tie(L, M.Ge, M.He) = func(M.P);
 	double deltaL = L;
@@ -46,7 +46,6 @@ bool Ox(
 	
 	for ( int iiter = 0; iiter < max_iter; iiter++ ){
 
-		M.ManifoldPurification();
 		M.getGradient();
 		if (output > 0) std::printf("| %4d |  %17.10f  | % 5.1E | %5.1E |", iiter, L, deltaL, M.Gr.norm());
 		M.getHessian();
@@ -54,7 +53,7 @@ bool Ox(
 		// Truncated conjugate gradient and rating the new step
 		const std::tuple<double, double, double> loong_tol = {
 			tol0/M.getDimension(),
-			std::sqrt(M.Inner(M.Gr,M.Gr))/M.getDimension(),
+			0.1*std::min(M.Inner(M.Gr,M.Gr),std::sqrt(M.Inner(M.Gr,M.Gr)))/M.getDimension(),
 			0.1*tol2/M.getDimension()
 		};
 		const EigenMatrix S = Loong(M, R, loong_tol, output-1);
@@ -73,7 +72,7 @@ bool Ox(
 		if ( rho > rho_thres ){
 			deltaL = Lnew - L;
 			L = Lnew;
-			M.P = Pnew;
+			M.Update(Pnew, 1);
 			M.Ge = Genew;
 			M.He = Henew;
 			if (output > 0) std::printf(" Accept |");

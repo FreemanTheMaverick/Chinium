@@ -1,121 +1,115 @@
 #include <Eigen/Dense>
-#include <unsupported/Eigen/MatrixFunctions>
 #include <cmath>
 #include <functional>
 #include <tuple>
-#include <deque>
 #include <cstdio>
 #include <chrono>
-#include <cassert>
+#include <string>
 
 #include "../Macro.h"
-#include "DIIS.h"
+#include "../Manifold/Manifold.h"
+#include "Loong.h"
 
 #include <iostream>
 
-#define check(x) assert(x.array().isNaN().any());
-
-
-EigenMatrix GrassmannLog(EigenMatrix F, EigenMatrix P){
-	// F - Point to log map
-	// P - Point of tangency
-	const EigenMatrix Omega = 0.5 * ( ( EigenOne(F.rows(), F.cols()) - 2 * F ) * (EigenOne(F.rows(), F.cols()) - 2 * P ) ).log();
-	return Omega * P - P * Omega;
-}
-
-EigenMatrix GrassmannExp(EigenMatrix p, EigenMatrix X){
-	const EigenMatrix Xp = X * p - p * X;
-	const EigenMatrix pX = - Xp;
-	const EigenMatrix expXp = Xp.exp();
-	const EigenMatrix exppX = pX.exp();
-	return expXp * p * exppX;
-}
-
-EigenMatrix GrassmannGrad(EigenMatrix X, EigenMatrix Ge){
-	const EigenMatrix tmp = X * Ge - Ge * X;
-	return X * tmp - tmp * X;
-}
-
-EigenMatrix GrassmannTransport(EigenMatrix p, EigenMatrix X, EigenMatrix d){
-	// p - From point of tangency
-	// X - Vector to transport from p
-	// d - To point of tangency logarithm mapped from Grassmann
-	const EigenMatrix dp = d * p - p * d;
-	const EigenMatrix pd = - dp;
-	const EigenMatrix expdp = dp.exp();
-	const EigenMatrix exppd = pd.exp();
-	return expdp * X * exppd;
-}
-
-EigenMatrix DIITS(std::deque<EigenMatrix>& Xs, std::deque<EigenMatrix>& Grs){
-	const int length = Xs.size();
-	std::deque<EigenMatrix> pXs(length); // Projections of Xs on the Grassmann manifold to the tangent space of the last X.
-	std::deque<EigenMatrix> Gts(length);
-	for ( int i = 0; i < length; i++ ){
-		pXs[i] = GrassmannLog(Xs[i], Xs.back());
-		const EigenMatrix tmp = GrassmannLog(Xs[length - 1], Xs[i]); // At the tangent space of a previous point, finding the log map of the current point.
-		Gts[i] = GrassmannTransport(Xs[i], Grs[i], tmp); // Parallel transporting the Riemann gradient of previous points to the tangent space of the current one.
-	}
-	EigenMatrix pX = CDIIS(pXs, Gts); // Extrapolation among the projected density matrix on the tangent space.
-	double norm = pX.norm();
-	if ( norm > 1 ) pX /= norm;
-	return GrassmannExp(Xs.back(), pX);
-}
 
 bool Tiger(
-		std::function<std::tuple<double, EigenMatrix> (EigenMatrix)>& func,
+		std::function<
+			std::tuple<
+				double,
+				EigenMatrix,
+				std::function<EigenMatrix (EigenMatrix)>
+			> (EigenMatrix)
+		>& func,
 		std::tuple<double, double, double> tol,
-		int diis_space, int max_iter,
-		double& L, EigenMatrix& X, bool output){
-	if (output){
-		std::printf("Using Tiger optimizer\n");
-		std::printf("Tolerance:\n");
-		std::printf("| Target change : %E\n", std::get<0>(tol));
-		std::printf("| Gradient      : %E\n", std::get<2>(tol));
-		std::printf("| Iteration |   Update    |        Target         | Gradient norm | Wall time |\n");
+		int max_iter,
+		double& L, Manifold& M, Manifold& M_last, int output){
+
+	const double tol0 = std::get<0>(tol) * M.getDimension();
+	const double tol1 = std::get<1>(tol) * M.P.size();
+	const double tol2 = std::get<2>(tol) * M.P.size();
+	if (output > 0){
+		std::printf("Using Tiger optimizer on %s\n", M.Name.c_str());
+		std::printf("Convergence threshold:\n");
+		std::printf("| Target change (T. C.)               : %E\n", tol0);
+		std::printf("| Gradient norm (Grad.)               : %E\n", tol1);
+		std::printf("| Independent variable update (V. U.) : %E\n", tol2);
+		std::printf("| Itn. |       Target        |   T. C.  |  Grad.  | Update |  V. U.  |  Time  |\n");
 	}
-	
-	std::deque<EigenMatrix> Xs;
-	std::deque<double> Ls;
-	std::deque<EigenMatrix> Grs;
+
 	const auto start = __now__;
-	
+	const double R0 = 3;
+	const double rho_thres = 0.1;
+	std::tie(L, M.Ge, M.He) = func(M.P);
+	double deltaL = L;
+	double R = R0;
+	EigenMatrix S_BFGS = EigenZero(M.Gr.rows(), M.Gr.cols());
+	EigenMatrix Y_BFGS = EigenZero(M.Gr.rows(), M.Gr.cols());
+	bool started = 0;
+
 	for ( int iiter = 0; iiter < max_iter; iiter++ ){
-		if (output) std::printf("|   %5d   |",iiter);
 
-		EigenMatrix Ge;
-		std::tie(L, Ge) = func(X);
-
-		const EigenMatrix Gr = GrassmannGrad(X, Ge);
-		//std::cout<<Gr<<std::endl;
-
-		Xs.push_back(X);
-		Ls.push_back(L);
-		Grs.push_back(Gr);
-		if ( (int)Xs.size() == diis_space ){
-			Xs.pop_front();
-			Ls.pop_front();
-			Grs.pop_front();
+		M.getGradient();
+		Y_BFGS += M.Gr;
+		if (output > 0) std::printf("| %4d |  %17.10f  | % 5.1E | %5.1E |", iiter, L, deltaL, M.Gr.norm());
+		if (!started) M.getHessian();
+		else{
+			const std::function<double (EigenMatrix, EigenMatrix)> Inner_current = M.getInner();
+			const std::function<EigenMatrix (EigenMatrix)> Hr_last = Hr_last;
+			const EigenMatrix tmp = Y_BFGS / M.Inner(Y_BFGS, S_BFGS);
+			const EigenMatrix Hr_last_s = Hr_last(S_BFGS);
+			M.Hr = [Inner_current, Hr_last, S_BFGS, Hr_last_s, Y_BFGS, tmp](EigenMatrix v){ // This needs to be modified for non-vector-transport-free cases.
+				const EigenMatrix Hr_last_v = Hr_last(v);
+				return Hr_last_v - Inner_current(S_BFGS, Hr_last_v) / Inner_current(S_BFGS, Hr_last_s) * Hr_last_s + Inner_current(Y_BFGS, v) * tmp;
+			};
 		}
-		
-		if ( iiter < 1000 ){
-			X = GrassmannExp(X, - 0.1 * Gr);
-			std::printf("  Steepest   |");
-		}else{
-			X = DIITS(Xs, Grs);
-			std::printf("    DIITS    |");
-		}
-		
-		const double deltaX = (X - Xs.back()).norm();
 
-		if (output) std::printf("  %17.10f  | %13.6f | %9.6f |\n", L, Gr.norm(), __duration__(start, __now__));
+		// Truncated conjugate gradient and rating the new step
+		const std::tuple<double, double, double> loong_tol = {
+			tol0/M.getDimension(),
+			0.1*std::min(M.Inner(M.Gr,M.Gr),std::sqrt(M.Inner(M.Gr,M.Gr)))/M.getDimension(),
+			0.1*tol2/M.getDimension()
+		};
+		const EigenMatrix S = Loong(M, R, loong_tol, output-1);
 
-		if ( Gr.norm() < std::get<2>(tol) ){
-			if ( iiter == 0 ) return 1;
-			if ( std::abs(L - Ls.back()) < std::get<0>(tol) ) return 1;
+		const double S2 = M.Inner(S, S);
+		const EigenMatrix Pnew = M.Exponential(S);
+		double Lnew;
+		EigenMatrix Genew;
+		std::function<EigenMatrix (EigenMatrix)> Henew;
+		std::tie(Lnew, Genew, Henew) = func(Pnew);
+		const double top = Lnew - L;
+		const double bottom = M.Inner(M.Gr + 0.5 * M.Hr(S), S);
+		const double rho = top / bottom;
+
+		// Determining whether to accept or reject the step
+		if ( rho > rho_thres ){
+			started = 1;
+			M_last = M;
+			deltaL = Lnew - L;
+			L = Lnew;
+			S_BFGS = M.TransportManifold(S, Pnew);
+			Y_BFGS = - M.TransportManifold(M.Gr, Pnew);
+			M.Update(Pnew, 1);
+			M.Ge = Genew;
+			M.He = Henew;
+			if (output > 0) std::printf(" Accept |");
+		}else if (output > 0) std::printf(" Reject |");
+		if (output > 0) std::printf(" %5.1E | %6.3f |\n", std::sqrt(S2), __duration__(start, __now__));
+
+		// Adjusting the trust radius according to the score
+		if ( rho < 0.25 ) R *= 0.25;
+		else if ( rho > 0.75 || std::abs(S2 - R * R) < 1.e-10 ) R = std::min(2 * R, R0);
+		if ( M.Gr.norm() < tol1 ){
+			if ( iiter == 0 ){
+				if ( std::sqrt(S2) < tol2 ) return 1;
+			}else{
+				if ( std::abs(deltaL) < tol0 && std::sqrt(S2) < tol2 ) return 1;
+			}
 		}
 
 	}
+
 	return 0;
 }
 

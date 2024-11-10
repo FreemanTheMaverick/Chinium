@@ -1,4 +1,4 @@
-#include <Eigen/Dense>
+#include <Eigen/Core>
 #include <unsupported/Eigen/MatrixFunctions>
 #include <functional>
 #include <vector>
@@ -15,13 +15,11 @@
 
 #define test(X) std::cout<<"X "<<X.rows()<<" "<<X.cols()<<std::endl;
 
-EigenMatrix Fock(EigenMatrix Cref, EigenMatrix Fao, EigenMatrix F2ao, int output){
+EigenMatrix Fock(EigenMatrix Fref, EigenMatrix F2ref, int output){
 	double L = 0;
-	const EigenMatrix kappa = Eigen::MatrixXd::Random(Cref.cols(), Cref.cols()) / 10 ;
+	const EigenMatrix kappa = Eigen::MatrixXd::Random(Fref.rows(), Fref.cols()) / 10 ;
 	const EigenMatrix p = ( kappa - kappa.transpose() ).exp();
 	Orthogonal M = Orthogonal(p);
-	const EigenMatrix Fref = Cref.transpose() * Fao * Cref;
-	const EigenMatrix F2ref = Cref.transpose() * F2ao * Cref;
 
 	std::function<
 		std::tuple<
@@ -32,17 +30,21 @@ EigenMatrix Fock(EigenMatrix Cref, EigenMatrix Fao, EigenMatrix F2ao, int output
 	> func = [Fref, F2ref](EigenMatrix U){
 		const EigenMatrix F = U.transpose() * Fref * U;
 		const EigenMatrix F2 = U.transpose() * F2ref * U;
-		const double L = F2.trace() - F.diagonal().norm() * F.diagonal().norm();
+		const double L = F2.trace() - std::pow(F.diagonal().norm(), 2);
 
-		const EigenMatrix DiagF = Diag(F);
-		const EigenMatrix Ge = 2 * F2ref * U - 4 * Fref * U * DiagF;
+		const EigenDiagonal Fdiag = F.diagonal().asDiagonal();
+		const EigenMatrix Ge = 2 * F2ref * U - 4 * Fref * U * Fdiag;
 
 		const EigenMatrix twoF2ref = 2 * F2ref;
 		const EigenMatrix fourFref = 4 * Fref;
 		const EigenMatrix eightFrefU = 8 * Fref * U;
 		const EigenMatrix UTFref = U.transpose() * Fref;
-		const std::function<EigenMatrix (EigenMatrix)> He = [DiagF, twoF2ref, fourFref, eightFrefU, UTFref](EigenMatrix v){
-			return (EigenMatrix)( twoF2ref * v - fourFref * v * DiagF - eightFrefU * Diag( UTFref * v) );
+		const std::function<EigenMatrix (EigenMatrix)> He = [Fdiag, twoF2ref, fourFref, eightFrefU, UTFref](EigenMatrix v){
+			return (EigenMatrix)(
+					twoF2ref * v
+					- fourFref * v * Fdiag
+					- eightFrefU * (UTFref * v).diagonal().asDiagonal()
+			);
 		};
 
 		return std::make_tuple(L, Ge, He);

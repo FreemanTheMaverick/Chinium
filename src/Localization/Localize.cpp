@@ -14,6 +14,7 @@
 
 #include "Fock.h"
 #include "FosterBoys.h"
+#include "PipekMezey.h"
 
 #include <iostream>
 
@@ -44,8 +45,11 @@ void Multiwfn::Localize(std::string scheme, std::string range, int output){
 		this->setEnergy(E2);
 		const EigenMatrix F2ao = this->getFock();
 		this->setEnergy(E);
-		for ( EigenMatrix Cref : Crefs )
-			Us.push_back(Fock(Cref, Fao, F2ao, output-1));
+		for ( EigenMatrix Cref : Crefs ){
+			const EigenMatrix Fref = Cref.transpose() * Fao * Cref;
+			const EigenMatrix F2ref = Cref.transpose() * F2ao * Cref;
+			Us.push_back(Fock(Fref, F2ref, output-1));
+		}
 	} else if ( scheme.compare("FOSTER") == 0 ){
 		if (output > 0) std::printf("Foster-Boys localization:\n");
 		const EigenMatrix Wxao = this->DipoleX;
@@ -54,7 +58,23 @@ void Multiwfn::Localize(std::string scheme, std::string range, int output){
 		const EigenMatrix W2aoSum = this->QuadrapoleXX + this->QuadrapoleYY + this-> QuadrapoleZZ;
 		for ( EigenMatrix Cref : Crefs )
 			Us.push_back(FosterBoys(Cref, Wxao, Wyao, Wzao, W2aoSum, output-1));
+	} else if ( scheme.compare("PIPEK") == 0){
+		if (output > 0) std::printf("Pipek-Mezey localization:\n");
+		Eigen::SelfAdjointEigenSolver<EigenMatrix> solver(this->Overlap);
+		const EigenMatrix S12 = solver.operatorSqrt();
+		for ( EigenMatrix Cref : Crefs ){
+			const EigenMatrix S12Cref = S12 * Cref;
+			int nbasis = 0;
+			std::vector<EigenMatrix> Qrefs = {};
+			for ( MwfnCenter& center : this->Centers ){
+				const EigenMatrix tmp = S12Cref.middleRows(nbasis, center.getNumBasis());
+				Qrefs.push_back(tmp.transpose() * tmp);
+				nbasis += center.getNumBasis();
+			}
+			Us.push_back(PipekMezey(Qrefs, output-1));
+		}
 	}
+
 
 	if ( range.compare("OCC") == 0 )
 		Call.leftCols(nocc) = Crefs[0] * Us[0];

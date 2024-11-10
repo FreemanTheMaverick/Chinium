@@ -4,6 +4,7 @@ class MwfnCenter{ public:
 	std::vector<double> Coordinates = {114, 514, 1919810};
 	std::vector<MwfnShell> Shells = {};
 	int getNumShells();
+	int getNumBasis();
 	std::string getSymbol();
 	void Print();
 };

@@ -13,6 +13,13 @@ int MwfnCenter::getNumShells(){
 	return this->Shells.size();
 }
 
+int MwfnCenter::getNumBasis(){
+	int nbasis = 0;
+	for ( MwfnShell& shell : this->Shells )
+		nbasis += shell.getSize();
+	return nbasis;
+}
+
 std::string MwfnCenter::getSymbol(){
 	__Z_2_Name__
 	return Z2Name[this->Index].c_str();
