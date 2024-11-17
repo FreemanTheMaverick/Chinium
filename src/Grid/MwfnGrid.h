@@ -16,7 +16,18 @@
 	double* AO2YZs = nullptr;
 	void GenerateGrid(std::string grid, int order, const bool output);
 
-	double* GridDensity = nullptr;
-	void getGridDensity(EigenMatrix D, const bool output);
+	double* Rhos = nullptr;
+	double* Rho1Xs = nullptr;
+	double* Rho1Ys = nullptr;
+	double* Rho1Zs = nullptr;
+	double* Sigmas = nullptr;
+	double* Rho2XXs = nullptr;
+	double* Rho2YYs = nullptr;
+	double* Rho2ZZs = nullptr;
+	double* Rho2XYs = nullptr;
+	double* Rho2XZs = nullptr;
+	double* Rho2YZs = nullptr;
+	double* Lapls = nullptr;
+	double* Taus = nullptr;
 
 

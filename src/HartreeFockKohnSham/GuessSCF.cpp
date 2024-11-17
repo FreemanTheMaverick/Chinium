@@ -19,9 +19,9 @@
 
 EigenMatrix SuperpositionAtomicPotential(
 		std::string path, std::vector<MwfnCenter>& centers, int nbasis,
-		double * xs,double * ys,double * zs,double * ws,int ngrids,double * aos){
+		double* xs, double* ys, double* zs, double* ws, long int ngrids, double* aos){
 	__Z_2_Name__
-	double * vsap=new double[ngrids]();
+	double * vsap = new double[ngrids]();
 	for ( MwfnCenter& center : centers ){
 		const std::string atomname = Z2Name[center.Index];
 		const double atomx = center.Coordinates[0];
@@ -53,20 +53,20 @@ EigenMatrix SuperpositionAtomicPotential(
 		}
 	}
 	return VMatrix(
-			ws,ngrids,nbasis,
+			{0},
+			ws, ngrids, nbasis,
 			aos,
-			nullptr,nullptr,nullptr,
+			nullptr, nullptr, nullptr,
 			nullptr,
-			nullptr,
-			nullptr,nullptr,nullptr,nullptr,
-			vsap,nullptr,
-			nullptr,nullptr);
+			nullptr, nullptr, nullptr,
+			vsap, nullptr,
+			nullptr, nullptr);
 }
 
 void Multiwfn::GuessSCF(std::string guess){
 	std::string path = std::getenv("CHINIUM_PATH");
 	path += "/SAP/";
-	EigenMatrix V;
+	EigenMatrix V = EigenZero(this->getNumBasis(), this->getNumBasis());
 	bool potential = 0;
 	if ( guess.compare("read") == 0 );
 	else if ( guess.compare("sap") == 0 ){

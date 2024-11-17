@@ -1,6 +1,7 @@
 #include "Multiwfn/MwfnShell.h"
 #include "Multiwfn/MwfnCenter.h"
 #include "Multiwfn/MwfnOrbital.h"
+#include "ExchangeCorrelation/MwfnXC1.h"
 
 class Multiwfn{ public:
 	// Field 1
@@ -24,4 +25,5 @@ class Multiwfn{ public:
 	#include "Grid/MwfnGrid.h"
 	#include "HartreeFockKohnSham/MwfnHFKS.h"
 	#include "Localization/MwfnLocalize.h"
+	#include "ExchangeCorrelation/MwfnXC2.h"
 };

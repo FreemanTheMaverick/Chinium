@@ -1,3 +1,5 @@
+#pragma once
+
 class Manifold{ public:
 	std::string Name;
 	EigenMatrix P;

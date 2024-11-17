@@ -5,7 +5,6 @@
 #include <cstdio>
 #include <sstream>
 #include <fstream>
-#include <algorithm> // For std::find().
 #include <map>
 #include <regex>
 
@@ -158,7 +157,10 @@ double SafeStod(std::string word){ // In FT theory, some occupation numbers can 
 
 Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 	std::ifstream file(mwfn_filename.c_str());
-	if (!file.good()) return;
+	if (!file.good()){
+		if (output) std::printf("Multiwfn file %s does not exist\n", mwfn_filename.c_str());
+		return;
+	}
 	if (output) std::printf("Reading existent Multiwfn file %s ...\n", mwfn_filename.c_str());
 	std::string line, word;
 	int tmp_int = -114;

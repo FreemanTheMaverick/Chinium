@@ -10,8 +10,9 @@
 
 #include "../Macro.h"
 #include "../Multiwfn.h"
-#include "../Optimization/Mouse.h"
 #include "../Manifold/Grassmann.h"
+#include "../Manifold/GrassmannQLocal.h"
+#include "../Optimization/Mouse.h"
 #include "../Optimization/Ox.h"
 #include "FockFormation.h"
 
@@ -22,9 +23,9 @@ void Multiwfn::HartreeFockKohnSham(double temperature, double chemicalpotential,
 
 	if (output > 0) std::printf("Self-consistent field\n");
 
+	const int nocc = std::round(this->getNumElec(1));
+
 	const EigenMatrix S = this->Overlap;
-	const int nbasis = this->getNumBasis();
-	const int nindbasis = this->getNumIndBasis();
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 	eigensolver.compute(S);
 	const EigenVector sval = eigensolver.eigenvalues();
@@ -61,6 +62,8 @@ void Multiwfn::HartreeFockKohnSham(double temperature, double chemicalpotential,
 		return std::make_tuple(E_, Fprime_, He);
 	};
 
+	EigenMatrix Call = this->getCoefficientMatrix();
+	GrassmannQLocal Cprime = GrassmannQLocal(Z.inverse() * Call.leftCols(nocc));
 	std::function<
 		std::tuple<
 			double,
@@ -70,14 +73,18 @@ void Multiwfn::HartreeFockKohnSham(double temperature, double chemicalpotential,
 	> cfunc = [Z, Hcore, is, js, ks, ls, degs, ints, length, nthreads](EigenMatrix Cprime_){
 		const EigenMatrix Dprime_ = Cprime_ * Cprime_.transpose();
 		const EigenMatrix C_ = Z * Cprime_;
-		const EigenMatrix D_ = Z.transpose() * Dprime_ * Z;
+		const EigenMatrix D_ = C_ * C_.transpose();
 		const EigenMatrix F_ = Hcore + Ghf(is, js, ks, ls, degs, ints, length, D_, 1, nthreads);
-		const EigenMatrix Fprime_ = Z * F_ * Z.transpose(); // Euclidean gradient
+		const EigenMatrix Fprime_ = Z * F_ * Z; // Euclidean gradient
 		const double E_ = ( D_ * ( Hcore + F_ ) ).trace();
-		const std::function<EigenMatrix (EigenMatrix)> He = [Cprime_, Z, is, js, ks, ls, degs, ints, length, nthreads, F_](EigenMatrix v){
-			const EigenMatrix tmp1 = Z.transpose() * Cprime_ * v.transpose() * Z;
-			const EigenMatrix tmp2 = Z * Ghf(is, js, ks, ls, degs, ints, length, tmp1, 1, nthreads) * Z.transpose() * Cprime_;
-			return 4 * tmp2 + 2 * F_ * v;
+		const EigenMatrix ZCprime_ = Z * Cprime_;
+		const std::function<EigenMatrix (EigenMatrix)> He = [Z, ZCprime_, is, js, ks, ls, degs, ints, length, nthreads, Fprime_](EigenMatrix v){
+std::cout<<11<<std::endl;
+			const EigenMatrix tmp1 = ZCprime_ * v.transpose() * Z;
+std::cout<<22<<std::endl;
+			const EigenMatrix tmp2 = Z * Ghf(is, js, ks, ls, degs, ints, length, tmp1, 1, nthreads) * ZCprime_;
+std::cout<<33<<std::endl;
+			return 4 * tmp2 + 2 * Fprime_ * v;
 		};
 		return std::make_tuple(E_, Fprime_ * Cprime_, He);
 	};
@@ -89,14 +96,19 @@ void Multiwfn::HartreeFockKohnSham(double temperature, double chemicalpotential,
 		this->setEnergy(eigensolver.eigenvalues());
 		this->setCoefficientMatrix(Z * eigensolver.eigenvectors());
 		const EigenMatrix D_ = this->getDensity() / 2.;
-		const EigenMatrix F_ = this->calcFock(D_, nthreads);
+		EigenMatrix Fhf_ = EigenZero(Fupdate.rows(), Fupdate.cols());
+		EigenMatrix Fxc_ = EigenZero(Fupdate.rows(), Fupdate.cols());
+		double Exc_ = 0;
+		std::tie(Fhf_, Fxc_, Exc_) = this->calcFock(D_, nthreads);
+		const EigenMatrix F_ = Fhf_ + Fxc_;
 		const EigenMatrix G = F_ * D_ * S - S * D_ * F_;
-		this->E_tot = (D_ * ( this->Kinetic + this->Nuclear + F_ )).trace();
+		this->E_tot = (D_ * ( this->Kinetic + this->Nuclear + Fhf_ )).trace() + Exc_;
 		return std::make_tuple(this->E_tot, F_, G, D_);
 	};
 
 	double E = 0;
 	assert( Mouse( ffunc, {1.e3, 0.5, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, this->E_tot, F, output-1) && "Convergence failed!" );
-	assert( Ox( dfunc, {1.e-8, 1.e-7, 1.e-7}, 100, E, Dprime, output-1) && "Convergence failed!" );
+	//assert( Ox( dfunc, {1.e-8, 1.e-7, 1.e-7}, 100, E, Dprime, output-1) && "Convergence failed!" );
+	//assert( Ox( cfunc, {1.e-8, 1.e-7, 1.e-7}, 100, E, Cprime, output-1) && "Convergence failed!" );
 	if (output > 0) std::printf("Converged!\n");
 }

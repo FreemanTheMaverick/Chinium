@@ -1,9 +1,9 @@
-EigenMatrix VMatrix(
+void GetDensity(
 		std::vector<int> orders,
-		double* ws, long int ngrids, int nbasis,
 		double* aos,
 		double* ao1xs, double* ao1ys, double* ao1zs,
 		double* ao2ls,
+		long int ngrids, EigenMatrix D,
+		double* ds,
 		double* d1xs, double* d1ys, double* d1zs,
-		double* vrs, double* vss,
-		double* vls, double* vts);
+		double* d2s, double* ts);

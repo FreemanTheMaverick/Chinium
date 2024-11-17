@@ -14,10 +14,10 @@ EigenMatrix LowdinOrthogonalization(EigenMatrix p){
 	const EigenMatrix S = p.transpose() * p;
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 	eigensolver.compute(S);
-	const EigenVector values = eigensolver.eigenvalues().cwiseSqrt();
+	const EigenVector values = eigensolver.eigenvalues().array().rsqrt().matrix();
 	const EigenMatrix vectors = eigensolver.eigenvectors();
 	const EigenMatrix X = vectors * values.asDiagonal() * vectors.transpose();
-	return X * p;
+	return p * X;
 }
 
 EigenMatrix OrthogonalComplement(EigenMatrix p){
@@ -80,8 +80,7 @@ EigenMatrix GrassmannQLocal::Logarithm(EigenMatrix q){
 }
 
 EigenMatrix GrassmannQLocal::TangentProjection(EigenMatrix x){
-	const EigenMatrix tmp = x - this->P * this->P.transpose() * x;
-	return this->Aux.transpose() * tmp;
+	return this->Aux.transpose() * x;
 }
 
 EigenMatrix GrassmannQLocal::TangentPurification(EigenMatrix X){
