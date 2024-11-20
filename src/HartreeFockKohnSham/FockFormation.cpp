@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cassert>
+#include <omp.h>
 
 #include "../Macro.h"
 #include "../Multiwfn.h"
@@ -31,10 +32,11 @@ EigenMatrix Ghf(
 		char* degs, double* ints, long int length,
 		EigenMatrix D, double kscale, int nthreads){
 	std::vector<long int> heads = getThreadPointers(length, nthreads);
-	std::vector<EigenMatrix> rawJs(nthreads, EigenZero(D.rows(), D.cols()));
-	std::vector<EigenMatrix> rawKs(nthreads, EigenZero(D.rows(), D.cols()));
+	EigenMatrix rawJ = EigenZero(D.rows(), D.cols());
+	EigenMatrix rawK = EigenZero(D.rows(), D.cols());
 	omp_set_num_threads(nthreads);
-	#pragma omp parallel for
+	#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
+	#pragma omp parallel for reduction(EigenMatrixSum: rawJ, rawK)
 	for ( int ithread = 0; ithread < nthreads; ithread++ ){
 		const long int head = heads[ithread];
 		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
@@ -44,29 +46,21 @@ EigenMatrix Ghf(
 		short int* lranger = ls + head;
 		char* degranger = degs + head;
 		double* repulsionranger = ints + head;
-		EigenMatrix* rawJ = &rawJs[ithread];
-		EigenMatrix* rawK = &rawKs[ithread];
 		for ( long int iint = 0; iint < nints; iint++ ){
 			const short int i = *(iranger++);
 			const short int j = *(jranger++);
 			const short int k = *(kranger++);
 			const short int l = *(lranger++);
 			const double deg_value = *(degranger++) * *(repulsionranger++);
-			(*rawJ)(i, j) += D(k, l) * deg_value;
-			(*rawJ)(k, l) += D(i, j) * deg_value;
+			rawJ(i, j) += D(k, l) * deg_value;
+			rawJ(k, l) += D(i, j) * deg_value;
 			if ( kscale > 0. ){
-				(*rawK)(i, k) += D(j, l) * deg_value;
-				(*rawK)(j, l) += D(i, k) * deg_value;
-				(*rawK)(i, l) += D(j, k) * deg_value;
-				(*rawK)(j, k) += D(i, l) * deg_value;
+				rawK(i, k) += D(j, l) * deg_value;
+				rawK(j, l) += D(i, k) * deg_value;
+				rawK(i, l) += D(j, k) * deg_value;
+				rawK(j, k) += D(i, l) * deg_value;
 			}
 		}
-	}
-	EigenMatrix rawJ = EigenZero(D.rows(), D.cols());
-	EigenMatrix rawK = EigenZero(D.rows(), D.cols());
-	for ( int ithread = 0; ithread < nthreads; ithread++ ){
-		rawJ += rawJs[ithread];
-		if ( kscale > 0. ) rawK += rawKs[ithread];
 	}
 	const EigenMatrix J = 0.5 * ( rawJ + rawJ.transpose() );
 	const EigenMatrix K = 0.25 * ( rawK + rawK.transpose() );

@@ -20,6 +20,7 @@
 	void setOccupation(EigenVector occupancies);
 	EigenMatrix getFock();
 	EigenMatrix getDensity();
+	EigenMatrix getEnergyDensity();
 
 	void Export(std::string mwfn_filename, const bool output);
 	void Print();

@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cmath> // std::abs, std::sqrt
 #include <tuple> // std::tuple, std::make_tuple, std::tie
+#include <functional>
+#include <chrono>
 #include <omp.h>
 
 #include "../Macro.h"
@@ -282,64 +284,193 @@ void getRepulsion0(
 	libint2::finalize();
 }
 
-void Multiwfn::getRepulsion(double threshold, int nthreads, const bool output){
+void EigenMatrixVectorSum( // For OMP reduction
+		std::vector<std::vector<EigenMatrix>>& omp_out,
+		std::vector<std::vector<EigenMatrix>>& omp_in){
+	for ( int iatom = 0; iatom < (int)omp_out.size(); iatom++ )
+		for ( int xyz = 0; xyz < 3; xyz++ )
+			omp_out[iatom][xyz] += omp_in[iatom][xyz];
+}
+
+std::vector<std::vector<EigenMatrix>> getRepulsion1(
+		libint2::BasisSet& obs,
+		std::vector<int>& shell2atom,
+		std::vector<long int> sqheads,
+		short int* shellis, short int* shelljs,
+		short int* shellks, short int* shellls,
+		EigenMatrix D, double kscale){
+	const int nbasis = libint2::nbf(obs);
+	const int natoms = *std::max_element(shell2atom.begin(), shell2atom.end()) + 1;
+	const auto shell2bf = obs.shell2bf();
+	std::vector<std::vector<EigenMatrix>> rawjs(natoms);
+	for ( std::vector<EigenMatrix>& rawj : rawjs )
+		rawj = {EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis)};
+	std::vector<std::vector<EigenMatrix>> rawks(natoms);
+	for ( std::vector<EigenMatrix>& rawk : rawks )
+		rawk = {EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis)};
+ 	libint2::initialize();
+	const int nthreads = sqheads.size() - 1;
+	omp_set_num_threads(nthreads);
+	#pragma omp declare reduction(Sum: std::vector<std::vector<EigenMatrix>>: EigenMatrixVectorSum(omp_out, omp_in)) initializer(omp_priv = omp_orig)
+	#pragma omp parallel for reduction(Sum: rawjs, rawks)
+	for ( int ithread = 0; ithread < nthreads; ithread++ ){
+		const long int nsq = sqheads[ithread + 1] - sqheads[ithread];
+		const long int sqhead = sqheads[ithread];
+		short int* s1ranger = shellis + sqhead;
+		short int* s2ranger = shelljs + sqhead;
+		short int* s3ranger = shellks + sqhead;
+		short int* s4ranger = shellls + sqhead;
+		libint2::Engine engine(libint2::Operator::coulomb, obs.max_nprim(), obs.max_l(), 1);
+		const auto& buf_vec = engine.results();
+		for ( int isq = 0; isq < nsq; isq++ ){
+			const short int s1 = *(s1ranger++);
+			const short int s2 = *(s2ranger++);
+			const short int s3 = *(s3ranger++);
+			const short int s4 = *(s4ranger++);
+			const short int bf1_first = shell2bf[s1];
+			const short int bf2_first = shell2bf[s2];
+			const short int bf3_first = shell2bf[s3];
+			const short int bf4_first = shell2bf[s4];
+			const short int n1 = obs[s1].size();
+			const short int n2 = obs[s2].size();
+			const short int n3 = obs[s3].size();
+			const short int n4 = obs[s4].size();
+			engine.compute(obs[s1], obs[s2], obs[s3], obs[s4]);
+			const auto ints_shellset = buf_vec[0];
+			if ( ints_shellset == nullptr ) continue;
+			const int atomlist[] = {
+				shell2atom[s1],
+				shell2atom[s2],
+				shell2atom[s3],
+				shell2atom[s4]
+			};
+			for ( short int f1 = 0, f1234 = 0; f1 != n1; f1++ ){
+				const short int bf1 = bf1_first + f1;
+				for ( short int f2 = 0; f2 != n2; f2++ ){
+					const short int bf2 = bf2_first + f2;
+					const double ab_deg = (bf1 == bf2) ? 1 : 2;
+					for ( short int f3 = 0; f3 != n3; f3++ ){
+						const short int bf3 = bf3_first + f3;
+						for ( short int f4 = 0; f4 != n4; f4++, f1234++ ){
+							const short int bf4 = bf4_first + f4;
+							if ( bf2 <= bf1 && bf3 <= bf1 && bf4 <= ((bf1 == bf3) ? bf2 : bf3)){
+								const double cd_deg = (bf3 == bf4) ? 1 : 2;
+								const double ab_cd_deg = (bf1 == bf3) ? (bf2 == bf4 ? 1 : 2) : 2;
+								const double abcd_deg = ab_deg * cd_deg * ab_cd_deg;
+								double tmp = 114514;
+								int atom = 1919810;
+								for ( int p = 0, pt = 0; p < 4; p++ ){
+									atom = atomlist[p];
+									for ( int t = 0; t < 3; t++, pt++ ){
+										tmp = abcd_deg * buf_vec[pt][f1234];
+										rawjs[atom][t](bf1, bf2) += tmp * D(bf3, bf4);
+										rawjs[atom][t](bf3, bf4) += tmp * D(bf1, bf2);
+										if ( kscale > 0 ){
+											rawks[atom][t](bf1, bf3) += tmp * D(bf2, bf4);
+											rawks[atom][t](bf2, bf4) += tmp * D(bf1, bf3);
+											rawks[atom][t](bf1, bf4) += tmp * D(bf2, bf3);
+											rawks[atom][t](bf2, bf3) += tmp * D(bf1, bf4);
+										}
+ 									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	libint2::finalize();
+	std::vector<std::vector<EigenMatrix>> gs(natoms);
+	for ( std::vector<EigenMatrix>& g : gs )
+		g = {EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis)};
+	for ( int iatom = 0; iatom < natoms; iatom++ ) for ( int xyz = 0; xyz < 3; xyz++ ){
+		const EigenMatrix j = 0.5  * ( rawjs[iatom][xyz] + rawjs[iatom][xyz].transpose() );
+		const EigenMatrix k = 0.25 * ( rawks[iatom][xyz] + rawks[iatom][xyz].transpose() );
+		gs[iatom][xyz] = j - 0.5 * kscale * k;
+	}
+	return gs;
+}
+
+
+void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthreads, const bool output){
 	__Make_Basis_Set__
-
-	if (output) std::printf("Calculating diagonal elements of repulsion integrals ... ");
-	auto start = __now__;
-	this->RepulsionDiag = getRepulsionDiag(obs);
-	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
-
-	if (output) std::printf("Calculating numbers of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
-	start = __now__;
-	long int nshellquartets = 0;
-	std::tie(this->RepulsionLength, nshellquartets) = getRepulsionLength(obs, this->RepulsionDiag, threshold);
-	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 	const long int nbasis = libint2::nbf(obs);
 	const long int nshells = obs.size();
-	if (output) std::printf("Before screening: %ld integrals and %ld shell quartets\n", nbasis*(nbasis+1)*(nbasis*(nbasis+1)/2+1)/4, nshells*(nshells+1)*(nshells*(nshells+1)/2+1)/4);
-	if (output) std::printf("After screening: %ld integrals and %ld shell quartets\n", this->RepulsionLength, nshellquartets);
-	if (output) std::printf("Memory needed for 4c-2e repulsion integrals and their indices: %f GB\n",(double)this->RepulsionLength * ( 2. * 4. + 1. + 8. ) / 1024. / 1024. / 1024.);
+	auto start = __now__;
 
-	if (output) std::printf("Generating indices of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
-	start = __now__;
-	short int* shellis = new short int[nshellquartets];
-	short int* shelljs = new short int[nshellquartets];
-	short int* shellks = new short int[nshellquartets];
-	short int* shellls = new short int[nshellquartets];
-	getRepulsionIndices(
-			obs, this->RepulsionDiag, threshold,
-			shellis, shelljs, shellks, shellls);
-	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	if (this->RepulsionDiag.cols() == 0){
+		if (output) std::printf("Calculating diagonal elements of repulsion integrals ... ");
+		start = __now__;
+		this->RepulsionDiag = getRepulsionDiag(obs);
+		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	}
+
+	if (this->RepulsionLength == 0 || this->ShellQuartetLength == 0){
+		if (output) std::printf("Calculating numbers of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
+		start = __now__;
+		std::tie(this->RepulsionLength, this->ShellQuartetLength) = getRepulsionLength(obs, this->RepulsionDiag, threshold);
+		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+		if (output) std::printf("Before screening: %ld integrals and %ld shell quartets\n", nbasis*(nbasis+1)*(nbasis*(nbasis+1)/2+1)/4, nshells*(nshells+1)*(nshells*(nshells+1)/2+1)/4);
+		if (output) std::printf("After screening: %ld integrals and %ld shell quartets\n", this->RepulsionLength, this->ShellQuartetLength);
+		if (output) std::printf("Memory needed for 4c-2e repulsion integrals and their indices: %f GB\n",(double)this->RepulsionLength * ( 2. * 4. + 1. + 8. ) / 1024. / 1024. / 1024.);
+	}
+
+	if ( (!this->ShellIs) || (!this->ShellJs) || (!this->ShellKs) || (!this->ShellLs) ){
+		if (output) std::printf("Generating indices of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
+		start = __now__;
+		if (!this->ShellIs) this->ShellIs = new short int[this->ShellQuartetLength];
+		if (!this->ShellJs) this->ShellJs = new short int[this->ShellQuartetLength];
+		if (!this->ShellKs) this->ShellKs = new short int[this->ShellQuartetLength];
+		if (!this->ShellLs) this->ShellLs = new short int[this->ShellQuartetLength];
+		getRepulsionIndices(
+				obs, this->RepulsionDiag, threshold,
+				this->ShellIs, this->ShellJs,
+				this->ShellKs, this->ShellLs);
+		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	}
 
 	if (output) std::printf("Arranging for %d threads to calculate 4c-2e repulsion integrals ... ", nthreads);
 	start = __now__;
 	std::vector<long int> sqheads = {};
 	std::vector<long int> bqheads = {};
 	std::tie(sqheads, bqheads) = getThreadPointers(
-		obs, nshellquartets, nthreads,
-		shellis, shelljs, shellks, shellls);
-	sqheads.push_back(nshellquartets);
+		obs, this->ShellQuartetLength, nthreads,
+		this->ShellIs, this->ShellJs,
+		this->ShellKs, this->ShellLs);
+	sqheads.push_back(this->ShellQuartetLength);
 	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 
-	if (output) std::printf("Calculating 4c-2e repulsion integrals ... ");
-	start = __now__;
-	this->RepulsionIs = new short int[this->RepulsionLength];
-	this->RepulsionJs = new short int[this->RepulsionLength];
-	this->RepulsionKs = new short int[this->RepulsionLength];
-	this->RepulsionLs = new short int[this->RepulsionLength];
-	this->RepulsionDegs = new char[this->RepulsionLength];
-	this->Repulsions = new double[this->RepulsionLength];
-	getRepulsion0(
-		obs, sqheads, bqheads,
-		shellis, shelljs, shellks, shellls,
-		this->RepulsionIs, this->RepulsionJs,
-		this->RepulsionKs, this->RepulsionLs,
-		this->RepulsionDegs, this->Repulsions);
-	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
+		if (output) std::printf("Calculating 4c-2e repulsion integrals ... ");
+		start = __now__;
+		if (!this->RepulsionIs) this->RepulsionIs = new short int[this->RepulsionLength];
+		if (!this->RepulsionJs) this->RepulsionJs = new short int[this->RepulsionLength];
+		if (!this->RepulsionKs) this->RepulsionKs = new short int[this->RepulsionLength];
+		if (!this->RepulsionLs) this->RepulsionLs = new short int[this->RepulsionLength];
+		if (!this->RepulsionDegs) this->RepulsionDegs = new char[this->RepulsionLength];
+		if (!this->Repulsions)this->Repulsions = new double[this->RepulsionLength];
+		getRepulsion0(
+			obs, sqheads, bqheads,
+			this->ShellIs, this->ShellJs,
+			this->ShellKs, this->ShellLs,
+			this->RepulsionIs, this->RepulsionJs,
+			this->RepulsionKs, this->RepulsionLs,
+			this->RepulsionDegs, this->Repulsions);
+		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	}
 
-	delete [] shellis;
-	delete [] shelljs;
-	delete [] shellks;
-	delete [] shellls;
+	if (std::find(orders.begin(), orders.end(), 1) != orders.end()){
+		if (output) std::printf("Calculating 4c-2e repulsion integral nuclear gradient ... ");
+		start = __now__;
+		this->GGrads = getRepulsion1(
+			obs,
+			shell2atom,
+			sqheads,
+			this->ShellIs, this->ShellJs,
+			this->ShellKs, this->ShellLs,
+			this->getDensity() / 2, this->XC.EXX
+		);
+		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	}
 }

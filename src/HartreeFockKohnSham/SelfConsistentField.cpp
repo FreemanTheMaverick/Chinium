@@ -102,12 +102,13 @@ std::cout<<33<<std::endl;
 		std::tie(Fhf_, Fxc_, Exc_) = this->calcFock(D_, nthreads);
 		const EigenMatrix F_ = Fhf_ + Fxc_;
 		const EigenMatrix G = F_ * D_ * S - S * D_ * F_;
-		this->E_tot = (D_ * ( this->Kinetic + this->Nuclear + Fhf_ )).trace() + Exc_;
-		return std::make_tuple(this->E_tot, F_, G, D_);
+		const double E = (D_ * ( this->Kinetic + this->Nuclear + Fhf_ )).trace() + Exc_;
+		return std::make_tuple(E, F_, G, D_);
 	};
 
 	double E = 0;
-	assert( Mouse( ffunc, {1.e3, 0.5, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, this->E_tot, F, output-1) && "Convergence failed!" );
+	assert( Mouse( ffunc, {1.e3, 0.5, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, E, F, output-1) && "Convergence failed!" );
+	this->E_tot += E;
 	//assert( Ox( dfunc, {1.e-8, 1.e-7, 1.e-7}, 100, E, Dprime, output-1) && "Convergence failed!" );
 	//assert( Ox( cfunc, {1.e-8, 1.e-7, 1.e-7}, 100, E, Cprime, output-1) && "Convergence failed!" );
 	if (output > 0) std::printf("Converged!\n");

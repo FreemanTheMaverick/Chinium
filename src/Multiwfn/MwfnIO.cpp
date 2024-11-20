@@ -446,6 +446,13 @@ EigenMatrix Multiwfn::getDensity(){
 	return C * N * C.transpose();
 }
 
+EigenMatrix Multiwfn::getEnergyDensity(){
+	const EigenMatrix N = this->getOccupation().asDiagonal();
+	const EigenMatrix E = this->getEnergy().asDiagonal();
+	const EigenMatrix C = this->getCoefficientMatrix();
+	return C * N * E * C.transpose();
+}
+
 void Multiwfn::Export(std::string mwfn_filename, const bool output){
 	std::FILE* file = std::fopen(mwfn_filename.c_str(), "w");
 	if (output) std::printf("Exporting wavefunction information to %s ...\n", mwfn_filename.c_str());

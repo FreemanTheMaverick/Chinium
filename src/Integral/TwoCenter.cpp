@@ -7,6 +7,7 @@
 #include <cmath> // std::abs in "../Macro.h"
 #include <experimental/array> // std::array, std::experimental::make_array
 #include <utility> // std::pair, std::make_pair
+#include <chrono>
 
 #include "../Macro.h"
 #include "../Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
@@ -65,7 +66,63 @@ std::vector<EigenMatrix> getTwoCenter0(
 	return matrices;
 }
 
-void Multiwfn::getTwoCenter(int order, const bool output){
+#define __Loop_Over_XYZ__(iatom, position){\
+	for ( short int f1 = 0, f12 = 0; f1 != n1; f1++ ){\
+		const short int bf1 = bf1_first + f1;\
+		for ( short int f2 = 0; f2 != n2; f2++, f12++ ){\
+			const short int bf2 = bf2_first + f2;\
+			if (bf2 <= bf1){\
+				gs[iatom][0](bf1,bf2)+=buf_vec[3*(position)+0][f12];\
+				gs[iatom][1](bf1,bf2)+=buf_vec[3*(position)+1][f12];\
+				gs[iatom][2](bf1,bf2)+=buf_vec[3*(position)+2][f12];\
+			}\
+		}\
+	}\
+}
+
+std::vector<std::vector<EigenMatrix>> getTwoCenter1(
+		libint2::BasisSet& obs,
+		std::vector<std::pair<double, std::array<double, 3>>>& libint2charges,
+		std::vector<int>& shell2atom,
+		libint2::Operator Operator){
+	const int nbasis = libint2::nbf(obs);
+	const int natoms = *std::max_element(shell2atom.begin(), shell2atom.end()) + 1;
+	std::vector<std::vector<EigenMatrix>> gs(natoms);
+	for ( std::vector<EigenMatrix>& g : gs )
+		g = {EigenZero(nbasis,nbasis), EigenZero(nbasis,nbasis), EigenZero(nbasis,nbasis)};
+	libint2::initialize();
+	libint2::Engine engine(Operator, obs.max_nprim(), obs.max_l(), 1);
+	if ( Operator == libint2::Operator::nuclear )
+		engine.set_params(libint2charges); // Including nuclear information.
+	const auto& buf_vec = engine.results();
+	const auto shell2bf = obs.shell2bf();
+	for ( short int s1 = 0; s1 != (short int)obs.size(); s1++ ){
+		const short int atom1 = shell2atom[s1];
+		const short int bf1_first = shell2bf[s1];
+		const short int n1 = obs[s1].size();
+		for ( short int s2 = 0; s2 <= s1; s2++ ){
+			const short int atom2 = shell2atom[s2];
+			if ( Operator != libint2::Operator::nuclear && atom1 == atom2 ) continue;
+			const short int bf2_first = shell2bf[s2];
+			const short int n2 = obs[s2].size();
+			engine.compute(obs[s1], obs[s2]);
+			__Loop_Over_XYZ__(atom1, 0)
+			__Loop_Over_XYZ__(atom2, 1)
+			if ( Operator == libint2::Operator::nuclear )
+				for (short int iatom = 0; iatom < natoms; iatom++ )
+					__Loop_Over_XYZ__(iatom, iatom + 2)
+		}
+	}
+	for ( int iatom = 0; iatom < natoms; iatom++ ) for ( int xyz = 0; xyz < 3; xyz++ ){
+		const EigenMatrix transpose = gs[iatom][xyz].transpose();
+		const EigenMatrix diagonal(gs[iatom][xyz].diagonal().asDiagonal());
+		gs[iatom][xyz] += transpose - diagonal;
+	}
+	libint2::finalize();
+	return gs;
+}
+
+void Multiwfn::getTwoCenter(std::vector<int> orders, const bool output){
 	__Make_Basis_Set__
 	std::vector<std::pair<double, std::array<double, 3>>> libint2charges = {}; // Making point charges.
 	for ( MwfnCenter& center : this->Centers )
@@ -76,7 +133,7 @@ void Multiwfn::getTwoCenter(int order, const bool output){
 				center.Coordinates[1],
 				center.Coordinates[2])));
 
-	if ( order >= 0 ){
+	if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
 		if (output) std::printf("Calculating 2c-1e integrals ... ");
 		const auto start = __now__;
 		std::vector<EigenMatrix> matrices = getTwoCenter0( obs, libint2charges, libint2::Operator::emultipole2 );
@@ -94,6 +151,13 @@ void Multiwfn::getTwoCenter(int order, const bool output){
 		this->Nuclear = getTwoCenter0( obs, libint2charges, libint2::Operator::nuclear )[0];
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 	}
+	if (std::find(orders.begin(), orders.end(), 1) != orders.end()){
+		if (output) std::printf("Calculating 2c-1e integral nuclear gradient ... ");
+		const auto start = __now__;
+		this->OverlapGrads = getTwoCenter1(obs, libint2charges, shell2atom, libint2::Operator::overlap);
+		this->KineticGrads = getTwoCenter1(obs, libint2charges, shell2atom, libint2::Operator::kinetic);
+		this->NuclearGrads = getTwoCenter1(obs, libint2charges, shell2atom, libint2::Operator::nuclear);
+		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	}
 }
-
 

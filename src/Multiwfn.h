@@ -16,9 +16,14 @@ class Multiwfn{ public:
 	std::vector<MwfnOrbital> Orbitals = {};
 
 	// Field 5
+	/*
 	EigenMatrix Overlap;
 	EigenMatrix Kinetic;
 	EigenMatrix Nuclear;
+	*/
+
+	EigenMatrix Gradient;
+	EigenMatrix Hessian;
 
 	#include "Multiwfn/MwfnIO.h"
 	#include "Integral/MwfnIntegral.h"

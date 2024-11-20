@@ -22,7 +22,7 @@ int MwfnCenter::getNumBasis(){
 
 std::string MwfnCenter::getSymbol(){
 	__Z_2_Name__
-	return Z2Name[this->Index].c_str();
+	return Z2Name[this->Index];
 }
 
 void MwfnCenter::Print(){
