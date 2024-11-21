@@ -17,8 +17,9 @@ int main(){
 	mwfn.NuclearRepulsion({0}, 1);
 	mwfn.getTwoCenter({0, 1}, 1);
 	mwfn.getRepulsion({0}, -1., 8, 1);
-	mwfn.GenerateGrid("SG-1",1,1);
-	//mwfn.XC.Read("b3lyp", 1);
+	mwfn.GenerateGrid("SG-1",1);
+	mwfn.getGridAO(1,1);
+	mwfn.XC.Read("b3lyp", 1);
 	mwfn.PrepareXC("ev",1);
 	mwfn.GuessSCF("sap");
 	mwfn.HartreeFockKohnSham(0,0,2,8);

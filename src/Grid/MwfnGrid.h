@@ -3,6 +3,8 @@
 	double* Ys = nullptr;
 	double* Zs = nullptr;
 	double* Ws = nullptr;
+	void GenerateGrid(std::string grid, int output);
+
 	double* AOs = nullptr;
 	double* AO1Xs = nullptr;
 	double* AO1Ys = nullptr;
@@ -14,7 +16,7 @@
 	double* AO2XYs = nullptr;
 	double* AO2XZs = nullptr;
 	double* AO2YZs = nullptr;
-	void GenerateGrid(std::string grid, int order, const bool output);
+	void getGridAO(int order, int output);
 
 	double* Rhos = nullptr;
 	double* Rho1Xs = nullptr;

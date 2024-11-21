@@ -1,0 +1,56 @@
+Q[0] = x * y * std::sqrt(3);
+Q[1] = y * z * std::sqrt(3);
+Q[2] = ( 3 * z * z - r2 ) / 2;
+Q[3] = x * z * std::sqrt(3);
+Q[4] = ( x * x - y * y ) * std::sqrt(3) / 2;
+if (ao1xs){
+	Qx[0] = std::sqrt(3) * y;
+	Qy[0] = std::sqrt(3) * x;
+	Qz[0] = 0;
+	Qx[1] = 0;
+	Qy[1] = std::sqrt(3) * z;
+	Qz[1] = std::sqrt(3) * y;
+	Qx[2] =  - x;
+	Qy[2] = - y ;
+	Qz[2] = 2 * z;
+	Qx[3] = std::sqrt(3) * z;
+	Qy[3] = 0;
+	Qz[3] = std::sqrt(3) * x;
+	Qx[4] = std::sqrt(3) * x;
+	Qy[4] = - std::sqrt(3) * y;
+	Qz[4] = 0;
+	if (ao2ls || ao2xxs){
+		Qxx[0] = 0;
+		Qyy[0] = 0;
+		Qzz[0] = 0;
+		Qxx[1] = 0;
+		Qyy[1] = 0;
+		Qzz[1] = 0;
+		Qxx[2] = - 1;
+		Qyy[2] = - 1;
+		Qzz[2] = 2;
+		Qxx[3] = 0;
+		Qyy[3] = 0;
+		Qzz[3] = 0;
+		Qxx[4] = std::sqrt(3);
+		Qyy[4] = - std::sqrt(3);
+		Qzz[4] = 0;
+		if (ao2xxs){
+			Qxy[0] = std::sqrt(3);
+			Qxz[0] = 0;
+			Qyz[0] = 0;
+			Qxy[1] = 0;
+			Qxz[1] = 0;
+			Qyz[1] = std::sqrt(3);
+			Qxy[2] = 0;
+			Qxz[2] = 0;
+			Qyz[2] = 0;
+			Qxy[3] = 0;
+			Qxz[3] = std::sqrt(3);
+			Qyz[3] = 0;
+			Qxy[4] = 0;
+			Qxz[4] = 0;
+			Qyz[4] = 0;
+		}
+	}
+}
