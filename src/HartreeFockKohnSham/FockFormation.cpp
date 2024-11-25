@@ -9,7 +9,6 @@
 #include "../Macro.h"
 #include "../Multiwfn.h"
 #include "../Grid/GridDensity.h"
-#include "../ExchangeCorrelation/MwfnXC1.h"
 #include "../Grid/GridPotential.h"
 
 #include <iostream>

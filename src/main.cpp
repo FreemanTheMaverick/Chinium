@@ -17,7 +17,7 @@ int main(){
 	mwfn.NuclearRepulsion({0}, 1);
 	mwfn.getTwoCenter({0, 1}, 1);
 	mwfn.getRepulsion({0}, -1., 8, 1);
-	mwfn.GenerateGrid("SG-1",1);
+	mwfn.GenerateGrid("SG-3",1);
 	mwfn.getGridAO(1,1);
 	mwfn.XC.Read("b3lyp", 1);
 	mwfn.PrepareXC("ev",1);
@@ -27,7 +27,7 @@ int main(){
 
 	mwfn.NuclearRepulsion({1}, 1);
 	mwfn.getRepulsion({1}, -1., 8, 1);
-	mwfn.HFKSGradient();
+	mwfn.HFKSGradient(1);
 	std::printf("Total Nuclear gradient:\n");
 	for ( int iatom = 0; iatom < mwfn.getNumCenters(); iatom++ )
 		std::printf("| %3d  %2s  % 10.17f  % 10.17f  % 10.17f\n", iatom, mwfn.Centers[iatom].getSymbol().c_str(), mwfn.Gradient(iatom, 0), mwfn.Gradient(iatom, 1), mwfn.Gradient(iatom, 2));

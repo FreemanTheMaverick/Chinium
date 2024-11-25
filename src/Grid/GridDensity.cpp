@@ -110,72 +110,95 @@ void GetDensity(
 		d2s[igrid] += 4 * ts[igrid];
 }
 
-void GetDensity(
-		std::vector<int> orders,
-		double* aos,
-		double* ao1xs, double* ao1ys, double* ao1zs,
-		double* ao2ls,
-		long int ngrids, EigenMatrix D,
-		double* ds,
-		double* d1xs, double* d1ys, double* d1zs,
-		double* d2s, double* ts){
-
+#define __Check_Vector_Array__(vec)\
+	vec.size() > 0 && vec[0].size() == 3 && vec[0][0]
 
 void GetDensitySkeleton(
 		std::vector<int> orders,
-		double * aos,
-		double * ao1xs,double * ao1ys,double * ao1zs,
-		double * ao2xxs,double * ao2yys,double * ao2zzs,
-		double * ao2xys,double * ao2xzs,double * ao2yzs,
+		double* aos,
+		double* ao1xs, double* ao1ys, double* ao1zs,
+		double* ao2xxs, double* ao2yys, double* ao2zzs,
+		double* ao2xys, double* ao2xzs, double* ao2yzs,
 		long int ngrids, EigenMatrix D,
-		std::vector<int> bf2atom,
-		double * dnxs,double * dnys,double * dnzs,
-		double * dxnxs,double * dxnys,double * dxnzs, // For example, dxnys is the x component of grid density gradient derivative with respect to a nuclear y coordinate perturbation.
-		double * dynxs,double * dynys,double * dynzs,
-		double * dznxs,double * dznys,double * dznzs){
-	double * iao=aos; // AOs
-	double * jao=aos;
-	double * ix=ao1xs; // AO first derivatives
-	double * jx=ao1xs;
-	double * iy=ao1ys;
-	double * jy=ao1ys;
-	double * iz=ao1zs;
-	double * jz=ao1zs;
-	double * ixx=ao2xxs; // AO second derivatives
-	//double * jxx=ao2xxs;
-	double * iyy=ao2yys;
-	//double * jyy=ao2yys;
-	double * izz=ao2zzs;
-	//double * jzz=ao2zzs;
-	double * ixy=ao2xys;
-	//double * jxy=ao2xys;
-	double * ixz=ao2xzs;
-	//double * jxz=ao2xzs;
-	double * iyz=ao2yzs;
-	//double * jyz=ao2yzs;
-	double Dij;
-	for (int ibasis=0;ibasis<D.cols();ibasis++){
-		if (aos) iao=aos+ibasis*ngrids; // ibasis*ngrids+jgrid
-		if (ao1xs){
-			ix=ao1xs+ibasis*ngrids;
-			iy=ao1ys+ibasis*ngrids;
-			iz=ao1zs+ibasis*ngrids;
+		std::vector<int>& bf2atom,
+		std::vector<std::vector<double*>>& ds,
+		std::vector<std::vector<double*>>& d1xs,
+		std::vector<std::vector<double*>>& d1ys,
+		std::vector<std::vector<double*>>& d1zs){
+
+	bool zeroth = 0;
+	bool first = 0;
+	if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
+		zeroth = 1;
+		assert(aos && "AOs on grids do not exist!");
+		assert(ao1xs && "First-order x-derivatives of AOs on grids do not exist!");
+		assert(ao1ys && "First-order y-derivatives of AOs on grids do not exist!");
+		assert(ao1zs && "First-order z-derivatives of AOs on grids do not exist!");
+		assert(__Check_Vector_Array__(ds) && "Nuclear gradient of density on grids arrays are not allocated!");
+	}
+	if (std::find(orders.begin(), orders.end(), 1) != orders.end()){
+		first = 1;
+		assert(aos && "AOs on grids do not exist!");
+		assert(ao1xs && "First-order x-derivatives of AOs on grids do not exist!");
+		assert(ao1ys && "First-order y-derivatives of AOs on grids do not exist!");
+		assert(ao1zs && "First-order z-derivatives of AOs on grids do not exist!");
+		assert(ao2xxs && "Second-order xx-derivatives of AOs on grids do not exist!");
+		assert(ao2yys && "Second-order yy-derivatives of AOs on grids do not exist!");
+		assert(ao2zzs && "Second-order zz-derivatives of AOs on grids do not exist!");
+		assert(ao2xys && "Second-order xy-derivatives of AOs on grids do not exist!");
+		assert(ao2xzs && "Second-order xz-derivatives of AOs on grids do not exist!");
+		assert(ao2yzs && "Second-order yz-derivatives of AOs on grids do not exist!");
+		assert(__Check_Vector_Array__(d1xs) && "Nuclear Gradient of first-order x-derivatives of density on grids array is not allocated!");
+		assert(__Check_Vector_Array__(d1ys) && "Nuclear Gradient of first-order y-derivatives of density on grids array is not allocated!");
+		assert(__Check_Vector_Array__(d1zs) && "Nuclear Gradient of first-order z-derivatives of density on grids array is not allocated!");
+	}
+
+	//double* iao = aos; // AOs
+	double* jao = aos;
+	double* ix = ao1xs; // AO first derivatives
+	double* jx = ao1xs;
+	double* iy = ao1ys;
+	double* jy = ao1ys;
+	double* iz = ao1zs;
+	double* jz = ao1zs;
+	double* ixx = ao2xxs; // AO second derivatives
+	//double* jxx = ao2xxs;
+	double* iyy = ao2yys;
+	//double* jyy = ao2yys;
+	double* izz = ao2zzs;
+	//double* jzz = ao2zzs;
+	double* ixy = ao2xys;
+	//double* jxy = ao2xys;
+	double* ixz = ao2xzs;
+	//double* jxz = ao2xzs;
+	double* iyz = ao2yzs;
+	//double* jyz = ao2yzs;
+	int iatom = -1;
+	int jatom = -1;
+	double twoDij = 0;
+	for ( int ibasis = 0; ibasis < D.cols(); ibasis++ ){
+		//if (aos) iao = aos + ibasis * ngrids; // ibasis*ngrids+jgrid
+		if (ao1xs && ao1ys && ao1zs){
+			ix = ao1xs + ibasis * ngrids;
+			iy = ao1ys + ibasis * ngrids;
+			iz = ao1zs + ibasis * ngrids;
 		}
-		if (ao2xxs){
-			ixx=ao2xxs+ibasis*ngrids;
-			iyy=ao2yys+ibasis*ngrids;
-			izz=ao2zzs+ibasis*ngrids;
-			ixy=ao2xys+ibasis*ngrids;
-			ixz=ao2xzs+ibasis*ngrids;
-			iyz=ao2yzs+ibasis*ngrids;
+		if (ao2xxs && ao2yys && ao2zzs && ao2xys && ao2xzs && ao2yzs){
+			ixx = ao2xxs + ibasis * ngrids;
+			iyy = ao2yys + ibasis * ngrids;
+			izz = ao2zzs + ibasis * ngrids;
+			ixy = ao2xys + ibasis * ngrids;
+			ixz = ao2xzs + ibasis * ngrids;
+			iyz = ao2yzs + ibasis * ngrids;
 		}
-		for (int jbasis=0;jbasis<D.cols();jbasis++){
-			Dij=D(ibasis,jbasis);
-			if (aos) jao=aos+jbasis*ngrids;
-			if (ao1xs){
-				jx=ao1xs+jbasis*ngrids;
-				jy=ao1ys+jbasis*ngrids;
-				jz=ao1zs+jbasis*ngrids;
+		iatom = bf2atom[ibasis];
+		for ( int jbasis = 0; jbasis < D.cols(); jbasis++ ){
+			twoDij = 2 * D(ibasis, jbasis);
+			if (aos) jao = aos + jbasis * ngrids;
+			if (ao1xs && ao1ys && ao1zs){
+				jx = ao1xs + jbasis * ngrids;
+				jy = ao1ys + jbasis * ngrids;
+				jz = ao1zs + jbasis * ngrids;
 			}
 			/*if (ao2xxs){
 				jxx=ao2xxs+ibasis*ngrids;
@@ -185,22 +208,40 @@ void GetDensitySkeleton(
 				jxz=ao2xzs+ibasis*ngrids;
 				jyz=ao2yzs+ibasis*ngrids;
 			}*/
-			for (long int kgrid=0;kgrid<ngrids;kgrid++){
-				if (aos && ao1xs && dnxs){
-					dnxs[kgrid]-=Dij*((bf2atom[ibasis]==atom)*ix[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iao[kgrid]*jx[kgrid]);
-					dnys[kgrid]-=Dij*((bf2atom[ibasis]==atom)*iy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iao[kgrid]*jy[kgrid]);
-					dnzs[kgrid]-=Dij*((bf2atom[ibasis]==atom)*iz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iao[kgrid]*jz[kgrid]);
+			jatom = bf2atom[jbasis];
+			for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+				if (zeroth){
+					ds[iatom][0][kgrid] -= twoDij * ix[kgrid] * jao[kgrid];
+					ds[iatom][1][kgrid] -= twoDij * iy[kgrid] * jao[kgrid];
+					ds[iatom][2][kgrid] -= twoDij * iz[kgrid] * jao[kgrid];
 				}
-				if (aos && ao1xs && ao2xxs && dxnxs){
-					dxnxs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixx[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*ix[kgrid]*jx[kgrid]);
-					dxnys[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*ix[kgrid]*jy[kgrid]);
-					dxnzs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*ix[kgrid]*jz[kgrid]);
-					dynxs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iy[kgrid]*jx[kgrid]);
-					dynys[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*iyy[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iy[kgrid]*jy[kgrid]);
-					dynzs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*iyz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iy[kgrid]*jz[kgrid]);
-					dznxs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*ixz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iz[kgrid]*jx[kgrid]);
-					dznys[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*iyz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iz[kgrid]*jy[kgrid]);
-					dznzs[kgrid]-=2*Dij*((bf2atom[ibasis]==atom)*izz[kgrid]*jao[kgrid]+(bf2atom[jbasis]==atom)*iz[kgrid]*jz[kgrid]);
+				if (first){
+					d1xs[iatom][0][kgrid] -= twoDij * ixx[kgrid] * jao[kgrid];
+					d1xs[jatom][0][kgrid] -= twoDij * ix[kgrid] * jx[kgrid];
+
+					d1xs[iatom][1][kgrid] -= twoDij * ixy[kgrid] * jao[kgrid];
+					d1xs[jatom][1][kgrid] -= twoDij * ix[kgrid] * jy[kgrid];
+
+					d1xs[iatom][2][kgrid] -= twoDij * ixz[kgrid] * jao[kgrid];
+					d1xs[jatom][2][kgrid] -= twoDij * ix[kgrid] * jz[kgrid];
+
+					d1ys[iatom][0][kgrid] -= twoDij * ixy[kgrid] * jao[kgrid];
+					d1ys[jatom][0][kgrid] -= twoDij * iy[kgrid] * jx[kgrid];
+
+					d1ys[iatom][1][kgrid] -= twoDij * iyy[kgrid] * jao[kgrid];
+					d1ys[jatom][1][kgrid] -= twoDij * iy[kgrid] * jy[kgrid];
+
+					d1ys[iatom][2][kgrid] -= twoDij * iyz[kgrid] * jao[kgrid];
+					d1ys[jatom][2][kgrid] -= twoDij * iy[kgrid] * jz[kgrid];
+
+					d1zs[iatom][0][kgrid] -= twoDij * ixz[kgrid] * jao[kgrid];
+					d1zs[jatom][0][kgrid] -= twoDij * iz[kgrid] * jx[kgrid];
+
+					d1zs[iatom][1][kgrid] -= twoDij * iyz[kgrid] * jao[kgrid];
+					d1zs[jatom][1][kgrid] -= twoDij * iz[kgrid] * jy[kgrid];
+
+					d1zs[iatom][2][kgrid] -= twoDij * izz[kgrid] * jao[kgrid];
+					d1zs[jatom][2][kgrid] -= twoDij * iz[kgrid] * jz[kgrid];
 				}
 			}
 		}
