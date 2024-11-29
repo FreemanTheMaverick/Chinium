@@ -122,6 +122,62 @@ std::vector<std::vector<EigenMatrix>> getTwoCenter1(
 	return gs;
 }
 
+EigenMatrix getTwoCenter2(
+		libint2::BasisSet& obs,
+		std::vector<std::pair<double, std::array<double, 3>>>& libint2charges,
+		std::vector<int>& shell2atom,
+		libint2::Operator Operator, EigenMatrix D){
+	const int natoms = *std::max_element(shell2atom.begin(), shell2atom.end()) + 1;
+	EigenMatrix hessian = EigenMatrix(3 * natoms, 3 * natoms);
+	int atomlist[] = {114, 514};
+	libint2::initialize();
+	libint2::Engine engine(Operator, obs.max_nprim(), obs.max_l(), 2);
+	if ( Operator == libint2::Operator::nuclear )
+		engine.set_params(libint2charges); // Including nuclear information.
+	const auto& buf_vec = engine.results();
+	const auto shell2bf = obs.shell2bf();
+	for ( short int s1 = 0; s1 != (short int)obs.size(); s1++ ){
+		atomlist[0] = shell2atom[s1];
+		const short int bf1_first = shell2bf[s1];
+		const short int n1 = obs[s1].size();
+		for ( short int s2 = 0; s2 <= s1; s2++ ){
+			atomlist[1] = shell2atom[s2];
+			if ( Operator != libint2::Operator::nuclear && atomlist[0] == atomlist[1] ) continue;
+			const short int bf2_first = shell2bf[s2];
+			const short int n2 = obs[s2].size();
+			engine.compute(obs[s1], obs[s2]);
+			if ( !buf_vec[0] ) continue;
+			for ( short int f1 = 0, f12 = 0; f1 < n1; f1++ ){
+				const short int bf1 = bf1_first + f1;
+				for ( short int f2 = 0; f2 < n2; f2++, f12++ ){
+					const short int bf2 = bf2_first + f2;
+					if ( bf2 <= bf1 ){
+						const double tmp = ((bf1==bf2)?1:2) * D(bf1, bf2);
+						int xpert = 114514;
+						int ypert = 1919810;
+						if ( Operator == libint2::Operator::nuclear ) for ( int p = 0, ptqs = 0; p < 2 + natoms; p++ ) for ( int t = 0; t < 3; t++ ){
+							xpert = 3 * ( p < 2 ? atomlist[p] : p - 2 ) + t;
+							for ( int q = p; q < 2 + natoms; q++ ) for ( int s = ((q==p)?t:0); s < 3; s++, ptqs++ ){
+								ypert = 3 * ( q < 2 ? atomlist[q] : q - 2 ) + s;
+								hessian(xpert, ypert) += ( (xpert==ypert && p!=q && (p<2 || q<2)) ? 2 : 1 ) * tmp * buf_vec[ptqs][f12];
+							}
+						}
+						else for ( int p = 0, ptqs = 0; p < 2; p++ ) for ( int t = 0; t < 3; t++ ){
+							xpert = 3 * atomlist[p] + t;
+							for ( int q = p; q < 2; q++ ) for ( int s = ((q==p)?t:0); s < 3; s++, ptqs++ ){
+								ypert = 3 * atomlist[q] + s;
+								hessian(xpert, ypert) += tmp * buf_vec[ptqs][f12];
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return hessian + hessian.transpose() - (EigenMatrix)hessian.diagonal().asDiagonal();
+}
+
+
 void Multiwfn::getTwoCenter(std::vector<int> orders, const bool output){
 	__Make_Basis_Set__
 	std::vector<std::pair<double, std::array<double, 3>>> libint2charges = {}; // Making point charges.
@@ -157,6 +213,14 @@ void Multiwfn::getTwoCenter(std::vector<int> orders, const bool output){
 		this->OverlapGrads = getTwoCenter1(obs, libint2charges, shell2atom, libint2::Operator::overlap);
 		this->KineticGrads = getTwoCenter1(obs, libint2charges, shell2atom, libint2::Operator::kinetic);
 		this->NuclearGrads = getTwoCenter1(obs, libint2charges, shell2atom, libint2::Operator::nuclear);
+		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	}
+	if (std::find(orders.begin(), orders.end(), 2) != orders.end()){
+		if (output) std::printf("Calculating 2c-1e integral nuclear hessian ... ");
+		const auto start = __now__;
+		this->OverlapHess = getTwoCenter2(obs, libint2charges, shell2atom, libint2::Operator::overlap, this->getEnergyDensity() / 2);
+		this->KineticHess = getTwoCenter2(obs, libint2charges, shell2atom, libint2::Operator::kinetic, this->getDensity() / 2);
+		this->NuclearHess = getTwoCenter2(obs, libint2charges, shell2atom, libint2::Operator::nuclear, this->getDensity() / 2);
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 	}
 }

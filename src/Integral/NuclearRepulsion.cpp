@@ -121,7 +121,7 @@ void Multiwfn::NuclearRepulsion(std::vector<double> orders, int output){
 	if (std::find(orders.begin(), orders.end(), 2) != orders.end()){
 		const auto start = __now__;
 		if (output) std::printf("Calculating nuclear repulsion hessian ... ");
-		assert(this->Gradient.rows() == 3*this->getNumCenters() && this->Gradient.cols() == 3*this->getNumCenters() && "Nuclear gradient is not allocated!");
+		assert(this->Hessian.rows() == 3*this->getNumCenters() && this->Hessian.cols() == 3*this->getNumCenters() && "Nuclear hessian is not allocated!");
 		this->Hessian += NuclearRepulsion2(libint2charges);
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 	}

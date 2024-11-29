@@ -26,6 +26,83 @@ std::vector<long int> getThreadPointers(long int nitems, int nthreads){
 	return heads;
 }
 
+void GhfMultipleReduction(
+		std::vector<std::vector<EigenArray>>& omp_out,
+		std::vector<std::vector<EigenArray>>& omp_in){
+	for ( int i = 0; i < (int)omp_out.size(); i++ )
+		for ( int j = 0; j < (int)omp_out[i].size(); j++ )
+			omp_out[i][j] += omp_in[i][j];
+}
+
+std::vector<EigenMatrix> GhfMultiple(
+		short int* is, short int* js, short int* ks, short int* ls,
+		char* degs, double* ints, long int length,
+		std::vector<EigenMatrix>& Ds, double kscale, int nthreads){
+	std::vector<long int> heads = getThreadPointers(length, nthreads);
+	const int nbasis = Ds[0].rows();
+	const int nmatrices = Ds.size();
+	const int nmatrices_redun = std::ceil((double)nmatrices / 8.) * 8;
+	std::vector<std::vector<EigenArray>> vvvD(nbasis);
+	std::vector<std::vector<EigenArray>> vvvrawJ(nbasis);
+	std::vector<std::vector<EigenArray>> vvvrawK(nbasis);
+	for ( int i = 0; i < nbasis; i++ ){
+		vvvD[i].resize(nbasis);
+		vvvrawJ[i].resize(nbasis);
+		vvvrawK[i].resize(nbasis);
+		for ( int j = 0; j < nbasis; j++ ){
+			vvvD[i][j] = EigenZero(nmatrices_redun, 1).array();
+			vvvrawJ[i][j] = EigenZero(nmatrices_redun, 1).array();
+			vvvrawK[i][j] = EigenZero(nmatrices_redun, 1).array();
+			for ( int k = 0; k < nmatrices; k++ )
+				vvvD[i][j](k) = Ds[k](i, j);
+		}
+	}
+	omp_set_num_threads(nthreads);
+	#pragma omp declare reduction(vvv_reduction: std::vector<std::vector<EigenArray>>: GhfMultipleReduction(omp_out, omp_in)) initializer(omp_priv = omp_orig)
+	#pragma omp parallel for reduction(vvv_reduction: vvvrawJ, vvvrawK)
+	for ( int ithread = 0; ithread < nthreads; ithread++ ){
+		const long int head = heads[ithread];
+		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
+		short int* iranger = is + head;
+		short int* jranger = js + head;
+		short int* kranger = ks + head;
+		short int* lranger = ls + head;
+		char* degranger = degs + head;
+		double* repulsionranger = ints + head;
+		for ( long int iint = 0; iint < nints; iint++ ){
+			const short int i = *(iranger++);
+			const short int j = *(jranger++);
+			const short int k = *(kranger++);
+			const short int l = *(lranger++);
+			const double deg_value = *(degranger++) * *(repulsionranger++);
+			vvvrawJ[i][j] += vvvD[k][l] * deg_value;
+			vvvrawJ[k][l] += vvvD[i][j] * deg_value;
+			if ( kscale > 0. ){
+				vvvrawK[i][k] += vvvD[j][l] * deg_value;
+				vvvrawK[j][l] += vvvD[i][k] * deg_value;
+				vvvrawK[i][l] += vvvD[j][k] * deg_value;
+				vvvrawK[j][k] += vvvD[i][l] * deg_value;
+			}
+		}
+	}
+	std::vector<EigenMatrix> rawGs(nmatrices, EigenZero(nbasis, nbasis));
+	for ( int k = 0; k < nmatrices; k++ ){
+		EigenMatrix rawJ = EigenZero(nbasis, nbasis);
+		EigenMatrix rawK = EigenZero(nbasis, nbasis);
+		for ( int i = 0; i < nbasis; i++ ){
+			for ( int j = 0; j < nbasis; j++ ){
+				rawJ(i, j) = vvvrawJ[i][j](k);
+				rawK(i, j) = vvvrawK[i][j](k);
+			}
+		}
+		const EigenMatrix J = 0.5 *  ( rawJ + rawJ.transpose() );
+		const EigenMatrix K = 0.25 * ( rawK + rawK.transpose() );
+		rawGs[k] = J - 0.5 * kscale * K;
+	}
+	return rawGs;
+}
+
+
 EigenMatrix Ghf(
 		short int* is, short int* js, short int* ks, short int* ls,
 		char* degs, double* ints, long int length,

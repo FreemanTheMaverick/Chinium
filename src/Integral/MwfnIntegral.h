@@ -20,6 +20,10 @@
 	std::vector<std::vector<EigenMatrix>> KineticGrads;
 	std::vector<std::vector<EigenMatrix>> NuclearGrads;
 
+	EigenMatrix OverlapHess;
+	EigenMatrix KineticHess;
+	EigenMatrix NuclearHess;
+
 	void getTwoCenter(std::vector<int> orders, const bool output);
 
 	// Four-center integrals
@@ -37,4 +41,5 @@
 	char* RepulsionDegs = nullptr;
 	double* Repulsions = nullptr;
 	std::vector<std::vector<EigenMatrix>> GGrads;
+	EigenMatrix GHess;
 	void getRepulsion(std::vector<int> orders, double threshold, int nthreads, const bool output);

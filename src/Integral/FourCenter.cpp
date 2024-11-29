@@ -392,6 +392,92 @@ std::vector<std::vector<EigenMatrix>> getRepulsion1(
 	return gs;
 }
 
+EigenMatrix getRepulsion2(
+		libint2::BasisSet& obs,
+		std::vector<int>& shell2atom,
+		std::vector<long int> sqheads,
+		short int* shellis, short int* shelljs,
+		short int* shellks, short int* shellls,
+		EigenMatrix D, double kscale){
+	const int natoms = *std::max_element(shell2atom.begin(), shell2atom.end()) + 1;
+	const auto shell2bf = obs.shell2bf();
+	EigenMatrix hessianj = EigenZero(3 * natoms, 3 * natoms);
+	EigenMatrix hessiank = EigenZero(3 * natoms, 3 * natoms);
+ 	libint2::initialize();
+	const int nthreads = sqheads.size() - 1;
+	omp_set_num_threads(nthreads);
+	#pragma omp declare reduction(Sum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
+	#pragma omp parallel for reduction(Sum: hessianj, hessiank)
+	for ( int ithread = 0; ithread < nthreads; ithread++ ){
+		const long int nsq = sqheads[ithread + 1] - sqheads[ithread];
+		const long int sqhead = sqheads[ithread];
+		short int* s1ranger = shellis + sqhead;
+		short int* s2ranger = shelljs + sqhead;
+		short int* s3ranger = shellks + sqhead;
+		short int* s4ranger = shellls + sqhead;
+		libint2::Engine engine(libint2::Operator::coulomb, obs.max_nprim(), obs.max_l(), 2);
+		const auto& buf_vec = engine.results();
+		for ( int isq = 0; isq < nsq; isq++ ){
+			const short int s1 = *(s1ranger++);
+			const short int s2 = *(s2ranger++);
+			const short int s3 = *(s3ranger++);
+			const short int s4 = *(s4ranger++);
+			const short int bf1_first = shell2bf[s1];
+			const short int bf2_first = shell2bf[s2];
+			const short int bf3_first = shell2bf[s3];
+			const short int bf4_first = shell2bf[s4];
+			const short int n1 = obs[s1].size();
+			const short int n2 = obs[s2].size();
+			const short int n3 = obs[s3].size();
+			const short int n4 = obs[s4].size();
+			engine.compute(obs[s1], obs[s2], obs[s3], obs[s4]);
+			const auto ints_shellset = buf_vec[0];
+			if ( ints_shellset == nullptr ) continue;
+			const int atomlist[] = {
+				shell2atom[s1],
+				shell2atom[s2],
+				shell2atom[s3],
+				shell2atom[s4]
+			};
+			for ( short int f1 = 0, f1234 = 0; f1 != n1; f1++ ){
+				const short int bf1 = bf1_first + f1;
+				for ( short int f2 = 0; f2 != n2; f2++ ){
+					const short int bf2 = bf2_first + f2;
+					const double ab_deg = (bf1 == bf2) ? 1 : 2;
+					for ( short int f3 = 0; f3 != n3; f3++ ){
+						const short int bf3 = bf3_first + f3;
+						for ( short int f4 = 0; f4 != n4; f4++, f1234++ ){
+							const short int bf4 = bf4_first + f4;
+							if ( bf2 <= bf1 && bf3 <= bf1 && bf4 <= ((bf1 == bf3) ? bf2 : bf3)){
+								const double cd_deg = (bf3 == bf4) ? 1 : 2;
+								const double ab_cd_deg = (bf1 == bf3) ? (bf2 == bf4 ? 1 : 2) : 2;
+								const double abcd_deg = ab_deg * cd_deg * ab_cd_deg;
+								double tmp = 114514;
+								int xpert = 1919;
+								int ypert = 810;
+								for ( int p = 0, ptqs = 0; p < 4; p++ ) for ( int t = 0; t < 3; t++ ){
+									xpert = 3 * atomlist[p] + t;
+									for ( int q = p; q < 4; q++ ) for ( int  s = ((q==p)?t:0); s < 3; s++, ptqs++ ){
+										ypert = 3 * atomlist[q] + s;
+										double scale = (xpert==ypert && p!=q) ? 2 : 1;
+										tmp = scale * abcd_deg * buf_vec[ptqs][f1234];
+										hessianj(xpert, ypert) += tmp * D(bf1, bf2) * D(bf3, bf4);
+										if ( kscale > 0 ) hessiank(xpert, ypert) += tmp * ( D(bf1, bf3) * D(bf2, bf4) + D(bf1, bf4) * D(bf2, bf3) );
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	libint2::finalize();
+	hessianj *= 2;
+	EigenMatrix rawhessian = hessianj - 0.5 * kscale * hessiank;
+	return rawhessian + rawhessian.transpose() - (EigenMatrix)rawhessian.diagonal().asDiagonal();
+}
+
 
 void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthreads, const bool output){
 	__Make_Basis_Set__
@@ -464,6 +550,20 @@ void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthre
 		if (output) std::printf("Calculating 4c-2e repulsion integral nuclear gradient ... ");
 		start = __now__;
 		this->GGrads = getRepulsion1(
+			obs,
+			shell2atom,
+			sqheads,
+			this->ShellIs, this->ShellJs,
+			this->ShellKs, this->ShellLs,
+			this->getDensity() / 2, this->XC.EXX
+		);
+		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	}
+
+	if (std::find(orders.begin(), orders.end(), 2) != orders.end()){
+		if (output) std::printf("Calculating 4c-2e repulsion integral nuclear hessian ... ");
+		start = __now__;
+		this->GHess = getRepulsion2(
 			obs,
 			shell2atom,
 			sqheads,
