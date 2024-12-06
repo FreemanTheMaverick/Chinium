@@ -336,8 +336,7 @@ std::vector<std::vector<EigenMatrix>> getRepulsion1(
 			const short int n3 = obs[s3].size();
 			const short int n4 = obs[s4].size();
 			engine.compute(obs[s1], obs[s2], obs[s3], obs[s4]);
-			const auto ints_shellset = buf_vec[0];
-			if ( ints_shellset == nullptr ) continue;
+			if ( !buf_vec[0] ) continue;
 			const int atomlist[] = {
 				shell2atom[s1],
 				shell2atom[s2],
@@ -431,8 +430,7 @@ EigenMatrix getRepulsion2(
 			const short int n3 = obs[s3].size();
 			const short int n4 = obs[s4].size();
 			engine.compute(obs[s1], obs[s2], obs[s3], obs[s4]);
-			const auto ints_shellset = buf_vec[0];
-			if ( ints_shellset == nullptr ) continue;
+			if ( !buf_vec[0] ) continue;
 			const int atomlist[] = {
 				shell2atom[s1],
 				shell2atom[s2],

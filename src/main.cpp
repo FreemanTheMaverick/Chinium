@@ -19,9 +19,10 @@ int main(){
 	mwfn.getTwoCenter({0, 1}, 1);
 	mwfn.getRepulsion({0}, -1., nthreads, 1);
 	mwfn.GenerateGrid("SG-3",1);
-	mwfn.getGridAO(1,1);
-	//mwfn.XC.Read("b3lyp", 1);
+	mwfn.getGridAO(2,1);
+	mwfn.XC.Read("b3lyp", 1);
 	mwfn.PrepareXC("ev",1);
+	mwfn.PrepareXC("f",1);
 	mwfn.GuessSCF("sap");
 	mwfn.HartreeFockKohnSham(0,0,2,nthreads);
 	std::printf("Total energy: %17.10f\n", mwfn.E_tot);

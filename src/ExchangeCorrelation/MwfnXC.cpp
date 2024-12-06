@@ -9,8 +9,10 @@
 #include <iostream>
 
 #define __Check_and_Allocate__(array, multiple)\
-	array = new double[this->NumGrids * ( this->XC.Spin == 1 ? 1 : multiple )]();\
-	if (output) std::printf("Allocating memory for array %s ...\n", #array);
+	if (!array){\
+		array = new double[this->NumGrids * ( this->XC.Spin == 1 ? 1 : multiple )]();\
+		if (output) std::printf("Allocating memory for array %s ...\n", #array);\
+	}
 
 void Multiwfn::PrepareXC(std::string order, int output){
 	const std::string family = this->XC.XCcode == 0 ? this->XC.Xfamily : this->XC.XCfamily;

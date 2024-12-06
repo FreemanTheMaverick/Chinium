@@ -166,15 +166,23 @@ void Multiwfn::getGridAO(int order, int output){
 		this->AO1Ys = new double[this->NumGrids * this->getNumBasis()];
 		this->AO1Zs = new double[this->NumGrids * this->getNumBasis()];
 	}
-	if ( order >= 2 )
+	if ( order >= 2 ){
 		this->AO2Ls = new double[this->NumGrids * this->getNumBasis()];
+		this->AO2XXs = new double[this->NumGrids * this->getNumBasis()];
+		this->AO2YYs = new double[this->NumGrids * this->getNumBasis()];
+		this->AO2ZZs = new double[this->NumGrids * this->getNumBasis()];
+		this->AO2XYs = new double[this->NumGrids * this->getNumBasis()];
+		this->AO2XZs = new double[this->NumGrids * this->getNumBasis()];
+		this->AO2YZs = new double[this->NumGrids * this->getNumBasis()];
+	}
 	GetAoValues(
 			this->Centers,
 			this->Xs, this->Ys, this->Zs, this->NumGrids,
 			this->AOs,
 			this->AO1Xs, this->AO1Ys, this->AO1Zs,
 			this->AO2Ls,
-			nullptr, nullptr, nullptr,
-			nullptr, nullptr, nullptr);
+			this->AO2XXs, this->AO2YYs, this->AO2ZZs,
+			this->AO2XYs, this->AO2XZs, this->AO2YZs
+	);
 	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 }
