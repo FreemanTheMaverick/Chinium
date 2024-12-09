@@ -19,9 +19,5 @@ std::tuple<
 		double* d1xs, double* d1ys, double* d1zs,
 		double* vrs, double* vss,
 		double* vrrs, double* vrss, double* vsss,
-		std::vector<std::vector<double*>>& gds_skeleton,
-		std::vector<std::vector<double*>>& gd1xs_skeleton,
-		std::vector<std::vector<double*>>& gd1ys_skeleton,
-		std::vector<std::vector<double*>>& gd1zs_skeleton,
 		long int ngrids,
 		int output, int nthreads);

@@ -30,16 +30,11 @@ EigenMatrix HFGradient(
 }
 
 #define __Check_Vector_Array__(vec)\
-	vec.size() > 0 && vec[0].size() == 3 && vec[0][0]
+	vec.size() && vec[0].size() && vec[0][0]
 
 EigenMatrix XCGradient(
 		int order,
-		EigenMatrix D, std::vector<int>& bf2atom,
 		double* ws, long int ngrids,
-		double* aos,
-		double* ao1xs, double* ao1ys, double* ao1zs,
-		double* ao2xxs, double* ao2yys, double* ao2zzs,
-		double* ao2xys, double* ao2xzs, double* ao2yzs,
 		double* rho1xs, double* rho1ys, double* rho1zs,
 		double* erhos, double* esigmas,
 		std::vector<std::vector<double*>>& gds,
@@ -49,36 +44,20 @@ EigenMatrix XCGradient(
 	std::vector<int> orders = {};
 	if ( order >= 0 ){
 		orders.push_back(0);
-		assert(aos && "AOs on grids do not exist!");
-		assert(ao1xs && "First-order x-derivatives of AOs on grids do not exist!");
-		assert(ao1ys && "First-order y-derivatives of AOs on grids do not exist!");
-		assert(ao1zs && "First-order z-derivatives of AOs on grids do not exist!");
 		assert(erhos && "First-order XC potential w.r.t. density on grids do not exist!");
+		assert(__Check_Vector_Array__(gds) && "Nuclear Gradient of density on grids array does not exist!");
 	}
 	if ( order >= 1 ){
 		orders.push_back(1);
-		assert(ao2xxs && "Second-order xx-derivatives of AOs on grids do not exist!");
-		assert(ao2yys && "Second-order yy-derivatives of AOs on grids do not exist!");
-		assert(ao2zzs && "Second-order zz-derivatives of AOs on grids do not exist!");
-		assert(ao2xys && "Second-order xy-derivatives of AOs on grids do not exist!");
-		assert(ao2xzs && "Second-order xz-derivatives of AOs on grids do not exist!");
-		assert(ao2yzs && "Second-order yz-derivatives of AOs on grids do not exist!");
 		assert(rho1xs && "First-order x-derivatives of density on grids do not exist!");
 		assert(rho1ys && "First-order y-derivatives of density on grids do not exist!");
 		assert(rho1zs && "First-order z-derivatives of density on grids do not exist!");
 		assert(esigmas && "First-order XC potential w.r.t. sigma on grids do not exist!");
+		assert(__Check_Vector_Array__(gd1xs) && "Nuclear Gradient of first-order x-derivatives of density on grids does not exist!");
+		assert(__Check_Vector_Array__(gd1ys) && "Nuclear Gradient of first-order y-derivatives of density on grids does not exist!");
+		assert(__Check_Vector_Array__(gd1zs) && "Nuclear Gradient of first-order z-derivatives of density on grids does not exist!");
 	}
 	const int natoms = gds.size();
-	GetDensitySkeleton(
-			orders,
-			aos,
-			ao1xs, ao1ys, ao1zs,
-			ao2xxs, ao2yys, ao2zzs,
-			ao2xys, ao2xzs, ao2yzs,
-			ngrids, D,
-			bf2atom,
-			gds, gd1xs, gd1ys, gd1zs
-	);
 	EigenMatrix xcg0 = EigenZero(natoms, 3);
 	if ( std::find(orders.begin(), orders.end(), 0) != orders.end() ){
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
@@ -189,6 +168,77 @@ std::vector<std::vector<EigenMatrix>> GxcSkeleton(
 	return Gs;
 }
 
+EigenMatrix HFHessian(
+		EigenMatrix Eskeleton,
+		std::vector<EigenMatrix>& dDs, std::vector<EigenMatrix>& Fskeletons,
+		std::vector<EigenMatrix>& dWs, std::vector<EigenMatrix>& Sgrads){
+
+	const int nmatrices = dDs.size();
+	EigenMatrix hfh = EigenZero(nmatrices, nmatrices);
+	for ( int xpert = 0; xpert < nmatrices; xpert++ )
+		for ( int ypert = 0; ypert <= xpert; ypert++ )
+			hfh(xpert, ypert) = hfh(ypert, xpert) =
+				( dDs[xpert] * Fskeletons[ypert] ).trace()
+				- ( dWs[xpert] * Sgrads[ypert] ).trace();
+	hfh += Eskeleton;
+	return 2 * hfh;
+}
+
+EigenMatrix HxcSkeleton(
+		std::vector<int> orders,
+		long int ngrids, double* ws,
+		bool part1,
+		double* vrrs,
+		std::vector<std::vector<double*>>& gds,
+		bool part2,
+		double* vrs,
+		std::vector<std::vector<double*>>& hds){
+	bool zeroth = 0;
+	bool first = 0;
+	if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
+		zeroth = 1;
+		if (part1){
+			assert(vrrs && "Second-order XC potential w.r.t. density on grids do not exist!");
+			assert(__Check_Vector_Array__(gds) && "Nuclear gradient of density on grids array does not exist!");
+		}
+		if (part2){
+			assert(vrs && "First-order XC potential w.r.t. density on grids do not exist!");
+			assert(__Check_Vector_Array__(hds) && "Nuclear hessian of density on grids array does not exist!");
+		}
+	}
+	if (std::find(orders.begin(), orders.end(), 1) != orders.end()){
+		first = 1;
+	}
+	const int nmatrices = hds.size();
+	EigenMatrix h = EigenZero(nmatrices, nmatrices);
+	for ( int ipert = 0; ipert < nmatrices; ipert++ ){
+		for ( int jpert = ipert; jpert < nmatrices; jpert++ ){
+			double hij = 0;
+			if (part1){
+				const double* gdi = gds[ipert / 3][ipert % 3];
+				const double* gdj = gds[jpert / 3][jpert % 3];
+				if (zeroth){
+					for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+						hij += ws[kgrid] * vrrs[kgrid] * gdi[kgrid] * gdj[kgrid];
+					}
+				}
+			}
+			if (part2){
+				double* hdij = hds[ipert][jpert];
+				if (zeroth){
+					for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+						hij += ws[kgrid] * vrs[kgrid] * hdij[kgrid];
+					}
+				}
+			}
+			h(ipert, jpert) = h(jpert, ipert) = hij;
+		}
+	}
+	return h;
+}
+
+
+
 #define __Allocate_and_Zero__(array)\
 	if (array) std::memset(array, 0, this->getNumBasis() * ngrids_this_batch * sizeof(double));\
 	else array = new double[this->getNumBasis() * ngrids_this_batch]();
@@ -199,6 +249,16 @@ std::vector<std::vector<EigenMatrix>> GxcSkeleton(
 			if (vector[icenter][xyz]) std::memset(vector[icenter][xyz], 0, ngrids_this_batch * sizeof(double));\
 			else vector[icenter][xyz] = new double[ngrids_this_batch]();\
 		}
+
+#define __Allocate_and_Zero_3__(vector)\
+	for ( int ipert = 0; ipert < 3*this->getNumCenters(); ipert++ )\
+		for ( int jpert = 0; jpert < 3*this->getNumCenters(); jpert++ ){\
+			if (vector[ipert][jpert]) std::memset(vector[ipert][jpert], 0, ngrids_this_batch * sizeof(double));\
+			else vector[ipert][jpert] = new double[ngrids_this_batch]();\
+		}
+
+#define __max_num_grids__ 100000
+
 
 void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 	const int natoms = this->getNumCenters();
@@ -224,29 +284,14 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 
 	// Nuclear gradient of density in batches
 	// They are also necessary for nuclear hessian of DFT energy, so we store them temporarily in std::vector.
-	std::vector<std::vector<double*>> batch_gds(natoms);
-	std::vector<std::vector<double*>> batch_gd1xs(natoms);
-	std::vector<std::vector<double*>> batch_gd1ys(natoms);
-	std::vector<std::vector<double*>> batch_gd1zs(natoms);
-	for ( int iatom = 0; iatom < natoms; iatom++ )
-		batch_gds[iatom] = batch_gd1xs[iatom] = batch_gd1ys[iatom] = batch_gd1zs[iatom] = {nullptr, nullptr, nullptr};
+	std::vector<std::vector<double*>> batch_gds(natoms, {nullptr, nullptr, nullptr});
+	std::vector<std::vector<double*>> batch_gd1xs(natoms, {nullptr, nullptr, nullptr});
+	std::vector<std::vector<double*>> batch_gd1ys(natoms, {nullptr, nullptr, nullptr});
+	std::vector<std::vector<double*>> batch_gd1zs(natoms, {nullptr, nullptr, nullptr});
 
 	if (this->XC.XCcode){
 
 		EigenMatrix xcg = EigenZero(natoms, 3);
-		// Distributing grids to batches
-		const long int ngrids_per_batch = derivative < 2 ? 3000 : ngrids; // If only gradient is required, the grids will be done in batches. Otherwise, they will be done simultaneously, because the intermediate variable, nuclear gradient of density on grids, is required in CPSCF.
-		std::vector<long int> batch_tails = {};
-		long int tmp = 0;
-		while ( tmp < ngrids ){
-			if ( tmp + ngrids_per_batch < ngrids )
-				batch_tails.push_back(tmp + ngrids_per_batch);
-			else batch_tails.push_back(ngrids);
-			tmp += ngrids_per_batch;
-		}
-		const int nbatches = batch_tails.size();
-		std::printf("Calculating XC nuclear gradient in %d batches ...\n", nbatches);
-		const auto start_all = __now__;
 
 		// AO values in batches
 		double* batch_aos = nullptr;
@@ -259,20 +304,48 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 		double* batch_ao2xys = nullptr;
 		double* batch_ao2xzs = nullptr;
 		double* batch_ao2yzs = nullptr;
+		/*
+		double* batch_ao3xxxs = nullptr;
+		double* batch_ao3xxys = nullptr;
+		double* batch_ao3xxzs = nullptr;
+		double* batch_ao3xyys = nullptr;
+		double* batch_ao3xyzs = nullptr;
+		double* batch_ao3xzzs = nullptr;
+		double* batch_ao3yyys = nullptr;
+		double* batch_ao3yyzs = nullptr;
+		double* batch_ao3yzzs = nullptr;
+		double* batch_ao3zzzs = nullptr;
+*/
+		// Distributing grids to batches
+		const long int ngrids_per_batch = derivative < 2 ? __max_num_grids__ : ngrids; // If only gradient is required, the grids will be done in batches. Otherwise, they will be done simultaneously, because the intermediate variable, nuclear gradient of density on grids, is required in CPSCF.
+		std::vector<long int> batch_tails = {};
+		long int tmp = 0;
+		while ( tmp < ngrids ){
+			if ( tmp + ngrids_per_batch < ngrids )
+				batch_tails.push_back(tmp + ngrids_per_batch);
+			else batch_tails.push_back(ngrids);
+			tmp += ngrids_per_batch;
+		}
+		const int nbatches = batch_tails.size();
+		if (output) std::printf("Calculating XC nuclear gradient in %d batches ...\n", nbatches);
 
+		const auto start_all = __now__;
 		for ( int ibatch = 0; ibatch < nbatches; ibatch++ ){
-			std::printf("| Batch %d\n", ibatch);
+			if (output) std::printf("| Batch %d\n", ibatch);
 			const long int grid_head = (ibatch == 0) ? 0 : batch_tails[ibatch - 1];
 			const long int grid_tail = batch_tails[ibatch];
 			const long int ngrids_this_batch = grid_tail - grid_head;
-			if (output) std::printf("| | Evaluating AO of %ld grids ...", ngrids_this_batch);
+			if (output) std::printf("| | Evaluating AOs on %ld grids ...", ngrids_this_batch);
 			auto start = __now__;
 			int order = 0;
+			std::vector<int> orders = {};
 			if ( this->XC.XCfamily.compare("LDA") == 0 ){
 				order = 0;
+				orders = {0};
 				__Allocate_and_Zero_2__(batch_gds);
 			}else if ( this->XC.XCfamily.compare("GGA") == 0 ){
 				order = 1;
+				orders = {0, 1};
 				__Allocate_and_Zero_2__(batch_gds);
 				__Allocate_and_Zero_2__(batch_gd1xs);
 				__Allocate_and_Zero_2__(batch_gd1ys);
@@ -337,24 +410,33 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 				batch_ao2xzs = this->AO2XZs;
 				batch_ao2yzs = this->AO2YZs;
 			}
-			if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
+			if (output) std::printf("| | Calculating skeleton gradient of density on these grids ...");
+			start = __now__;
+			GetDensitySkeleton(
+					orders,
+					batch_aos,
+					batch_ao1xs, batch_ao1ys, batch_ao1zs,
+					batch_ao2xxs, batch_ao2yys, batch_ao2zzs,
+					batch_ao2xys, batch_ao2xzs, batch_ao2yzs,
+					ngrids_this_batch, this->getDensity(),
+					bf2atom,
+					batch_gds, batch_gd1xs, batch_gd1ys, batch_gd1zs
+			);
+			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 			if (output) std::printf("| | Calculating XC gradient contributed by these grids ...");
 			start = __now__;
 			xcg += XCGradient(
-				order,
-				this->getDensity(), bf2atom,
-				this->Ws + grid_head, ngrids_this_batch,
-				batch_aos,
-				batch_ao1xs, batch_ao1ys, batch_ao1zs,
-				batch_ao2xxs, batch_ao2yys, batch_ao2zzs,
-				batch_ao2xys, batch_ao2xzs, batch_ao2yzs,
-				this->Rho1Xs + grid_head,
-				this->Rho1Ys + grid_head,
-				this->Rho1Zs + grid_head,
-				this->E1Rhos + grid_head,
-				this->E1Sigmas + grid_head,
-				batch_gds, batch_gd1xs, batch_gd1ys, batch_gd1zs);
-			if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+					order,
+					this->Ws + grid_head, ngrids_this_batch,
+					this->Rho1Xs + grid_head,
+					this->Rho1Ys + grid_head,
+					this->Rho1Zs + grid_head,
+					this->E1Rhos + grid_head,
+					this->E1Sigmas + grid_head,
+					batch_gds, batch_gd1xs, batch_gd1ys, batch_gd1zs
+			);
+			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 		}
 		if (output) std::printf("| Done in %f s\n", __duration__(start_all, __now__));
 		this->Gradient += xcg;
@@ -394,6 +476,22 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					this->E1Rhos, this->E1Sigmas,
 					bf2atom
 			);
+			for ( int iatom = 0; iatom < natoms; iatom++ ) for ( int xyz = 0; xyz < 3; xyz++ )
+				fxcskeletons[iatom][xyz] += PotentialSkeleton(
+						orders,
+						this->Ws, ngrids, nbasis,
+						this->AOs,
+						this->AO1Xs, this->AO1Ys, this->AO1Zs,
+						this->AO2XXs, this->AO2YYs, this->AO2ZZs,
+						this->AO2XYs, this->AO2XZs, this->AO2YZs,
+						this->Rho1Xs, this->Rho1Ys, this->Rho1Zs,
+						this->E1Rhos, this->E1Sigmas,
+						this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
+						batch_gds[iatom][xyz],
+						batch_gd1xs[iatom][xyz],
+						batch_gd1ys[iatom][xyz],
+						batch_gd1zs[iatom][xyz]
+				);
 		}
 
 		for ( int icenter = 0; icenter < natoms; icenter++ ) for ( int xyz = 0; xyz < 3; xyz++ ){
@@ -419,19 +517,135 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 				this->Rho1Xs, this->Rho1Ys, this->Rho1Zs,
 				this->E1Rhos, this->E1Sigmas,
 				this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
-				batch_gds, batch_gd1xs, batch_gd1ys, batch_gd1zs,
 				this->NumGrids,
 				output - 1, nthreads
 		);
 		if (output) std::printf("| Done in %f s\n", __duration__(start, __now__));
-		EigenMatrix hfh = EigenZero(3 * natoms, 3 * natoms);
-		for ( int xpert = 0; xpert < 3 * natoms; xpert++ )
-			for ( int ypert = 0; ypert <= xpert; ypert++ )
-				hfh(xpert, ypert) = hfh(ypert, xpert) =
-					( dDs[xpert] * Fskeletons[ypert] ).trace()
-					- ( dWs[xpert] * Ss[ypert] ).trace();
-		hfh += this->KineticHess + this->NuclearHess - this->OverlapHess + 0.5 * this->GHess;
-		this->Hessian += 2 * hfh;
+
+		this->Hessian += HFHessian(this->KineticHess + this->NuclearHess - this->OverlapHess + 0.5 * this->GHess, dDs, Fskeletons, dWs, Ss);
+		if (this->XC.XCcode){
+			// Distributing grids to batches
+			const long int ngrids_per_batch = __max_num_grids__;
+			std::vector<long int> batch_tails = {};
+			long int tmp = 0;
+			while ( tmp < ngrids ){
+				if ( tmp + ngrids_per_batch < ngrids )
+					batch_tails.push_back(tmp + ngrids_per_batch);
+				else batch_tails.push_back(ngrids);
+				tmp += ngrids_per_batch;
+			}
+			const int nbatches = batch_tails.size();
+
+			// Nuclear hessian of density in batches
+			std::vector<std::vector<double*>> batch_hds(3 * natoms);
+			for ( int ipert = 0; ipert < 3 * natoms; ipert++ ){
+				batch_hds[ipert].resize(3 * natoms);
+			}
+
+			if (output) std::printf("Calculating XC nuclear hessian Part 1 (involving skeleton gradient of density on grids) ...");
+			auto start = __now__;
+			this->Hessian += HxcSkeleton(
+					orders,
+					ngrids, this->Ws,
+					1,
+					this->E2Rho2s,
+					batch_gds,
+					0,
+					this->E1Rhos,
+					batch_hds
+			);
+			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
+
+			// AO values in batches
+			double* batch_aos = nullptr;
+			double* batch_ao1xs = nullptr;
+			double* batch_ao1ys = nullptr;
+			double* batch_ao1zs = nullptr;
+			double* batch_ao2xxs = nullptr;
+			double* batch_ao2yys = nullptr;
+			double* batch_ao2zzs = nullptr;
+			double* batch_ao2xys = nullptr;
+			double* batch_ao2xzs = nullptr;
+			double* batch_ao2yzs = nullptr;
+			double* batch_ao3xxxs = nullptr;
+			double* batch_ao3xxys = nullptr;
+			double* batch_ao3xxzs = nullptr;
+			double* batch_ao3xyys = nullptr;
+			double* batch_ao3xyzs = nullptr;
+			double* batch_ao3xzzs = nullptr;
+			double* batch_ao3yyys = nullptr;
+			double* batch_ao3yyzs = nullptr;
+			double* batch_ao3yzzs = nullptr;
+			double* batch_ao3zzzs = nullptr;
+
+			if (output) std::printf("Calculating XC nuclear hessian Part 2 (involving skeleton hessian of density on grids) in %d batches ...\n", nbatches);
+			const auto start_all = __now__;
+			for ( int ibatch = 0; ibatch < nbatches; ibatch++ ){
+				if (output) std::printf("| Batch %d\n", ibatch);
+				const long int grid_head = (ibatch == 0) ? 0 : batch_tails[ibatch - 1];
+				const long int grid_tail = batch_tails[ibatch];
+				const long int ngrids_this_batch = grid_tail - grid_head;
+				if (output) std::printf("| | Evaluating AOs on %ld grids ...", ngrids_this_batch);
+				start = __now__;
+				int order = 0;
+				std::vector<int> orders = {};
+				if ( this->XC.XCfamily.compare("LDA") == 0 ){
+					order = 0;
+					orders = {0};
+					__Allocate_and_Zero__(batch_aos); 
+					__Allocate_and_Zero__(batch_ao1xs);
+					__Allocate_and_Zero__(batch_ao1ys);
+					__Allocate_and_Zero__(batch_ao1zs);
+					__Allocate_and_Zero__(batch_ao2xxs);
+					__Allocate_and_Zero__(batch_ao2yys);
+					__Allocate_and_Zero__(batch_ao2zzs);
+					__Allocate_and_Zero__(batch_ao2xys);
+					__Allocate_and_Zero__(batch_ao2xzs);
+					__Allocate_and_Zero__(batch_ao2yzs);
+					__Allocate_and_Zero_3__(batch_hds);
+				}
+				GetAoValues(
+						this->Centers,
+						this->Xs + grid_head,
+						this->Ys + grid_head,
+						this->Zs + grid_head,
+						ngrids_this_batch,
+						batch_aos,
+						batch_ao1xs, batch_ao1ys, batch_ao1zs,
+						nullptr,
+						batch_ao2xxs, batch_ao2yys, batch_ao2zzs,
+						batch_ao2xys, batch_ao2xzs, batch_ao2yzs
+				);
+				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
+				if (output) std::printf("| | Calculating skeleton hessian of density on these grids ...");
+				start = __now__;
+				GetDensitySkeleton2(
+						orders,
+						batch_aos,
+						batch_ao1xs, batch_ao1ys, batch_ao1zs,
+						batch_ao2xxs, batch_ao2yys, batch_ao2zzs,
+						batch_ao2xys, batch_ao2xzs, batch_ao2yzs,
+						ngrids_this_batch, this->getDensity(),
+						bf2atom,
+						batch_hds
+				);
+				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
+				if (output) std::printf("| | Calculating XC skeleton hessian contributed by these grids ...");
+				start = __now__;
+				this->Hessian += HxcSkeleton(
+						orders,
+						ngrids_this_batch, this->Ws + grid_head,
+						0,
+						this->E2Rho2s + grid_head,
+						batch_gds,
+						1,
+						this->E1Rhos + grid_head,
+						batch_hds
+				);
+				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
+			}
+			if (output) std::printf("| Done in %f s\n", __duration__(start_all, __now__));
+		}
 	}
 }
 

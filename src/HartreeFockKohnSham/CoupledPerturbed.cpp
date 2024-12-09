@@ -20,10 +20,9 @@
 
 #include <iostream>
 
-#define __Allocate_and_Copy__(dest, src)\
-	if (!dest) dest = new double[ngrids];\
-	std::memcpy(dest, src, ngrids * sizeof(double));
-	
+#define __Allocate_and_Zero__(array)\
+	if (array) std::memset(array, 0, ngrids * sizeof(double));\
+	else array = new double[ngrids]();
 
 std::tuple<
 	std::vector<EigenMatrix>,
@@ -46,10 +45,6 @@ std::tuple<
 		double* d1xs, double* d1ys, double* d1zs,
 		double* vrs, double* vss,
 		double* vrrs, double* vrss, double* vsss,
-		std::vector<std::vector<double*>>& gds_skeleton,
-		std::vector<std::vector<double*>>& gd1xs_skeleton,
-		std::vector<std::vector<double*>>& gd1ys_skeleton,
-		std::vector<std::vector<double*>>& gd1zs_skeleton,
 		long int ngrids,
 		int output, int nthreads){
 
@@ -80,7 +75,7 @@ std::tuple<
 	}
 
 	// KS part
-	double* gds = nullptr;
+	double* gds = nullptr; // Nuclear U gradients of density on grids
 	double* gd1xs = nullptr;
 	double* gd1ys = nullptr;
 	double* gd1zs = nullptr;
@@ -119,7 +114,7 @@ std::tuple<
 				assert(ao1xs && "First-order x-derivatives of AOs on grids do not exist!");
 				assert(ao1ys && "First-order y-derivatives of AOs on grids do not exist!");
 				assert(ao1zs && "First-order z-derivatives of AOs on grids do not exist!");
-				__Allocate_and_Copy__(gds, gds_skeleton[imatrix/3][imatrix%3]);
+				__Allocate_and_Zero__(gds);
 			}
 			if (std::find(orders.begin(), orders.end(), 1) != orders.end()){
 				assert(aos && "AOs on grids do not exist!");
@@ -132,9 +127,9 @@ std::tuple<
 				assert(ao2xys && "Second-order xy-derivatives of AOs on grids do not exist!");
 				assert(ao2xzs && "Second-order xz-derivatives of AOs on grids do not exist!");
 				assert(ao2yzs && "Second-order yz-derivatives of AOs on grids do not exist!");
-				__Allocate_and_Copy__(gd1xs, gd1xs_skeleton[imatrix/3][imatrix%3]);
-				__Allocate_and_Copy__(gd1ys, gd1ys_skeleton[imatrix/3][imatrix%3]);
-				__Allocate_and_Copy__(gd1zs, gd1zs_skeleton[imatrix/3][imatrix%3]);
+				__Allocate_and_Zero__(gd1xs);
+				__Allocate_and_Zero__(gd1ys);
+				__Allocate_and_Zero__(gd1zs);
 			}
 			GetDensity(
 					orders,

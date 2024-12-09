@@ -368,4 +368,124 @@ void GetDensitySkeleton(
 	}
 }
 
+#define __Check_Vector_Array_2__(vec)\
+	vec.size() && vec[0].size() && vec[0][0]
+
+void GetDensitySkeleton2(
+		std::vector<int> orders,
+		double* aos,
+		double* ao1xs, double* ao1ys, double* ao1zs,
+		double* ao2xxs, double* ao2yys, double* ao2zzs,
+		double* ao2xys, double* ao2xzs, double* ao2yzs,
+		long int ngrids, EigenMatrix D,
+		std::vector<int>& bf2atom,
+		std::vector<std::vector<double*>>& hds){
+
+	bool zeroth = 0;
+	bool first = 0;
+	if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
+		zeroth = 1;
+		assert(aos && "AOs on grids do not exist!");
+		assert(ao1xs && "First-order x-derivatives of AOs on grids do not exist!");
+		assert(ao1ys && "First-order y-derivatives of AOs on grids do not exist!");
+		assert(ao1zs && "First-order z-derivatives of AOs on grids do not exist!");
+		assert(ao2xxs && "Second-order xx-derivatives of AOs on grids do not exist!");
+		assert(ao2yys && "Second-order yy-derivatives of AOs on grids do not exist!");
+		assert(ao2zzs && "Second-order zz-derivatives of AOs on grids do not exist!");
+		assert(ao2xys && "Second-order xy-derivatives of AOs on grids do not exist!");
+		assert(ao2xzs && "Second-order xz-derivatives of AOs on grids do not exist!");
+		assert(ao2yzs && "Second-order yz-derivatives of AOs on grids do not exist!");
+		assert(__Check_Vector_Array_2__(hds) && "Nuclear hessian of density on grids arrays are not allocated!");
+	}
+
+	//double* iao = aos; // AOs
+	double* jao = aos;
+	double* ix = ao1xs; // AO first derivatives
+	double* jx = ao1xs;
+	double* iy = ao1ys;
+	double* jy = ao1ys;
+	double* iz = ao1zs;
+	double* jz = ao1zs;
+	double* ixx = ao2xxs; // AO second derivatives
+	//double* jxx = ao2xxs;
+	double* iyy = ao2yys;
+	//double* jyy = ao2yys;
+	double* izz = ao2zzs;
+	//double* jzz = ao2zzs;
+	double* ixy = ao2xys;
+	//double* jxy = ao2xys;
+	double* ixz = ao2xzs;
+	//double* jxz = ao2xzs;
+	double* iyz = ao2yzs;
+	//double* jyz = ao2yzs;
+	for ( int ibasis = 0; ibasis < D.cols(); ibasis++ ){
+		//if (aos) iao = aos + ibasis * ngrids; // ibasis*ngrids+jgrid
+		if (ao1xs && ao1ys && ao1zs){
+			ix = ao1xs + ibasis * ngrids;
+			iy = ao1ys + ibasis * ngrids;
+			iz = ao1zs + ibasis * ngrids;
+		}
+		if (ao2xxs && ao2yys && ao2zzs && ao2xys && ao2xzs && ao2yzs){
+			ixx = ao2xxs + ibasis * ngrids;
+			iyy = ao2yys + ibasis * ngrids;
+			izz = ao2zzs + ibasis * ngrids;
+			ixy = ao2xys + ibasis * ngrids;
+			ixz = ao2xzs + ibasis * ngrids;
+			iyz = ao2yzs + ibasis * ngrids;
+		}
+		const int iatom = bf2atom[ibasis];
+		for ( int jbasis = 0; jbasis < D.cols(); jbasis++ ){
+			if (aos) jao = aos + jbasis * ngrids;
+			if (ao1xs && ao1ys && ao1zs){
+				jx = ao1xs + jbasis * ngrids;
+				jy = ao1ys + jbasis * ngrids;
+				jz = ao1zs + jbasis * ngrids;
+			}
+			/*if (ao2xxs){
+				jxx=ao2xxs+ibasis*ngrids;
+				jyy=ao2yys+ibasis*ngrids;
+				jzz=ao2zzs+ibasis*ngrids;
+				jxy=ao2xys+ibasis*ngrids;
+				jxz=ao2xzs+ibasis*ngrids;
+				jyz=ao2yzs+ibasis*ngrids;
+			}*/
+			const double twoDij = 2 * D(ibasis, jbasis);
+			double tmp = 0;
+			if (zeroth) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+				tmp = twoDij * jao[kgrid];
+				hds[3 * iatom + 0][3 * iatom + 0][kgrid] += tmp * ixx[kgrid];
+				hds[3 * iatom + 0][3 * iatom + 1][kgrid] += tmp * ixy[kgrid];
+				hds[3 * iatom + 0][3 * iatom + 2][kgrid] += tmp * ixz[kgrid];
+				hds[3 * iatom + 1][3 * iatom + 1][kgrid] += tmp * iyy[kgrid];
+				hds[3 * iatom + 1][3 * iatom + 2][kgrid] += tmp * iyz[kgrid];
+				hds[3 * iatom + 2][3 * iatom + 2][kgrid] += tmp * izz[kgrid];
+			}
+			const int jatom = bf2atom[jbasis];
+			if ( iatom > jatom ) continue;
+			else if ( iatom == jatom ){
+				if (zeroth) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+					hds[3 * iatom + 0][3 * jatom + 0][kgrid] += twoDij * ix[kgrid] * jx[kgrid]; // x x
+					hds[3 * iatom + 0][3 * jatom + 1][kgrid] += twoDij * ix[kgrid] * jy[kgrid]; // x y
+					hds[3 * iatom + 0][3 * jatom + 2][kgrid] += twoDij * ix[kgrid] * jz[kgrid]; // x z
+					hds[3 * iatom + 1][3 * jatom + 1][kgrid] += twoDij * iy[kgrid] * jy[kgrid]; // y y
+					hds[3 * iatom + 1][3 * jatom + 2][kgrid] += twoDij * iy[kgrid] * jz[kgrid]; // y z
+					hds[3 * iatom + 2][3 * jatom + 2][kgrid] += twoDij * iz[kgrid] * jz[kgrid]; // z z
+				}
+			}else{
+				if (zeroth) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+					hds[3 * iatom + 0][3 * jatom + 0][kgrid] += twoDij * ix[kgrid] * jx[kgrid]; // x x
+					hds[3 * iatom + 0][3 * jatom + 1][kgrid] += twoDij * ix[kgrid] * jy[kgrid]; // x y
+					hds[3 * iatom + 0][3 * jatom + 2][kgrid] += twoDij * ix[kgrid] * jz[kgrid]; // x z
+					hds[3 * iatom + 1][3 * jatom + 0][kgrid] += twoDij * iy[kgrid] * jx[kgrid]; // y x
+					hds[3 * iatom + 1][3 * jatom + 1][kgrid] += twoDij * iy[kgrid] * jy[kgrid]; // y y
+					hds[3 * iatom + 1][3 * jatom + 2][kgrid] += twoDij * iy[kgrid] * jz[kgrid]; // y z
+					hds[3 * iatom + 2][3 * jatom + 0][kgrid] += twoDij * iz[kgrid] * jx[kgrid]; // z x
+					hds[3 * iatom + 2][3 * jatom + 1][kgrid] += twoDij * iz[kgrid] * jy[kgrid]; // z x
+					hds[3 * iatom + 2][3 * jatom + 2][kgrid] += twoDij * iz[kgrid] * jz[kgrid]; // z z
+				}
+			}
+		}
+	}
+}
+
 
