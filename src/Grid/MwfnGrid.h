@@ -16,6 +16,16 @@
 	double* AO2XYs = nullptr;
 	double* AO2XZs = nullptr;
 	double* AO2YZs = nullptr;
+	double* AO3XXXs = nullptr;
+	double* AO3XXYs = nullptr;
+	double* AO3XXZs = nullptr;
+	double* AO3XYYs = nullptr;
+	double* AO3XYZs = nullptr;
+	double* AO3XZZs = nullptr;
+	double* AO3YYYs = nullptr;
+	double* AO3YYZs = nullptr;
+	double* AO3YZZs = nullptr;
+	double* AO3ZZZs = nullptr;
 	void getGridAO(int order, int output);
 
 	double* Rhos = nullptr;

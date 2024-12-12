@@ -51,6 +51,58 @@ if (ao1xs){
 			Qxy[4] = 0;
 			Qxz[4] = 0;
 			Qyz[4] = 0;
+			if (ao3xxxs){
+				Qxxx[0] = 0;
+				Qxxy[0] = 0;
+				Qxxz[0] = 0;
+				Qxyy[0] = 0;
+				Qxyz[0] = 0;
+				Qxzz[0] = 0;
+				Qyyy[0] = 0;
+				Qyyz[0] = 0;
+				Qyzz[0] = 0;
+				Qzzz[0] = 0;
+				Qxxx[1] = 0;
+				Qxxy[1] = 0;
+				Qxxz[1] = 0;
+				Qxyy[1] = 0;
+				Qxyz[1] = 0;
+				Qxzz[1] = 0;
+				Qyyy[1] = 0;
+				Qyyz[1] = 0;
+				Qyzz[1] = 0;
+				Qzzz[1] = 0;
+				Qxxx[2] = 0;
+				Qxxy[2] = 0;
+				Qxxz[2] = 0;
+				Qxyy[2] = 0;
+				Qxyz[2] = 0;
+				Qxzz[2] = 0;
+				Qyyy[2] = 0;
+				Qyyz[2] = 0;
+				Qyzz[2] = 0;
+				Qzzz[2] = 0;
+				Qxxx[3] = 0;
+				Qxxy[3] = 0;
+				Qxxz[3] = 0;
+				Qxyy[3] = 0;
+				Qxyz[3] = 0;
+				Qxzz[3] = 0;
+				Qyyy[3] = 0;
+				Qyyz[3] = 0;
+				Qyzz[3] = 0;
+				Qzzz[3] = 0;
+				Qxxx[4] = 0;
+				Qxxy[4] = 0;
+				Qxxz[4] = 0;
+				Qxyy[4] = 0;
+				Qxyz[4] = 0;
+				Qxzz[4] = 0;
+				Qyyy[4] = 0;
+				Qyyz[4] = 0;
+				Qyzz[4] = 0;
+				Qzzz[4] = 0;
+			}
 		}
 	}
 }

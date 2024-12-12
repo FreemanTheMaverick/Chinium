@@ -20,16 +20,16 @@ int main(){
 	mwfn.getRepulsion({0}, -1., nthreads, 1);
 	mwfn.GenerateGrid("SG-3",1);
 	mwfn.getGridAO(2,1);
-	mwfn.XC.Read("slater", 1);
+	mwfn.XC.Read("b3lyp", 1);
 	mwfn.PrepareXC("ev",1);
 	mwfn.PrepareXC("f",1);
 	mwfn.GuessSCF("sap");
 	mwfn.HartreeFockKohnSham(0,0,2,nthreads);
 	std::printf("Total energy: %17.10f\n", mwfn.E_tot);
 
-	mwfn.NuclearRepulsion({1, 2}, 1);
+	mwfn.NuclearRepulsion({1,2}, 1);
 	mwfn.getTwoCenter({2}, 1);
-	mwfn.getRepulsion({1, 2}, -1., nthreads, 1);
+	mwfn.getRepulsion({1,2}, -1., nthreads, 1);
 	mwfn.HFKSDerivative(2, 2, nthreads);
 	std::printf("Total Nuclear gradient:\n");
 	for ( int iatom = 0; iatom < mwfn.getNumCenters(); iatom++ )

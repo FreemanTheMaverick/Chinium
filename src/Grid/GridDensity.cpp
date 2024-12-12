@@ -371,15 +371,53 @@ void GetDensitySkeleton(
 #define __Check_Vector_Array_2__(vec)\
 	vec.size() && vec[0].size() && vec[0][0]
 
+#define ixyx ixxy
+#define iyxx ixxy
+
+#define ixzx ixxz
+#define izxx ixxz
+
+#define iyxy ixyy
+#define iyyx ixyy
+
+#define izxy ixyz
+#define iyzx ixyz
+#define iyxz ixyz
+#define izyx ixyz
+#define ixzy ixyz
+
+#define izxz ixzz
+#define izzx ixzz
+
+#define iyzy iyyz
+#define izyy iyyz
+
+#define izyz iyzz
+#define izzy iyzz
+
+#define iyx ixy
+#define izx ixz
+#define izy iyz
+
+#define jyx jxy
+#define jzx jxz
+#define jzy jyz
+
 void GetDensitySkeleton2(
 		std::vector<int> orders,
 		double* aos,
 		double* ao1xs, double* ao1ys, double* ao1zs,
 		double* ao2xxs, double* ao2yys, double* ao2zzs,
 		double* ao2xys, double* ao2xzs, double* ao2yzs,
+		double* ao3xxxs, double* ao3xxys, double* ao3xxzs,
+		double* ao3xyys, double* ao3xyzs, double* ao3xzzs,
+		double* ao3yyys, double* ao3yyzs, double* ao3yzzs, double* ao3zzzs,
 		long int ngrids, EigenMatrix D,
 		std::vector<int>& bf2atom,
-		std::vector<std::vector<double*>>& hds){
+		std::vector<std::vector<double*>>& hds,
+		std::vector<std::vector<double*>>& hd1xs,
+		std::vector<std::vector<double*>>& hd1ys,
+		std::vector<std::vector<double*>>& hd1zs){
 
 	bool zeroth = 0;
 	bool first = 0;
@@ -397,6 +435,32 @@ void GetDensitySkeleton2(
 		assert(ao2yzs && "Second-order yz-derivatives of AOs on grids do not exist!");
 		assert(__Check_Vector_Array_2__(hds) && "Nuclear hessian of density on grids arrays are not allocated!");
 	}
+	if (std::find(orders.begin(), orders.end(), 1) != orders.end()){
+		first = 1;
+		assert(aos && "AOs on grids do not exist!");
+		assert(ao1xs && "First-order x-derivatives of AOs on grids do not exist!");
+		assert(ao1ys && "First-order y-derivatives of AOs on grids do not exist!");
+		assert(ao1zs && "First-order z-derivatives of AOs on grids do not exist!");
+		assert(ao2xxs && "Second-order xx-derivatives of AOs on grids do not exist!");
+		assert(ao2yys && "Second-order yy-derivatives of AOs on grids do not exist!");
+		assert(ao2zzs && "Second-order zz-derivatives of AOs on grids do not exist!");
+		assert(ao2xys && "Second-order xy-derivatives of AOs on grids do not exist!");
+		assert(ao2xzs && "Second-order xz-derivatives of AOs on grids do not exist!");
+		assert(ao2yzs && "Second-order yz-derivatives of AOs on grids do not exist!");
+		assert(ao3xxxs && "Third-order xxx-derivatives of AOs on grids do not exist!");
+		assert(ao3xxys && "Third-order xxy-derivatives of AOs on grids do not exist!");
+		assert(ao3xxzs && "Third-order xxz-derivatives of AOs on grids do not exist!");
+		assert(ao3xyys && "Third-order xyy-derivatives of AOs on grids do not exist!");
+		assert(ao3xyzs && "Third-order xyz-derivatives of AOs on grids do not exist!");
+		assert(ao3xzzs && "Third-order xzz-derivatives of AOs on grids do not exist!");
+		assert(ao3yyys && "Third-order yyy-derivatives of AOs on grids do not exist!");
+		assert(ao3yyzs && "Third-order yyz-derivatives of AOs on grids do not exist!");
+		assert(ao3yzzs && "Third-order yzz-derivatives of AOs on grids do not exist!");
+		assert(ao3zzzs && "Third-order zzz-derivatives of AOs on grids do not exist!");
+		assert(__Check_Vector_Array_2__(hd1xs) && "Nuclear hessian of first-order x-derivatives of density on grids arrays are not allocated!");
+		assert(__Check_Vector_Array_2__(hd1ys) && "Nuclear hessian of first-order y-derivatives of density on grids arrays are not allocated!");
+		assert(__Check_Vector_Array_2__(hd1zs) && "Nuclear hessian of first-order z-derivatives of density on grids arrays are not allocated!");
+	}
 
 	//double* iao = aos; // AOs
 	double* jao = aos;
@@ -407,17 +471,27 @@ void GetDensitySkeleton2(
 	double* iz = ao1zs;
 	double* jz = ao1zs;
 	double* ixx = ao2xxs; // AO second derivatives
-	//double* jxx = ao2xxs;
+	double* jxx = ao2xxs;
 	double* iyy = ao2yys;
-	//double* jyy = ao2yys;
+	double* jyy = ao2yys;
 	double* izz = ao2zzs;
-	//double* jzz = ao2zzs;
+	double* jzz = ao2zzs;
 	double* ixy = ao2xys;
-	//double* jxy = ao2xys;
+	double* jxy = ao2xys;
 	double* ixz = ao2xzs;
-	//double* jxz = ao2xzs;
+	double* jxz = ao2xzs;
 	double* iyz = ao2yzs;
-	//double* jyz = ao2yzs;
+	double* jyz = ao2yzs;
+	double* ixxx = ao3xxxs; // AO third derivatives
+	double* ixxy = ao3xxys;
+	double* ixxz = ao3xxzs;
+	double* ixyy = ao3xyys;
+	double* ixyz = ao3xyzs;
+	double* ixzz = ao3xzzs;
+	double* iyyy = ao3yyys;
+	double* iyyz = ao3yyzs;
+	double* iyzz = ao3yzzs;
+	double* izzz = ao3zzzs;
 	for ( int ibasis = 0; ibasis < D.cols(); ibasis++ ){
 		//if (aos) iao = aos + ibasis * ngrids; // ibasis*ngrids+jgrid
 		if (ao1xs && ao1ys && ao1zs){
@@ -433,6 +507,18 @@ void GetDensitySkeleton2(
 			ixz = ao2xzs + ibasis * ngrids;
 			iyz = ao2yzs + ibasis * ngrids;
 		}
+		if (ao3xxxs && ao3xxys && ao3xxzs && ao3xyys && ao3xyzs && ao3xzzs && ao3yyys && ao3yyzs && ao3yzzs && ao3zzzs){
+			ixxx = ao3xxxs + ibasis * ngrids;
+			ixxy = ao3xxys + ibasis * ngrids;
+			ixxz = ao3xxzs + ibasis * ngrids;
+			ixyy = ao3xyys + ibasis * ngrids;
+			ixyz = ao3xyzs + ibasis * ngrids;
+			ixzz = ao3xzzs + ibasis * ngrids;
+			iyyy = ao3yyys + ibasis * ngrids;
+			iyyz = ao3yyzs + ibasis * ngrids;
+			iyzz = ao3yzzs + ibasis * ngrids;
+			izzz = ao3zzzs + ibasis * ngrids;
+		}
 		const int iatom = bf2atom[ibasis];
 		for ( int jbasis = 0; jbasis < D.cols(); jbasis++ ){
 			if (aos) jao = aos + jbasis * ngrids;
@@ -441,16 +527,16 @@ void GetDensitySkeleton2(
 				jy = ao1ys + jbasis * ngrids;
 				jz = ao1zs + jbasis * ngrids;
 			}
-			/*if (ao2xxs){
-				jxx=ao2xxs+ibasis*ngrids;
-				jyy=ao2yys+ibasis*ngrids;
-				jzz=ao2zzs+ibasis*ngrids;
-				jxy=ao2xys+ibasis*ngrids;
-				jxz=ao2xzs+ibasis*ngrids;
-				jyz=ao2yzs+ibasis*ngrids;
-			}*/
+			if (ao2xxs && ao2yys && ao2zzs && ao2xys && ao2xzs && ao2yzs){
+				jxx = ao2xxs + jbasis * ngrids;
+				jyy = ao2yys + jbasis * ngrids;
+				jzz = ao2zzs + jbasis * ngrids;
+				jxy = ao2xys + jbasis * ngrids;
+				jxz = ao2xzs + jbasis * ngrids;
+				jyz = ao2yzs + jbasis * ngrids;
+			}
 			const double twoDij = 2 * D(ibasis, jbasis);
-			double tmp = 0;
+			double tmp, tmpx, tmpy, tmpz;
 			if (zeroth) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
 				tmp = twoDij * jao[kgrid];
 				hds[3 * iatom + 0][3 * iatom + 0][kgrid] += tmp * ixx[kgrid];
@@ -459,6 +545,30 @@ void GetDensitySkeleton2(
 				hds[3 * iatom + 1][3 * iatom + 1][kgrid] += tmp * iyy[kgrid];
 				hds[3 * iatom + 1][3 * iatom + 2][kgrid] += tmp * iyz[kgrid];
 				hds[3 * iatom + 2][3 * iatom + 2][kgrid] += tmp * izz[kgrid];
+			}
+			if (first) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+				tmp = twoDij * jao[kgrid];
+				tmpx = twoDij * jx[kgrid];
+				hd1xs[3 * iatom + 0][3 * iatom + 0][kgrid] += tmp * ixxx[kgrid] + ixx[kgrid] * tmpx;
+				hd1xs[3 * iatom + 0][3 * iatom + 1][kgrid] += tmp * ixyx[kgrid] + ixy[kgrid] * tmpx;
+				hd1xs[3 * iatom + 0][3 * iatom + 2][kgrid] += tmp * ixzx[kgrid] + ixz[kgrid] * tmpx;
+				hd1xs[3 * iatom + 1][3 * iatom + 1][kgrid] += tmp * iyyx[kgrid] + iyy[kgrid] * tmpx;
+				hd1xs[3 * iatom + 1][3 * iatom + 2][kgrid] += tmp * iyzx[kgrid] + iyz[kgrid] * tmpx;
+				hd1xs[3 * iatom + 2][3 * iatom + 2][kgrid] += tmp * izzx[kgrid] + izz[kgrid] * tmpx;
+				tmpy = twoDij * jy[kgrid];
+				hd1ys[3 * iatom + 0][3 * iatom + 0][kgrid] += tmp * ixxy[kgrid] + ixx[kgrid] * tmpy;
+				hd1ys[3 * iatom + 0][3 * iatom + 1][kgrid] += tmp * ixyy[kgrid] + ixy[kgrid] * tmpy;
+				hd1ys[3 * iatom + 0][3 * iatom + 2][kgrid] += tmp * ixzy[kgrid] + ixz[kgrid] * tmpy;
+				hd1ys[3 * iatom + 1][3 * iatom + 1][kgrid] += tmp * iyyy[kgrid] + iyy[kgrid] * tmpy;
+				hd1ys[3 * iatom + 1][3 * iatom + 2][kgrid] += tmp * iyzy[kgrid] + iyz[kgrid] * tmpy;
+				hd1ys[3 * iatom + 2][3 * iatom + 2][kgrid] += tmp * izzy[kgrid] + izz[kgrid] * tmpy;
+				tmpz = twoDij * jz[kgrid];
+				hd1zs[3 * iatom + 0][3 * iatom + 0][kgrid] += tmp * ixxz[kgrid] + ixx[kgrid] * tmpz;
+				hd1zs[3 * iatom + 0][3 * iatom + 1][kgrid] += tmp * ixyz[kgrid] + ixy[kgrid] * tmpz;
+				hd1zs[3 * iatom + 0][3 * iatom + 2][kgrid] += tmp * ixzz[kgrid] + ixz[kgrid] * tmpz;
+				hd1zs[3 * iatom + 1][3 * iatom + 1][kgrid] += tmp * iyyz[kgrid] + iyy[kgrid] * tmpz;
+				hd1zs[3 * iatom + 1][3 * iatom + 2][kgrid] += tmp * iyzz[kgrid] + iyz[kgrid] * tmpz;
+				hd1zs[3 * iatom + 2][3 * iatom + 2][kgrid] += tmp * izzz[kgrid] + izz[kgrid] * tmpz;
 			}
 			const int jatom = bf2atom[jbasis];
 			if ( iatom > jatom ) continue;
@@ -471,6 +581,26 @@ void GetDensitySkeleton2(
 					hds[3 * iatom + 1][3 * jatom + 2][kgrid] += twoDij * iy[kgrid] * jz[kgrid]; // y z
 					hds[3 * iatom + 2][3 * jatom + 2][kgrid] += twoDij * iz[kgrid] * jz[kgrid]; // z z
 				}
+				if (first) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+					hd1xs[3 * iatom + 0][3 * jatom + 0][kgrid] += twoDij * ( ixx[kgrid] * jx[kgrid] + ix[kgrid] * jxx[kgrid] ); // t s r = x x x
+					hd1xs[3 * iatom + 0][3 * jatom + 1][kgrid] += twoDij * ( ixx[kgrid] * jy[kgrid] + ix[kgrid] * jyx[kgrid] ); // t s r = x y x
+					hd1xs[3 * iatom + 0][3 * jatom + 2][kgrid] += twoDij * ( ixx[kgrid] * jz[kgrid] + ix[kgrid] * jzx[kgrid] ); // t s r = x z x
+					hd1xs[3 * iatom + 1][3 * jatom + 1][kgrid] += twoDij * ( iyx[kgrid] * jy[kgrid] + iy[kgrid] * jyx[kgrid] ); // t s r = y y x
+					hd1xs[3 * iatom + 1][3 * jatom + 2][kgrid] += twoDij * ( iyx[kgrid] * jz[kgrid] + iy[kgrid] * jzx[kgrid] ); // t s r = y z x
+					hd1xs[3 * iatom + 2][3 * jatom + 2][kgrid] += twoDij * ( izx[kgrid] * jz[kgrid] + iz[kgrid] * jzx[kgrid] ); // t s r = z z x
+					hd1ys[3 * iatom + 0][3 * jatom + 0][kgrid] += twoDij * ( ixy[kgrid] * jx[kgrid] + ix[kgrid] * jxy[kgrid] ); // t s r = x x y
+					hd1ys[3 * iatom + 0][3 * jatom + 1][kgrid] += twoDij * ( ixy[kgrid] * jy[kgrid] + ix[kgrid] * jyy[kgrid] ); // t s r = x y y
+					hd1ys[3 * iatom + 0][3 * jatom + 2][kgrid] += twoDij * ( ixy[kgrid] * jz[kgrid] + ix[kgrid] * jzy[kgrid] ); // t s r = x z y
+					hd1ys[3 * iatom + 1][3 * jatom + 1][kgrid] += twoDij * ( iyy[kgrid] * jy[kgrid] + iy[kgrid] * jyy[kgrid] ); // t s r = y y y
+					hd1ys[3 * iatom + 1][3 * jatom + 2][kgrid] += twoDij * ( iyy[kgrid] * jz[kgrid] + iy[kgrid] * jzy[kgrid] ); // t s r = y z y
+					hd1ys[3 * iatom + 2][3 * jatom + 2][kgrid] += twoDij * ( izy[kgrid] * jz[kgrid] + iz[kgrid] * jzy[kgrid] ); // t s r = z z y
+					hd1zs[3 * iatom + 0][3 * jatom + 0][kgrid] += twoDij * ( ixz[kgrid] * jx[kgrid] + ix[kgrid] * jxz[kgrid] ); // t s r = x x z
+					hd1zs[3 * iatom + 0][3 * jatom + 1][kgrid] += twoDij * ( ixz[kgrid] * jy[kgrid] + ix[kgrid] * jyz[kgrid] ); // t s r = x y z
+					hd1zs[3 * iatom + 0][3 * jatom + 2][kgrid] += twoDij * ( ixz[kgrid] * jz[kgrid] + ix[kgrid] * jzz[kgrid] ); // t s r = x z z
+					hd1zs[3 * iatom + 1][3 * jatom + 1][kgrid] += twoDij * ( iyz[kgrid] * jy[kgrid] + iy[kgrid] * jyz[kgrid] ); // t s r = y y z
+					hd1zs[3 * iatom + 1][3 * jatom + 2][kgrid] += twoDij * ( iyz[kgrid] * jz[kgrid] + iy[kgrid] * jzz[kgrid] ); // t s r = y z z
+					hd1zs[3 * iatom + 2][3 * jatom + 2][kgrid] += twoDij * ( izz[kgrid] * jz[kgrid] + iz[kgrid] * jzz[kgrid] ); // t s r = z z z
+				}
 			}else{
 				if (zeroth) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
 					hds[3 * iatom + 0][3 * jatom + 0][kgrid] += twoDij * ix[kgrid] * jx[kgrid]; // x x
@@ -482,6 +612,37 @@ void GetDensitySkeleton2(
 					hds[3 * iatom + 2][3 * jatom + 0][kgrid] += twoDij * iz[kgrid] * jx[kgrid]; // z x
 					hds[3 * iatom + 2][3 * jatom + 1][kgrid] += twoDij * iz[kgrid] * jy[kgrid]; // z x
 					hds[3 * iatom + 2][3 * jatom + 2][kgrid] += twoDij * iz[kgrid] * jz[kgrid]; // z z
+				}
+				if (first) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+					hd1xs[3 * iatom + 0][3 * jatom + 0][kgrid] += twoDij * ( ixx[kgrid] * jx[kgrid] + ix[kgrid] * jxx[kgrid] ); // t s r = x x x
+					hd1xs[3 * iatom + 0][3 * jatom + 1][kgrid] += twoDij * ( ixx[kgrid] * jy[kgrid] + ix[kgrid] * jyx[kgrid] ); // t s r = x y x
+					hd1xs[3 * iatom + 0][3 * jatom + 2][kgrid] += twoDij * ( ixx[kgrid] * jz[kgrid] + ix[kgrid] * jzx[kgrid] ); // t s r = x z x
+					hd1xs[3 * iatom + 1][3 * jatom + 0][kgrid] += twoDij * ( iyx[kgrid] * jx[kgrid] + iy[kgrid] * jxx[kgrid] ); // t s r = y x x
+					hd1xs[3 * iatom + 1][3 * jatom + 1][kgrid] += twoDij * ( iyx[kgrid] * jy[kgrid] + iy[kgrid] * jyx[kgrid] ); // t s r = y y x
+					hd1xs[3 * iatom + 1][3 * jatom + 2][kgrid] += twoDij * ( iyx[kgrid] * jz[kgrid] + iy[kgrid] * jzx[kgrid] ); // t s r = y z x
+					hd1xs[3 * iatom + 2][3 * jatom + 0][kgrid] += twoDij * ( izx[kgrid] * jx[kgrid] + iz[kgrid] * jxx[kgrid] ); // t s r = z x x
+					hd1xs[3 * iatom + 2][3 * jatom + 1][kgrid] += twoDij * ( izx[kgrid] * jx[kgrid] + iz[kgrid] * jxx[kgrid] ); // t s r = z y x
+					hd1xs[3 * iatom + 2][3 * jatom + 2][kgrid] += twoDij * ( izx[kgrid] * jz[kgrid] + iz[kgrid] * jzx[kgrid] ); // t s r = z z x
+
+					hd1ys[3 * iatom + 0][3 * jatom + 0][kgrid] += twoDij * ( ixy[kgrid] * jx[kgrid] + ix[kgrid] * jxy[kgrid] ); // t s r = x x y
+					hd1ys[3 * iatom + 0][3 * jatom + 1][kgrid] += twoDij * ( ixy[kgrid] * jy[kgrid] + ix[kgrid] * jyy[kgrid] ); // t s r = x y y
+					hd1ys[3 * iatom + 0][3 * jatom + 2][kgrid] += twoDij * ( ixy[kgrid] * jz[kgrid] + ix[kgrid] * jzy[kgrid] ); // t s r = x z y
+					hd1ys[3 * iatom + 1][3 * jatom + 0][kgrid] += twoDij * ( iyy[kgrid] * jx[kgrid] + iy[kgrid] * jxy[kgrid] ); // t s r = y x y
+					hd1ys[3 * iatom + 1][3 * jatom + 1][kgrid] += twoDij * ( iyy[kgrid] * jy[kgrid] + iy[kgrid] * jyy[kgrid] ); // t s r = y y y
+					hd1ys[3 * iatom + 1][3 * jatom + 2][kgrid] += twoDij * ( iyy[kgrid] * jz[kgrid] + iy[kgrid] * jzy[kgrid] ); // t s r = y z y
+					hd1ys[3 * iatom + 2][3 * jatom + 0][kgrid] += twoDij * ( izy[kgrid] * jx[kgrid] + iz[kgrid] * jxy[kgrid] ); // t s r = z x y
+					hd1ys[3 * iatom + 2][3 * jatom + 1][kgrid] += twoDij * ( izy[kgrid] * jx[kgrid] + iz[kgrid] * jxy[kgrid] ); // t s r = z y y
+					hd1ys[3 * iatom + 2][3 * jatom + 2][kgrid] += twoDij * ( izy[kgrid] * jz[kgrid] + iz[kgrid] * jzy[kgrid] ); // t s r = z z y
+
+					hd1zs[3 * iatom + 0][3 * jatom + 0][kgrid] += twoDij * ( ixz[kgrid] * jx[kgrid] + ix[kgrid] * jxz[kgrid] ); // t s r = x x z
+					hd1zs[3 * iatom + 0][3 * jatom + 1][kgrid] += twoDij * ( ixz[kgrid] * jy[kgrid] + ix[kgrid] * jyz[kgrid] ); // t s r = x y z
+					hd1zs[3 * iatom + 0][3 * jatom + 2][kgrid] += twoDij * ( ixz[kgrid] * jz[kgrid] + ix[kgrid] * jzz[kgrid] ); // t s r = x z z
+					hd1zs[3 * iatom + 1][3 * jatom + 0][kgrid] += twoDij * ( iyz[kgrid] * jx[kgrid] + iy[kgrid] * jxz[kgrid] ); // t s r = y x z
+					hd1zs[3 * iatom + 1][3 * jatom + 1][kgrid] += twoDij * ( iyz[kgrid] * jy[kgrid] + iy[kgrid] * jyz[kgrid] ); // t s r = y y z
+					hd1zs[3 * iatom + 1][3 * jatom + 2][kgrid] += twoDij * ( iyz[kgrid] * jz[kgrid] + iy[kgrid] * jzz[kgrid] ); // t s r = y z z
+					hd1zs[3 * iatom + 2][3 * jatom + 0][kgrid] += twoDij * ( izz[kgrid] * jx[kgrid] + iz[kgrid] * jxz[kgrid] ); // t s r = z x z
+					hd1zs[3 * iatom + 2][3 * jatom + 1][kgrid] += twoDij * ( izz[kgrid] * jx[kgrid] + iz[kgrid] * jxz[kgrid] ); // t s r = z y z
+					hd1zs[3 * iatom + 2][3 * jatom + 2][kgrid] += twoDij * ( izz[kgrid] * jz[kgrid] + iz[kgrid] * jzz[kgrid] ); // t s r = z z z
 				}
 			}
 		}

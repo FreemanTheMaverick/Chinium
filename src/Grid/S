@@ -11,6 +11,18 @@ if (ao1xs){ // (uv)' = u'v + uv'
 			Qxy[0] = 0;
 			Qxz[0] = 0;
 			Qyz[0] = 0;
+			if (ao3xxxs){
+				Qxxx[0] = 0;
+				Qxxy[0] = 0;
+				Qxxz[0] = 0;
+				Qxyy[0] = 0;
+				Qxyz[0] = 0;
+				Qxzz[0] = 0;
+				Qyyy[0] = 0;
+				Qyyz[0] = 0;
+				Qyzz[0] = 0;
+				Qzzz[0] = 0;
+			}
 		}
 	}
 }
