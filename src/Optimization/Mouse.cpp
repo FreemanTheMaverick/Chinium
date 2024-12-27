@@ -61,7 +61,7 @@ bool Mouse(
 
 		if ( Es.size() < 2 ){
 			if (output > 0) std::printf("  Naive |");
-		}else if ( G.norm() > std::get<1>(adtol) ){
+		}else if ( G.norm() > std::get<1>(adtol) || iiter < 3 ){
 			if (output > 0) std::printf("  ADIIS |");
 			EigenMatrix AD1s = EigenZero(Ds.size(), 1);
 			EigenMatrix AD2s = EigenZero(Ds.size(), Ds.size());

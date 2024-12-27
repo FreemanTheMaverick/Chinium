@@ -11,9 +11,11 @@ int main(){
 
 	const int nthreads = 8;
 	Multiwfn mwfn=Multiwfn("h2o.mwfn",1);
+	//mwfn.Centers[0].Coordinates[2]+=0.001;
 	mwfn.E_tot = 0;
 	mwfn.Gradient = EigenZero(mwfn.getNumCenters(), 3);
 	mwfn.Hessian = EigenZero(3*mwfn.getNumCenters(), 3*mwfn.getNumCenters());
+	mwfn.Temperature = 0.1;
 
 	mwfn.NuclearRepulsion({0}, 1);
 	mwfn.getTwoCenter({0, 1}, 1);
@@ -24,8 +26,9 @@ int main(){
 	mwfn.PrepareXC("ev",1);
 	mwfn.PrepareXC("f",1);
 	mwfn.GuessSCF("sap");
-	mwfn.HartreeFockKohnSham(0,0,2,nthreads);
+	mwfn.HartreeFockKohnSham(2,nthreads);
 	std::printf("Total energy: %17.10f\n", mwfn.E_tot);
+	//mwfn.Export("h2o.mwfn", 1);
 
 	mwfn.NuclearRepulsion({1,2}, 1);
 	mwfn.getTwoCenter({2}, 1);
@@ -44,7 +47,6 @@ int main(){
 	//mwfn.Localize("Foster", "both", 2);
 	//mwfn.Export("chainene_fb.mwfn", 1);
 	//mwfn.Localize("Pipek", "both", 2);
-	//mwfn.Export("h2o.mwfn", 1);
 	return 0;
 }
 

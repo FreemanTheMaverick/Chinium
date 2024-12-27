@@ -62,6 +62,8 @@ void GetDensity(
 	double* iao2 = ao2ls;
 	double* jao2 = ao2ls;
 	double Dij;
+	std::vector<double> Dij_iao(ngrids);
+	std::vector<double> Dij_jao(ngrids);
 	for ( int ibasis = 0; ibasis < D.cols(); ibasis++ ){
 		Dij = D(ibasis, ibasis);
 		if (zeroth) iao = aos + ibasis * ngrids; // ibasis*ngrids+jgrid
@@ -71,17 +73,18 @@ void GetDensity(
 			iz = ao1zs + ibasis * ngrids;
 		}
 		if (second) iao2 = ao2ls + ibasis * ngrids;
-		for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
-			if (zeroth) ds[kgrid] += Dij * iao[kgrid] * iao[kgrid];
-			if (first){
-				d1xs[kgrid] += 2 * Dij * ix[kgrid] * iao[kgrid];
-				d1ys[kgrid] += 2 * Dij * iy[kgrid] * iao[kgrid];
-				d1zs[kgrid] += 2 * Dij * iz[kgrid] * iao[kgrid];
-			}
-			if (second){
-				ts[kgrid] += 0.5 * Dij * ( ix[kgrid] * ix[kgrid] + iy[kgrid] * iy[kgrid] + iz[kgrid] * iz[kgrid] );
-				d2s[kgrid] += 2 * Dij * iao[kgrid] * iao2[kgrid];
-			}
+		if (zeroth || first || second) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ )
+			Dij_iao[kgrid] = Dij * iao[kgrid];
+		if (zeroth) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ )
+			ds[kgrid] += Dij_iao[kgrid] * iao[kgrid];
+		if (first) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+			d1xs[kgrid] += 2 * ix[kgrid] * Dij_iao[kgrid];
+			d1ys[kgrid] += 2 * iy[kgrid] * Dij_iao[kgrid];
+			d1zs[kgrid] += 2 * iz[kgrid] * Dij_iao[kgrid];
+		}
+		if (second) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+			ts[kgrid] += 0.5 * Dij * ( ix[kgrid] * ix[kgrid] + iy[kgrid] * iy[kgrid] + iz[kgrid] * iz[kgrid] );
+			d2s[kgrid] += 2 * Dij_iao[kgrid] * iao2[kgrid];
 		}
 		for ( int jbasis = 0; jbasis < ibasis; jbasis++ ){
 			Dij = D(ibasis, jbasis);
@@ -92,17 +95,20 @@ void GetDensity(
 				jz = ao1zs + jbasis * ngrids;
 			}
 			if (second) jao2 = ao2ls + jbasis * ngrids;
-			for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
-				if (zeroth) ds[kgrid] += 2 * Dij * iao[kgrid] * jao[kgrid];
-				if (first){
-					d1xs[kgrid] += 2 * Dij * ( ix[kgrid] * jao[kgrid] + iao[kgrid] * jx[kgrid] );
-					d1ys[kgrid] += 2 * Dij * ( iy[kgrid] * jao[kgrid] + iao[kgrid] * jy[kgrid]);
-					d1zs[kgrid] += 2 * Dij * ( iz[kgrid] * jao[kgrid] + iao[kgrid] * jz[kgrid]);
-				}
-				if (second){
-					ts[kgrid] += Dij * ( ix[kgrid] * jx[kgrid] + iy[kgrid] * jy[kgrid] + iz[kgrid] * jz[kgrid] );
-					d2s[kgrid] += 2 * Dij * ( iao[kgrid] * jao2[kgrid] + iao2[kgrid] * jao[kgrid] );
-				}
+			if (zeroth || first || second) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+				Dij_iao[kgrid] = 2 * Dij * iao[kgrid];
+				Dij_jao[kgrid] = 2 * Dij * jao[kgrid];
+			}
+			if (zeroth) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ )
+				ds[kgrid] += Dij_iao[kgrid] * jao[kgrid];
+			if (first) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+				d1xs[kgrid] += ix[kgrid] * Dij_jao[kgrid] + Dij_iao[kgrid] * jx[kgrid];
+				d1ys[kgrid] += iy[kgrid] * Dij_jao[kgrid] + Dij_iao[kgrid] * jy[kgrid];
+				d1zs[kgrid] += iz[kgrid] * Dij_jao[kgrid] + Dij_iao[kgrid] * jz[kgrid];
+			}
+			if (second) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+				ts[kgrid] += Dij * ( ix[kgrid] * jx[kgrid] + iy[kgrid] * jy[kgrid] + iz[kgrid] * jz[kgrid] );
+				d2s[kgrid] += Dij_iao[kgrid] * jao2[kgrid] + iao2[kgrid] * Dij_jao[kgrid];
 			}
 		}
 	}

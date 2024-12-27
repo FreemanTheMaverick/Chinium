@@ -57,7 +57,7 @@ EigenMatrix ADIIS(EigenVector A, EigenMatrix B, std::deque<EigenMatrix>& Fs, int
 	};
 
 	double L = 0;
-	assert( Ox( func, {1.e2, 1.e-6, 1e-2}, 100, L, M, output-1) && "Convergence failed!" );
+	assert( Ox( func, {1.e2, 1.e-6, 1e-2}, 1000, L, M, output-1) && "Convergence failed!" );
 
 	if (output > 0) std::printf("Converged!\n");
 	EigenMatrix F = EigenZero(Fs[0].rows(), Fs[0].cols());

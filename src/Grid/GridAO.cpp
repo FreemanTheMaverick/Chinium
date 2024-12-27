@@ -26,7 +26,6 @@ void GetAoValues(
 	double xo, yo, zo, x, y, z, r2;
 	double tmp, tmp0, tmp1, tmp2, tmp3;
 	auto [A, Ax, Ay, Az, Axx, Ayy, Azz, Axy, Axz, Ayz, Axxx, Axxy, Axxz, Axyy, Axyz, Axzz, Ayyy, Ayyz, Ayzz, Azzz] = std::array<double, 20>{}; // Basis function values
-	A = Ax = Ay = Az = Axx = Ayy = Azz = Axy = Axz = Ayz = Axxx = Axxy = Axxz = Axyy = Axyz = Axzz = Ayyy = Ayyz = Ayzz = Azzz = 0;
 	double ao2xx = 0; double ao2yy = 0; double ao2zz = 0;
 	double* ao_rangers[16];
 	double* ao1x_rangers[16];

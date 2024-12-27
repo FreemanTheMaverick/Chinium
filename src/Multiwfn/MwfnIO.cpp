@@ -138,7 +138,7 @@ EigenMatrix Multiwfn::MatrixTransform(){ // Chinium orders basis functions in th
 	int jbasis = 0;
 	for ( MwfnCenter& center : this->Centers ) for ( MwfnShell& shell : center.Shells ){
 		int l = shell.Type;
-		int num = ( l > 0 ) ? ( ( l + 1 ) * ( l + 2 ) / 2 ) : ( - 2 * l + 1 );
+		int num = shell.getSize();
 		transform.block(jbasis, jbasis, num, num) = SPDFGHI[l];
 		jbasis += num;
 	}

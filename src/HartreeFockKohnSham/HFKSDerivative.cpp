@@ -180,7 +180,7 @@ EigenMatrix HFHessian(
 			hfh(xpert, ypert) = hfh(ypert, xpert) =
 				( dDs[xpert] * Fskeletons[ypert] ).trace()
 				- ( dWs[xpert] * Sgrads[ypert] ).trace();
-	hfh += Eskeleton;//fuck
+	hfh += Eskeleton;
 	return 2 * hfh;
 }
 
@@ -522,7 +522,8 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 		auto start = __now__;
 		std::vector<EigenMatrix> Ss(3 * natoms, EigenZero(nbasis, nbasis));
 		std::vector<EigenMatrix> Fskeletons(3 * natoms, EigenZero(nbasis, nbasis));
-		std::vector<std::vector<EigenMatrix>> fxcskeletons(natoms, {EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis)});
+		std::vector<std::vector<EigenMatrix>> fxcskeleton1s(natoms, {EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis)});
+		std::vector<std::vector<EigenMatrix>> fxcskeleton2s(natoms, {EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis)});
 		std::vector<int> orders = {};
 		if (this->XC.XCcode){
 			if (this->XC.XCfamily.compare("LDA") == 0)
@@ -540,7 +541,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					nullptr, nullptr, nullptr, nullptr,
 					nullptr, nullptr, nullptr, nullptr, nullptr
 			);
-			fxcskeletons = GxcSkeleton(
+			fxcskeleton1s = GxcSkeleton(
 					orders,
 					this->Ws, ngrids,
 					this->AOs,
@@ -552,7 +553,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					bf2atom
 			);
 			for ( int iatom = 0; iatom < natoms; iatom++ ) for ( int xyz = 0; xyz < 3; xyz++ )
-				fxcskeletons[iatom][xyz] += PotentialSkeleton(
+				fxcskeleton2s[iatom][xyz] = PotentialSkeleton(
 						orders,
 						this->Ws, ngrids, nbasis,
 						this->AOs,
@@ -571,13 +572,13 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 
 		for ( int icenter = 0; icenter < natoms; icenter++ ) for ( int xyz = 0; xyz < 3; xyz++ ){
 			Ss[3 * icenter + xyz] = this->OverlapGrads[icenter][xyz];
-			Fskeletons[3 * icenter + xyz] = Hgrads[icenter][xyz] + this->GGrads[icenter][xyz] + fxcskeletons[icenter][xyz];
+			Fskeletons[3 * icenter + xyz] = Hgrads[icenter][xyz] + this->GGrads[icenter][xyz] + fxcskeleton1s[icenter][xyz] + fxcskeleton2s[icenter][xyz];
 		}
 		if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 		
 		if (output) std::printf("Coupled-perturbed self-consistent-field ...\n");
 		start = __now__;
-		auto [Us, dDs, dEs, dWs] = NonIdempotent( // std::vector<EigenMatrix>
+		auto [Us, dDs, dEs, dWs, dFs] = NonIdempotent( // std::vector<EigenMatrix>
 				this->getCoefficientMatrix(),
 				this->getEnergy(),
 				this->getOccupation() / 2.,
@@ -599,8 +600,42 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 				output - 1, nthreads
 		);
 		if (output) std::printf("| Done in %f s\n", __duration__(start, __now__));
-
 		this->Hessian += HFHessian(this->KineticHess + this->NuclearHess - this->OverlapHess + 0.5 * this->GHess, dDs, Fskeletons, dWs, Ss);
+
+		if ( this->Temperature > 0 ){
+			if (output) std::printf("Density-based occupation-gradient coupled-perturbed self-consistent-field ...\n");
+			start = __now__;
+			const EigenArray ns = this->getOccupation().array()/2;
+			const EigenVector Nes = (ns * ( ns - 1. ))/ this->Temperature;
+			const std::vector<EigenVector> dNs = DensityOccupationGradient(
+					this->getCoefficientMatrix(),
+					this->getEnergy(),
+					Nes,
+					Ss, dFs,
+					this->RepulsionIs, this->RepulsionJs,
+					this->RepulsionKs, this->RepulsionLs,
+					this->RepulsionDegs, this->Repulsions,
+					this->RepulsionLength, this->XC.EXX,
+					orders,
+					this->Ws,
+					this->AOs,
+					this->AO1Xs, this->AO1Ys, this->AO1Zs,
+					this->AO2XXs, this->AO2YYs, this->AO2ZZs,
+					this->AO2XYs, this->AO2XZs, this->AO2YZs,
+					this->Rho1Xs, this->Rho1Ys, this->Rho1Zs,
+					this->E1Rhos, this->E1Sigmas,
+					this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
+					this->NumGrids,
+					output - 1, nthreads
+			);
+			if (output) std::printf("| Done in %f s\n", __duration__(start, __now__));
+			EigenMatrix hessog = EigenZero(3*natoms, 3*natoms);
+			for ( int ipert = 0; ipert < 3 * natoms; ipert++ )
+				for ( int jpert = 0; jpert < 3 * natoms; jpert++ )
+					hessog(ipert, jpert) = dEs[jpert].dot(dNs[ipert]);
+			this->Hessian += hessog + hessog.transpose();
+		}
+
 		if (this->XC.XCcode){
 			// Distributing grids to batches
 			const long int ngrids_per_batch = __max_num_grids__;

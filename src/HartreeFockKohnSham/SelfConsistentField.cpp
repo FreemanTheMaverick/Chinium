@@ -19,11 +19,12 @@
 #include <iostream>
 
 
-void Multiwfn::HartreeFockKohnSham(double temperature, double chemicalpotential, int output, int nthreads){
-
-	if (output > 0) std::printf("Self-consistent field\n");
+void Multiwfn::HartreeFockKohnSham(int output, int nthreads){
 
 	const int nocc = std::round(this->getNumElec(1));
+	double T = this->Temperature;
+	double Mu = this->ChemicalPotential;
+	if (output > 0) std::printf("Self-consistent field in %s-canonical ensemble\n", T > 0 ? "grand" : "micro");
 
 	const EigenMatrix S = this->Overlap;
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
@@ -95,6 +96,18 @@ std::cout<<33<<std::endl;
 		eigensolver.compute(Fprime_);
 		this->setEnergy(eigensolver.eigenvalues());
 		this->setCoefficientMatrix(Z * eigensolver.eigenvectors());
+		double E = 0;
+		if ( T > 0 ){
+			const EigenArray es = eigensolver.eigenvalues();
+			const EigenArray ns = 1. / ( 1. + ( ( es - Mu ) / T ).exp() );
+			this->setOccupation(2*(EigenVector)ns);
+			E += 2 * (
+					T * (
+						ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log()
+					).sum()
+					- Mu * ns.sum()
+			);
+		}
 		const EigenMatrix D_ = this->getDensity() / 2.;
 		EigenMatrix Fhf_ = EigenZero(Fupdate.rows(), Fupdate.cols());
 		EigenMatrix Fxc_ = EigenZero(Fupdate.rows(), Fupdate.cols());
@@ -102,12 +115,12 @@ std::cout<<33<<std::endl;
 		std::tie(Fhf_, Fxc_, Exc_) = this->calcFock(D_, nthreads);
 		const EigenMatrix F_ = Fhf_ + Fxc_;
 		const EigenMatrix G = F_ * D_ * S - S * D_ * F_;
-		const double E = (D_ * ( this->Kinetic + this->Nuclear + Fhf_ )).trace() + Exc_;
+		E += (D_ * ( this->Kinetic + this->Nuclear + Fhf_ )).trace() + Exc_;
 		return std::make_tuple(E, F_, G, D_);
 	};
 
 	double E = 0;
-	assert( Mouse( ffunc, {1.e3, 0.5, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, E, F, output-1) && "Convergence failed!" );
+	assert( Mouse( ffunc, {1.e3, 0.15, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, E, F, output-1) && "Convergence failed!" );
 	this->E_tot += E;
 	//assert( Ox( dfunc, {1.e-8, 1.e-7, 1.e-7}, 100, E, Dprime, output-1) && "Convergence failed!" );
 	//assert( Ox( cfunc, {1.e-8, 1.e-7, 1.e-7}, 100, E, Cprime, output-1) && "Convergence failed!" );
