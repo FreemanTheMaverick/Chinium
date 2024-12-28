@@ -11,6 +11,7 @@ int main(){
 
 	const int nthreads = 8;
 	Multiwfn mwfn=Multiwfn("h2o.mwfn",1);
+	mwfn.PrintCenters();
 	//mwfn.Centers[0].Coordinates[2]+=0.001;
 	mwfn.E_tot = 0;
 	mwfn.Gradient = EigenZero(mwfn.getNumCenters(), 3);
@@ -28,6 +29,7 @@ int main(){
 	mwfn.GuessSCF("sap");
 	mwfn.HartreeFockKohnSham(2,nthreads);
 	std::printf("Total energy: %17.10f\n", mwfn.E_tot);
+	mwfn.PrintOrbitals();
 	//mwfn.Export("h2o.mwfn", 1);
 
 	mwfn.NuclearRepulsion({1,2}, 1);

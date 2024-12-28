@@ -709,10 +709,8 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 				const long int ngrids_this_batch = grid_tail - grid_head;
 				if (output) std::printf("| | Evaluating AOs on %ld grids ...", ngrids_this_batch);
 				start = __now__;
-				int order = 0;
 				std::vector<int> orders = {};
 				if ( this->XC.XCfamily.compare("LDA") == 0 ){
-					order = 0;
 					orders = {0};
 					__Allocate_and_Zero__(batch_aos); 
 					__Allocate_and_Zero__(batch_ao1xs);
@@ -726,7 +724,6 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					__Allocate_and_Zero__(batch_ao2yzs);
 					__Allocate_and_Zero_3__(batch_hds);
 				}else if ( this->XC.XCfamily.compare("GGA") == 0 ){
-					order = 1;
 					orders = {0, 1};
 					__Allocate_and_Zero__(batch_aos); 
 					__Allocate_and_Zero__(batch_ao1xs);

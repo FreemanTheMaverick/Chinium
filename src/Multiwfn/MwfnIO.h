@@ -23,6 +23,7 @@
 	EigenMatrix getEnergyDensity();
 
 	void Export(std::string mwfn_filename, const bool output);
-	void Print();
+	void PrintCenters();
+	void PrintOrbitals();
 	Multiwfn(std::string mwfn_filename, const bool output);
 	Multiwfn(std::string mwfn_filename, std::string basis_filename, const bool output);

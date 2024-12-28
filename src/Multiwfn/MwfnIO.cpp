@@ -290,7 +290,6 @@ Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 			__Read_Array_Head__
 				CoefficientMatrix(k, tmp_int) = SafeStod(word);
 			__Read_Array_Tail__
-			this->Orbitals[tmp_int];
 		}
 
 		// Field 5
@@ -660,7 +659,37 @@ Multiwfn::Multiwfn(std::string mwfn_filename, std::string basis_filename, const 
 	this->Normalize();
 }
 
-void Multiwfn::Print(){
-	for (MwfnCenter& center : this->Centers) center.Print();
+void Multiwfn::PrintCenters(){
+	std::printf("Atoms:\n");
+	std::printf("| Number | Symbol | Index | Charge |  X (Bohr)  |  Y (Bohr)  |  Z (Bohr)  |\n");
+	for ( int icenter = 0; icenter < this->getNumCenters(); icenter++ ){
+		MwfnCenter& center = this->Centers[icenter];
+		std::printf(
+				"| %6d | %6s | %5d | %6.2f | % 10.5f | % 10.5f | % 10.5f |\n",
+				icenter,
+				center.getSymbol().c_str(),
+				center.Index,
+				center.Nuclear_charge,
+				center.Coordinates[0],
+				center.Coordinates[1],
+				center.Coordinates[2]
+				
+		);
+	}
 }
 
+void Multiwfn::PrintOrbitals(){
+	std::printf("Orbitals:\n");
+	if ( this->Wfntype == 0 ){
+		std::printf("| Number | Energy (eV) | Occupation |\n");
+		for ( int iorbital = 0; iorbital < this->getNumIndBasis(); iorbital++){
+			MwfnOrbital& orbital = this->Orbitals[iorbital];
+			std::printf(
+					"| %6d | % 11.4f | %10.8f |\n",
+					iorbital,
+					orbital.Energy * __hartree2ev__,
+					orbital.Occ
+			);
+		}
+	}
+}

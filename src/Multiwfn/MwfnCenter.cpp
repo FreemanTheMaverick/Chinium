@@ -33,4 +33,3 @@ void MwfnCenter::Print(){
 	std::printf("Shells:\n");
 	for ( MwfnShell& shell : this->Shells ) shell.Print();
 }
-
