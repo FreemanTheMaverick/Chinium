@@ -170,6 +170,7 @@ std::string ReadGrid(std::string inp){
 		if ( thisline.compare("GRID") == 0){
 			found = 1;
 			std::getline(file, thisline);
+			__To_Upper__(thisline);
 			assert(thisline.length() > 0 && "Missing grid!");
 			std::stringstream ss(thisline);
 			ss >> grid;
