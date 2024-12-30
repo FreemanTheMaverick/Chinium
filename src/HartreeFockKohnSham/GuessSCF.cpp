@@ -63,22 +63,21 @@ EigenMatrix SuperpositionAtomicPotential(
 			nullptr, nullptr);
 }
 
-void Multiwfn::GuessSCF(std::string guess){
+void Multiwfn::GuessSCF(std::string guess, const bool output){
 	std::string path = std::getenv("CHINIUM_PATH");
 	path += "/SAP/";
 	EigenMatrix V = EigenZero(this->getNumBasis(), this->getNumBasis());
 	bool potential = 0;
-	if ( guess.compare("read") == 0 );
-	else if ( guess.compare("sap") == 0 ){
-		std::printf("SCF initial guess type ... SAP\n");
-		std::printf("Calculating superposition of atomic potential ... ");
+	if ( guess.compare("SAP") == 0 ){
+		if (output) std::printf("SCF initial guess type ... SAP\n");
+		if (output) std::printf("Calculating superposition of atomic potential ... ");
 		const auto start = __now__;
 		potential = 1;
 		V = SuperpositionAtomicPotential(
 			path, this->Centers, this->getNumBasis(),
 			this->Xs, this->Ys, this->Zs,
 			this->Ws, this->NumGrids, this->AOs);
-		std::printf("%f s\n", __duration__(start, __now__));
+		if (output) std::printf("%f s\n", __duration__(start, __now__));
 	}else assert("Unrecognized initial guess type!" && 0);
 
 	if (potential){

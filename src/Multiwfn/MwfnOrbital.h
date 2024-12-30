@@ -1,7 +1,7 @@
 class MwfnOrbital{ public:
-	int Type = -114;
-	double Energy = -114;
-	double Occ = -114;
+	int Type = 0;
+	double Energy = 0;
+	double Occ = 0;
 	std::string Sym = "A";
 	EigenVector Coeff;
 };

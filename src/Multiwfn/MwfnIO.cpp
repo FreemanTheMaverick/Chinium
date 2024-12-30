@@ -1,6 +1,7 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <string>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <sstream>
@@ -403,9 +404,9 @@ EigenMatrix Multiwfn::getCoefficientMatrix(){
 }
 
 void Multiwfn::setCoefficientMatrix(EigenMatrix matrix){
-	for ( int irow = 0; irow <this->getNumBasis(); irow++ )
-		for ( int jcol = 0; jcol<this->getNumIndBasis(); jcol++ )
-			this->Orbitals[jcol].Coeff(irow) = matrix(irow, jcol);
+	this->Orbitals.resize(matrix.cols());
+	for ( int jcol = 0; jcol < this->getNumIndBasis(); jcol++ )
+		this->Orbitals[jcol].Coeff = matrix.col(jcol);
 }
 
 EigenVector Multiwfn::getEnergy(){
@@ -428,7 +429,7 @@ EigenVector Multiwfn::getOccupation(){
 }
 
 void Multiwfn::setOccupation(EigenVector occupancies){
-	for ( int iorbital = 0; iorbital < this->getNumIndBasis(); iorbital++ )
+	for ( int iorbital = 0; iorbital < std::min((int)occupancies.size(), this->getNumIndBasis()); iorbital++ )
 		this->Orbitals[iorbital].Occ = occupancies(iorbital);
 }
 
@@ -569,10 +570,9 @@ void Multiwfn::Export(std::string mwfn_filename, const bool output){
 	std::fclose(file);
 }
 
-std::vector<MwfnCenter> MwfnReadBasis(std::string basis_filename, bool output){
-	std::ifstream file(basis_filename.c_str());
-	assert("Basis set file is missing!" && file.good());
-	if (output) std::printf("Reading basis set file %s ...\n", basis_filename.c_str());
+std::vector<MwfnCenter> MwfnReadBasis(std::string basis_file_path_name){
+	std::ifstream file( basis_file_path_name.c_str() );
+	assert("Basis set file is missing in $CHINIUM_PATH/BasisSets/ !" && file.good());
 	std::string line, word;
 	std::vector<MwfnCenter> centers={};
 	MwfnCenter center;
@@ -586,6 +586,7 @@ std::vector<MwfnCenter> MwfnReadBasis(std::string basis_filename, bool output){
 		ss >> word;
 		if ( word[0] == '-' ){
 			word.erase(0, 1);
+			std::transform(word.begin(), word.end(), word.begin(), ::toupper);
 			center.Index = Name2Z[word];
 		}else if (
 				word == "S" || word == "SP" || word == "P" || word == "D" ||
@@ -607,7 +608,7 @@ std::vector<MwfnCenter> MwfnReadBasis(std::string basis_filename, bool output){
 				shell.Type = -5;
 			}else if ( word == "I" ){
 				shell.Type = -6;
-			}
+			}else assert(0 && "Unrecognized symbol of angular momentum!");
 			ss >> word;
 			int n = std::stoi(word);
 			for ( int i = 0; i < n; i++ ){
@@ -620,9 +621,11 @@ std::vector<MwfnCenter> MwfnReadBasis(std::string basis_filename, bool output){
 				}
 				ss >> word; word = std::regex_replace(word, re, "E");
 				shell.Coefficients.push_back(std::stod(word));
+				shell.NormalizedCoefficients.push_back(0);
 				if ( shell2.Type != -114 ){
 					ss >> word; word = std::regex_replace(word, re, "E");
 					shell2.Coefficients.push_back(std::stod(word));
+					shell2.NormalizedCoefficients.push_back(0);
 				}
 			}
 			center.Shells.push_back(shell);
@@ -632,9 +635,11 @@ std::vector<MwfnCenter> MwfnReadBasis(std::string basis_filename, bool output){
 			shell.Type = -114;
 			shell.Exponents.resize(0);
 			shell.Coefficients.resize(0);
+			shell.NormalizedCoefficients.resize(0);
 			shell2.Type = -114;
 			shell2.Exponents.resize(0);
 			shell2.Coefficients.resize(0);
+			shell2.NormalizedCoefficients.resize(0);
 		}else if ( word == "****" ){
 			centers.push_back(center);
 			center.Shells.resize(0);
@@ -643,20 +648,35 @@ std::vector<MwfnCenter> MwfnReadBasis(std::string basis_filename, bool output){
 	return centers;
 }
 
-Multiwfn::Multiwfn(std::string mwfn_filename, std::string basis_filename, const bool output){
-	Multiwfn mwfn = Multiwfn(mwfn_filename, output);
-	std::vector<MwfnCenter> bare_centers = MwfnReadBasis(basis_filename, output);
-	this->Centers = {};
-	for ( MwfnCenter& mwfn_center : mwfn.Centers ){
-		this->Centers.push_back(mwfn_center);
+void Multiwfn::setBasis(std::string basis_filename, const bool output){
+	std::string basis_file_path_name = (std::string)std::getenv("CHINIUM_PATH") + "/BasisSets/" + basis_filename + ".gbs";
+	if (output) std::printf("Reading basis set file %s ...\n", basis_file_path_name.c_str());
+	std::vector<MwfnCenter> bare_centers = MwfnReadBasis(basis_file_path_name);
+	for ( MwfnCenter& mwfn_center : this->Centers ){
+		bool found = 0;
 		for ( MwfnCenter& bare_center : bare_centers ){
 			if ( mwfn_center.Index == bare_center.Index ){
-				this->Centers.back().Shells = bare_center.Shells;
+				mwfn_center.Shells = bare_center.Shells;
+				found = 1;
 				break;
 			}
 		}
+		assert(found && "Basis set file does not include this element!");
 	}
 	this->Normalize();
+}
+
+void Multiwfn::setCenters(std::vector<std::vector<double>> atoms, const bool output){
+	if (output) std::printf("Reading atomic coordinates from input file ...\n");
+	this->Centers.clear();
+	this->Centers.reserve(atoms.size());
+	for ( std::vector<double>& atom : atoms ){
+		MwfnCenter center;
+		center.Index = std::round(atom[0]);
+		center.Nuclear_charge = atom[1];
+		center.Coordinates = {atom[2], atom[3], atom[4]};
+		this->Centers.push_back(center);
+	}
 }
 
 void Multiwfn::PrintCenters(){

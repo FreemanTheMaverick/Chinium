@@ -22,8 +22,10 @@
 	EigenMatrix getDensity();
 	EigenMatrix getEnergyDensity();
 
+	Multiwfn() = default;
+	Multiwfn(std::string mwfn_filename, const bool output);
 	void Export(std::string mwfn_filename, const bool output);
 	void PrintCenters();
 	void PrintOrbitals();
-	Multiwfn(std::string mwfn_filename, const bool output);
-	Multiwfn(std::string mwfn_filename, std::string basis_filename, const bool output);
+	void setBasis(std::string basis_filename, const bool output);
+	void setCenters(std::vector<std::vector<double>> atoms, const bool output);

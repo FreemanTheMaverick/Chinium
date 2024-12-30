@@ -7,13 +7,11 @@ extern "C"{
 #include <cassert>
 #include <string>
 #include "MwfnXC1.h"
-
+#include <iostream>
 void ExchangeCorrelation::Read(std::string df, bool output){
 
 	// Parsing df file.
-	std::string path = std::getenv("CHINIUM_PATH");
-	path += "/DensityFunctionals/";
-	std::string filename = path + "/" + df + ".df";
+	std::string filename = (std::string)std::getenv("CHINIUM_PATH") + "/DensityFunctionals/" + df + ".df";
 	std::ifstream file(filename);
 	assert(file.good() && "Density functional file is missing!");
 	if (output) std::printf("Reading density functional file %s ...\n", filename.c_str());
