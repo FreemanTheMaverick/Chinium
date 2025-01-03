@@ -17,8 +17,9 @@
 #include "../ExchangeCorrelation/MwfnXC1.h"
 #include "../Grid/GridPotential.h"
 #include "FockFormation.h"
+#include "Parallel.h"
 
-#include <iostream>
+#define __Occupation_Cutoff__ 1.e-3
 
 #define __Allocate_and_Zero__(array)\
 	if (array) std::memset(array, 0, ngrids * sizeof(double));\
@@ -48,6 +49,7 @@ std::tuple<
 		double* vrrs, double* vrss, double* vsss,
 		long int ngrids,
 		int output, int nthreads){
+	Eigen::setNbThreads(nthreads);
 
 	// Step 1: Preparing data used by all perturbations
 	
@@ -66,7 +68,7 @@ std::tuple<
 		const EigenMatrix CTSC = CTSCs[imatrix] = C.transpose() * Ss[imatrix] * C;
 		Bs[imatrix] = Bskeletons[imatrix] = CTSC * es.asDiagonal() - C.transpose() * Fskeletons[imatrix] * C;
 		Us[imatrix] = - 0.5 * CTSC;
-		for ( int p = 0; p < nindbasis; p++ ){
+		for ( int p = 0; p < nindbasis; p++ ) if ( ns[p] > __Occupation_Cutoff__ ){
 			EigenMatrix Np = CTSC(p, p) * C.col(p) * C.col(p).transpose();
 			for ( int q = 0; q < p; q++ ){
 				const EigenMatrix CpCqT = C.col(p) * C.col(q).transpose();
@@ -89,26 +91,53 @@ std::tuple<
 		int nundones = nmatrices;
 		for ( int jdone : dones ) nundones -= jdone;
 		if ( nundones == 0 ) break;
-		if (output) std::printf("| Iteration %d with %d perturbations left ...", iiter, nundones); 
-		auto start = __now__;
+		if (output) std::printf("| Iteration %d with %d perturbations left ...\n", iiter, nundones); 
 
+		if (output) std::printf("| | Constructing gradients of density matrix ...");
+		auto start = __now__;
 		std::vector<EigenMatrix> undoneDs(nundones, EigenZero(nbasis, nbasis));
-		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] ){
+		for ( int imatrix = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] ){
 			if ( Bs_deque[imatrix].size() > 1 )
 				Bs[imatrix] = CDIIS(Rs_deque[imatrix], Bs_deque[imatrix]);
 			Ds[imatrix] = - Ns[imatrix];
-			EigenMatrix Dtmp = EigenZero(nbasis, nbasis);
-			#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
-			#pragma omp parallel for reduction(EigenMatrixSum: Dtmp)
 			for ( int p = 0; p < nindbasis; p++ ) for ( int q = 0; q < p; q++ ) if ( std::abs(es[p] - es[q]) > 1.e-6 ){
 				const double Upq = Us[imatrix](p, q) = Bs[imatrix](p, q) / ( es(p) - es(q) );
 				Us[imatrix](q, p) = - Upq - CTSCs[imatrix](p, q);
-				const EigenMatrix CpCqT = C.col(p) * C.col(q).transpose();
-				Dtmp += ( ns[q] - ns[p] ) * Upq * ( CpCqT + CpCqT.transpose() );
 			}
-			Ds[imatrix] += Dtmp;
-			undoneDs[jundone++] = Ds[imatrix];
 		}
+		Eigen::setNbThreads(1);
+		std::vector<std::vector<EigenArray>> Uarrays = Matrices2Arrays(Us);
+		EigenMatrix* D_raw_arrays = new EigenMatrix[nmatrices];
+		for ( int imatrix = 0; imatrix < nmatrices; imatrix++ ){
+			D_raw_arrays[imatrix].resize(nbasis, nbasis);
+			D_raw_arrays[imatrix] = EigenZero(nbasis, nbasis);
+		}
+		std::vector<EigenArray> Up(nindbasis, EigenZero(nindbasis, 1).array());
+		EigenMatrix CpCqT = EigenZero(nbasis, nbasis);
+		EigenMatrix n_CpCqT_sym = EigenZero(nbasis, nbasis);
+		#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
+		#pragma omp parallel for\
+		reduction(EigenMatrixSum: D_raw_arrays[:nmatrices])\
+		firstprivate(Up, CpCqT, n_CpCqT_sym, C, ns)\
+		schedule(dynamic, 1) num_threads(nthreads)
+		for ( int p = nindbasis - 1; p >= 0; p-- ){
+			Up = Uarrays[p];
+			for ( int q = 0; q < p; q++ ) if ( std::abs(ns[p] - ns[q]) > 1.e-6 ){
+				CpCqT = C.col(p) * C.col(q).transpose();
+				n_CpCqT_sym = ( ns[q] - ns[p] ) * (CpCqT + CpCqT.transpose() );
+				for ( int imatrix = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] )
+					D_raw_arrays[imatrix] += Up[q](imatrix) * n_CpCqT_sym;
+			}
+		}
+		for ( int imatrix = 0; imatrix < nmatrices; imatrix++ )
+			Ds[imatrix] += D_raw_arrays[imatrix];
+		Eigen::setNbThreads(nthreads);
+		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] )
+			undoneDs[jundone++] = Ds[imatrix];
+		if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
+
+		if (output) std::printf("| | Constructing gradients of Fock matrix ...");
+		auto fock_start = __now__;
 		std::vector<EigenMatrix> undoneFUs = GhfMultiple(
 				is, js, ks, ls,
 				degs, ints, length,
@@ -144,7 +173,8 @@ std::tuple<
 					nullptr,
 					ngrids, 2*Ds[imatrix],
 					gds, gd1xs, gd1ys, gd1zs,
-					nullptr, nullptr
+					nullptr, nullptr,
+					nthreads
 			);
 			undoneFUs[jundone] += PotentialSkeleton(
 					orders,
@@ -163,11 +193,16 @@ std::tuple<
 			const EigenMatrix Bdiff = Bnew - Bs[imatrix];
 			Bs_deque[imatrix].push_back(Bnew);
 			Rs_deque[imatrix].push_back(Bdiff);
+			if ( Bs_deque[imatrix].size() > 6 ){
+				Bs_deque[imatrix].pop_front();
+				Rs_deque[imatrix].pop_front();
+			}
 			if ( Bdiff.cwiseAbs().maxCoeff() < 1.e-5 )
 				dones[imatrix] = 1;
 			Bs[imatrix] = Bnew;
 		}
-		if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
+		if (output) std::printf(" Done in %f s\n", __duration__(fock_start, __now__));
+		if (output) std::printf("| | Done in %f s\n", __duration__(start, __now__));
 	}
 
 	std::vector<EigenVector> Es(nmatrices, EigenZero(nindbasis, 1));
@@ -205,6 +240,7 @@ std::vector<EigenVector> DensityOccupationGradient(
 		double* vrrs, double* vrss, double* vsss,
 		long int ngrids,
 		int output, int nthreads){
+	Eigen::setNbThreads(nthreads);
 
 	// Step 1: Preparing data used by all perturbations
 
@@ -283,7 +319,8 @@ std::vector<EigenVector> DensityOccupationGradient(
 					nullptr,
 					ngrids, 2*Ds[imatrix],
 					gds, gd1xs, gd1ys, gd1zs,
-					nullptr, nullptr
+					nullptr, nullptr,
+					nthreads
 			);
 			undoneFUs[jundone] += PotentialSkeleton(
 					orders,

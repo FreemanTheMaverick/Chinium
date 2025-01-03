@@ -57,9 +57,9 @@ EigenMatrix getRepulsionDiag(libint2::BasisSet& obs){ // Computing the diagonal 
 }
 
 std::tuple<long int, long int> getRepulsionLength(libint2::BasisSet& obs, EigenMatrix repulsiondiag, double threshold){ // Numbers of nonequivalent two-electron integrals and shell quartets after Cauchy-Schwarz screening.
-	const auto shell2bf=obs.shell2bf();
-	long int n2integrals=0; // Number of integrals not discarded.
-	long int nshellquartets=0; // Number of shell quartets not discarded.
+	const auto shell2bf = obs.shell2bf();
+	long int n2integrals = 0; // Number of integrals not discarded.
+	long int nshellquartets = 0; // Number of shell quartets not discarded.
 	for ( short int s1 = 0; s1 < (short int)obs.size() ; s1++ ){
 		const short int bf1_first = shell2bf[s1];
 		const short int n1 = obs[s1].size();
@@ -221,8 +221,7 @@ void getRepulsion0(
 	const auto shell2bf = obs.shell2bf();
 	libint2::initialize();
 	const int nthreads = bqheads.size();
-	omp_set_num_threads(nthreads);
-	#pragma omp parallel for
+	#pragma omp parallel for num_threads(nthreads)
 	for ( int ithread = 0; ithread < nthreads; ithread++ ){
 		const long int nsq = sqheads[ithread + 1] - sqheads[ithread];
 		const long int sqhead = sqheads[ithread];
@@ -310,9 +309,8 @@ std::vector<std::vector<EigenMatrix>> getRepulsion1(
 		rawk = {EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis)};
  	libint2::initialize();
 	const int nthreads = sqheads.size() - 1;
-	omp_set_num_threads(nthreads);
 	#pragma omp declare reduction(Sum: std::vector<std::vector<EigenMatrix>>: EigenMatrixVectorSum(omp_out, omp_in)) initializer(omp_priv = omp_orig)
-	#pragma omp parallel for reduction(Sum: rawjs, rawks)
+	#pragma omp parallel for reduction(Sum: rawjs, rawks) num_threads(nthreads)
 	for ( int ithread = 0; ithread < nthreads; ithread++ ){
 		const long int nsq = sqheads[ithread + 1] - sqheads[ithread];
 		const long int sqhead = sqheads[ithread];
@@ -404,9 +402,8 @@ EigenMatrix getRepulsion2(
 	EigenMatrix hessiank = EigenZero(3 * natoms, 3 * natoms);
  	libint2::initialize();
 	const int nthreads = sqheads.size() - 1;
-	omp_set_num_threads(nthreads);
 	#pragma omp declare reduction(Sum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
-	#pragma omp parallel for reduction(Sum: hessianj, hessiank)
+	#pragma omp parallel for reduction(Sum: hessianj, hessiank) num_threads(nthreads)
 	for ( int ithread = 0; ithread < nthreads; ithread++ ){
 		const long int nsq = sqheads[ithread + 1] - sqheads[ithread];
 		const long int sqhead = sqheads[ithread];

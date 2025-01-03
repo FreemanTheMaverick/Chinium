@@ -22,6 +22,7 @@ EigenMatrix HFGradient(
 		EigenMatrix D, std::vector<std::vector<EigenMatrix>>& Hgrads,
 		EigenMatrix W, std::vector<std::vector<EigenMatrix>>& Sgrads,
 		std::vector<std::vector<EigenMatrix>>& Ggrads){
+	Eigen::setNbThreads(1);
 	EigenMatrix g = EigenZero(Hgrads.size(), 3);
 	for ( int iatom = 0; iatom < (int)Hgrads.size(); iatom++ )
 		for ( int xyz = 0; xyz < 3; xyz++ )
@@ -41,6 +42,7 @@ EigenMatrix XCGradient(
 		std::vector<std::vector<double*>>& gd1xs,
 		std::vector<std::vector<double*>>& gd1ys,
 		std::vector<std::vector<double*>>& gd1zs){
+	Eigen::setNbThreads(1);
 	std::vector<int> orders = {};
 	if ( order >= 0 ){
 		orders.push_back(0);
@@ -104,6 +106,7 @@ std::vector<std::vector<EigenMatrix>> GxcSkeleton(
 		double* d1xs, double* d1ys, double* d1zs,
 		double* vrs, double* vss,
 		std::vector<int>& bf2atom){
+	Eigen::setNbThreads(1);
 	const int nbasis = bf2atom.size();
 	const int natoms = *std::max_element(bf2atom.begin(), bf2atom.end()) + 1;
 	std::vector<std::vector<EigenMatrix>> Gs(natoms, {EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis)});
@@ -172,7 +175,7 @@ EigenMatrix HFHessian(
 		EigenMatrix Eskeleton,
 		std::vector<EigenMatrix>& dDs, std::vector<EigenMatrix>& Fskeletons,
 		std::vector<EigenMatrix>& dWs, std::vector<EigenMatrix>& Sgrads){
-
+	Eigen::setNbThreads(1);
 	const int nmatrices = dDs.size();
 	EigenMatrix hfh = EigenZero(nmatrices, nmatrices);
 	for ( int xpert = 0; xpert < nmatrices; xpert++ )
@@ -334,6 +337,7 @@ EigenMatrix HxcSkeleton(
 
 
 void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
+	Eigen::setNbThreads(nthreads);
 	const int natoms = this->getNumCenters();
 	const int nbasis = this->getNumBasis();
 	const long int ngrids = this->NumGrids;
@@ -513,7 +517,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 			);
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 		}
-		if (output) std::printf("| Done in %f s\n", __duration__(start_all, __now__));
+		if (output) std::printf("| | Done in %f s\n", __duration__(start_all, __now__));
 		this->Gradient += xcg;
 	}
 
@@ -605,8 +609,8 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 		if ( this->Temperature > 0 ){
 			if (output) std::printf("Density-based occupation-gradient coupled-perturbed self-consistent-field ...\n");
 			start = __now__;
-			const EigenArray ns = this->getOccupation().array()/2;
-			const EigenVector Nes = (ns * ( ns - 1. ))/ this->Temperature;
+			const EigenArray ns = this->getOccupation().array() / 2;
+			const EigenVector Nes = (ns * ( ns - 1. )) / this->Temperature;
 			const std::vector<EigenVector> dNs = DensityOccupationGradient(
 					this->getCoefficientMatrix(),
 					this->getEnergy(),
@@ -629,7 +633,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					output - 1, nthreads
 			);
 			if (output) std::printf("| Done in %f s\n", __duration__(start, __now__));
-			EigenMatrix hessog = EigenZero(3*natoms, 3*natoms);
+			EigenMatrix hessog = EigenZero(3 * natoms, 3 * natoms);
 			for ( int ipert = 0; ipert < 3 * natoms; ipert++ )
 				for ( int jpert = 0; jpert < 3 * natoms; jpert++ )
 					hessog(ipert, jpert) = dEs[jpert].dot(dNs[ipert]);
@@ -804,7 +808,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 				);
 				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 			}
-			if (output) std::printf("| Done in %f s\n", __duration__(start_all, __now__));
+			if (output) std::printf("| | Done in %f s\n", __duration__(start_all, __now__));
 		}
 	}
 }

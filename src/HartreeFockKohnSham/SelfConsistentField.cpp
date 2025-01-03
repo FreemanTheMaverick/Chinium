@@ -20,6 +20,7 @@
 
 
 void Multiwfn::HartreeFockKohnSham(int output, int nthreads){
+	Eigen::setNbThreads(nthreads);
 
 	const int nocc = std::round(this->getNumElec(1));
 	double T = this->Temperature;

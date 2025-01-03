@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <algorithm>
 #include <cassert>
+#include <omp.h>
 
 #include "../Macro.h"
 #include "../Multiwfn.h"
@@ -20,7 +21,8 @@ void GetDensity(
 		long int ngrids, EigenMatrix D,
 		double* ds,
 		double* d1xs, double* d1ys, double* d1zs,
-		double* d2s, double* ts){
+		double* d2s, double* ts,
+		int nthreads){
 
 	bool zeroth = 0;
 	bool first = 0;
@@ -51,21 +53,50 @@ void GetDensity(
 		assert(ts && "Taus of density on grids array is not allocated!");
 	}
 
-	double* iao = aos;
-	double* jao = aos;
-	double* ix = ao1xs;
-	double* jx = ao1xs;
-	double* iy = ao1ys;
-	double* jy = ao1ys;
-	double* iz = ao1zs;
-	double* jz = ao1zs;
-	double* iao2 = ao2ls;
-	double* jao2 = ao2ls;
-	double Dij;
-	std::vector<double> Dij_iao(ngrids);
-	std::vector<double> Dij_jao(ngrids);
-	for ( int ibasis = 0; ibasis < D.cols(); ibasis++ ){
-		Dij = D(ibasis, ibasis);
+	long int ngrids0 = ngrids; // Dummy arrays to prevent the main body from being damaged by parallism.
+	long int ngrids1 = ngrids;
+	long int ngrids2 = ngrids;
+	if (!zeroth){
+		ngrids0 = 1;
+		ds = new double();
+	}
+	if (!first){
+		ngrids1 = 1;
+		d1xs = new double();
+		d1ys = new double();
+		d1zs = new double();
+	}
+	if (!second){
+		ngrids2 = 1;
+		ts = new double();
+		d2s = new double();
+	}
+
+	std::vector<int> basis_sequence(D.cols());
+	for ( int i = 0; i <= ( D.cols() - 1 ) / 2 ; i++ ){
+		basis_sequence[2 * i] = D.cols() - i - 1;
+		if ( 2 * i + 1 < D.cols() ) basis_sequence[2 * i + 1] = i;
+	}
+
+	std::vector<double> Dij_iao;
+	std::vector<double> Dij_jao;
+	if (zeroth || first || second){
+		Dij_iao.resize(ngrids);
+		Dij_jao.resize(ngrids);
+	}
+
+	#pragma omp parallel for schedule(dynamic,2)\
+	reduction(+:\
+			ds[:ngrids0],\
+			d1xs[:ngrids1], d1ys[:ngrids1], d1zs[:ngrids1],\
+			ts[:ngrids2], d2s[:ngrids2]\
+	)\
+	num_threads(nthreads)\
+	firstprivate(Dij_iao, Dij_jao)
+	for ( int i = 0; i < D.cols(); i++ ){
+		int ibasis = basis_sequence[i];
+		double Dij = D(ibasis, ibasis);
+		double *iao{}, *ix{}, *iy{}, *iz{}, *iao2{};
 		if (zeroth) iao = aos + ibasis * ngrids; // ibasis*ngrids+jgrid
 		if (first){
 			ix = ao1xs + ibasis * ngrids;
@@ -86,8 +117,9 @@ void GetDensity(
 			ts[kgrid] += 0.5 * Dij * ( ix[kgrid] * ix[kgrid] + iy[kgrid] * iy[kgrid] + iz[kgrid] * iz[kgrid] );
 			d2s[kgrid] += 2 * Dij_iao[kgrid] * iao2[kgrid];
 		}
-		for ( int jbasis = 0; jbasis < ibasis; jbasis++ ){
+		for ( int jbasis = ibasis - 1; jbasis >=0; jbasis-- ){
 			Dij = D(ibasis, jbasis);
+			double *jao{}, *jx{}, *jy{}, *jz{}, *jao2{};
 			if (zeroth) jao = aos + jbasis * ngrids;
 			if (first){
 				jx = ao1xs + jbasis * ngrids;
@@ -114,6 +146,17 @@ void GetDensity(
 	}
 	if (second) for ( long int igrid = 0; igrid < ngrids; igrid++ )
 		d2s[igrid] += 4 * ts[igrid];
+
+	if (!zeroth) delete ds; // Cleaning the dummy arrays.
+	if (!first){
+		delete d1xs;
+		delete d1ys;
+		delete d1zs;
+	}
+	if (!second){
+		delete ts;
+		delete d2s;
+	}
 }
 
 /*
@@ -654,5 +697,3 @@ void GetDensitySkeleton2(
 		}
 	}
 }
-
-

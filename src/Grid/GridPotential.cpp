@@ -63,7 +63,7 @@ EigenMatrix VMatrix(
 	double* iao2 = ao2ls;
 	double* jao2 = ao2ls;
 	EigenMatrix Fxc = EigenZero(nbasis, nbasis);
-	for ( int irow=0; irow < nbasis; irow++ ){
+	for ( int irow = 0; irow < nbasis; irow++ ){
 		if (zeroth || first || second) iao = aos + irow * ngrids;
 		if (first || second){
 			ix = ao1xs + irow * ngrids;

@@ -57,9 +57,8 @@ std::vector<EigenMatrix> GhfMultiple(
 				vvvD[i][j](k) = Ds[k](i, j);
 		}
 	}
-	omp_set_num_threads(nthreads);
 	#pragma omp declare reduction(vvv_reduction: std::vector<std::vector<EigenArray>>: GhfMultipleReduction(omp_out, omp_in)) initializer(omp_priv = omp_orig)
-	#pragma omp parallel for reduction(vvv_reduction: vvvrawJ, vvvrawK)
+	#pragma omp parallel for reduction(vvv_reduction: vvvrawJ, vvvrawK) num_threads(nthreads)
 	for ( int ithread = 0; ithread < nthreads; ithread++ ){
 		const long int head = heads[ithread];
 		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
@@ -107,12 +106,12 @@ EigenMatrix Ghf(
 		short int* is, short int* js, short int* ks, short int* ls,
 		char* degs, double* ints, long int length,
 		EigenMatrix D, double kscale, int nthreads){
+	Eigen::setNbThreads(1);
 	std::vector<long int> heads = getThreadPointers(length, nthreads);
 	EigenMatrix rawJ = EigenZero(D.rows(), D.cols());
 	EigenMatrix rawK = EigenZero(D.rows(), D.cols());
-	omp_set_num_threads(nthreads);
 	#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
-	#pragma omp parallel for reduction(EigenMatrixSum: rawJ, rawK)
+	#pragma omp parallel for reduction(EigenMatrixSum: rawJ, rawK) num_threads(nthreads)
 	for ( int ithread = 0; ithread < nthreads; ithread++ ){
 		const long int head = heads[ithread];
 		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
@@ -138,6 +137,7 @@ EigenMatrix Ghf(
 			}
 		}
 	}
+	Eigen::setNbThreads(nthreads);
 	const EigenMatrix J = 0.5 * ( rawJ + rawJ.transpose() );
 	const EigenMatrix K = 0.25 * ( rawK + rawK.transpose() );
 	return J - 0.5 * kscale * K;
@@ -159,7 +159,8 @@ std::tuple<double, EigenMatrix> Gxc(
 		double* lapls, double* taus,
 		double* es,
 		double* erhos, double* esigmas,
-		double* elapls, double* etaus){
+		double* elapls, double* etaus,
+		int nthreads){
 
 	// Step 1: Checking AOs
 	if ( xc.XCfamily.compare("LDA") == 0 ){
@@ -211,7 +212,8 @@ std::tuple<double, EigenMatrix> Gxc(
 			rho1ys + ngrids * iD,
 			rho1zs + ngrids * iD,
 			lapls + ngrids * iD,
-			taus + ngrids * iD);
+			taus + ngrids * iD,
+			nthreads);
 	if (std::find(dorders.begin(), dorders.end(), 1) != dorders.end()){
 		if ( Ds.size() == 1 )
 			for ( long int igrid = 0; igrid < ngrids; igrid++ )
@@ -301,7 +303,8 @@ std::tuple<EigenMatrix, EigenMatrix, double> Multiwfn::calcFock(EigenMatrix D, i
 			this->Lapls, this->Taus,
 			this->Es,
 			this->E1Rhos, this->E1Sigmas,
-			nullptr, nullptr);
+			nullptr, nullptr,
+			nthreads);
 	return std::make_tuple(Fhf, Fxc, Exc);
 }
 

@@ -2,7 +2,7 @@ Flags = $(GeneralFlags) $(EIGEN3Flags)
 
 .PHONY: all
 
-all: GuessSCF FockFormation SelfConsistentField HFKSDerivative CoupledPerturbed
+all: GuessSCF FockFormation SelfConsistentField HFKSDerivative CoupledPerturbed Parallel
 
 GuessSCF: GuessSCF.cpp
 	$(CXX) -o ../../obj/GuessSCF.o GuessSCF.cpp -c $(Flags)
@@ -18,3 +18,6 @@ HFKSDerivative: HFKSDerivative.cpp
 
 CoupledPerturbed: CoupledPerturbed.cpp
 	$(CXX) -o ../../obj/CoupledPerturbed.o CoupledPerturbed.cpp -c $(Flags)
+
+Parallel: Parallel.cpp
+	$(CXX) -o ../../obj/Parallel.o Parallel.cpp -c $(Flags)
