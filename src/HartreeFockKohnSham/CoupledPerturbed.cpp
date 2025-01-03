@@ -19,7 +19,7 @@
 #include "FockFormation.h"
 #include "Parallel.h"
 
-#define __Occupation_Cutoff__ 1.e-3
+#define __Occupation_Cutoff__ 1.e-4
 
 #define __Allocate_and_Zero__(array)\
 	if (array) std::memset(array, 0, ngrids * sizeof(double));\

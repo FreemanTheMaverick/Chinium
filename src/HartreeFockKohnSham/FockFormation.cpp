@@ -10,6 +10,7 @@
 #include "../Multiwfn.h"
 #include "../Grid/GridDensity.h"
 #include "../Grid/GridPotential.h"
+#include "Parallel.h"
 
 #include <iostream>
 
@@ -26,14 +27,6 @@ std::vector<long int> getThreadPointers(long int nitems, int nthreads){
 	return heads;
 }
 
-void GhfMultipleReduction(
-		std::vector<std::vector<EigenArray>>& omp_out,
-		std::vector<std::vector<EigenArray>>& omp_in){
-	for ( int i = 0; i < (int)omp_out.size(); i++ )
-		for ( int j = 0; j < (int)omp_out[i].size(); j++ )
-			omp_out[i][j] += omp_in[i][j];
-}
-
 std::vector<EigenMatrix> GhfMultiple(
 		short int* is, short int* js, short int* ks, short int* ls,
 		char* degs, double* ints, long int length,
@@ -42,23 +35,11 @@ std::vector<EigenMatrix> GhfMultiple(
 	const int nbasis = Ds[0].rows();
 	const int nmatrices = Ds.size();
 	const int nmatrices_redun = std::ceil((double)nmatrices / 8.) * 8;
-	std::vector<std::vector<EigenArray>> vvvD(nbasis);
-	std::vector<std::vector<EigenArray>> vvvrawJ(nbasis);
-	std::vector<std::vector<EigenArray>> vvvrawK(nbasis);
-	for ( int i = 0; i < nbasis; i++ ){
-		vvvD[i].resize(nbasis);
-		vvvrawJ[i].resize(nbasis);
-		vvvrawK[i].resize(nbasis);
-		for ( int j = 0; j < nbasis; j++ ){
-			vvvD[i][j] = EigenZero(nmatrices_redun, 1).array();
-			vvvrawJ[i][j] = EigenZero(nmatrices_redun, 1).array();
-			vvvrawK[i][j] = EigenZero(nmatrices_redun, 1).array();
-			for ( int k = 0; k < nmatrices; k++ )
-				vvvD[i][j](k) = Ds[k](i, j);
-		}
-	}
-	#pragma omp declare reduction(vvv_reduction: std::vector<std::vector<EigenArray>>: GhfMultipleReduction(omp_out, omp_in)) initializer(omp_priv = omp_orig)
-	#pragma omp parallel for reduction(vvv_reduction: vvvrawJ, vvvrawK) num_threads(nthreads)
+	std::vector<std::vector<EigenArray>> Darrays = Matrices2Arrays(Ds, nmatrices_redun);
+	std::vector<std::vector<EigenArray>> rawJarrays = MultipleMatrixInitialization(nmatrices_redun, nbasis, nbasis);
+	std::vector<std::vector<EigenArray>> rawKarrays = MultipleMatrixInitialization(nmatrices_redun, nbasis, nbasis);
+	#pragma omp declare reduction(Sum: std::vector<std::vector<EigenArray>>: MultipleMatrixReduction(omp_out, omp_in)) initializer(omp_priv = omp_orig)
+	#pragma omp parallel for reduction(Sum: rawJarrays, rawKarrays) firstprivate(Darrays) num_threads(nthreads)
 	for ( int ithread = 0; ithread < nthreads; ithread++ ){
 		const long int head = heads[ithread];
 		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
@@ -74,33 +55,26 @@ std::vector<EigenMatrix> GhfMultiple(
 			const short int k = *(kranger++);
 			const short int l = *(lranger++);
 			const double deg_value = *(degranger++) * *(repulsionranger++);
-			vvvrawJ[i][j] += vvvD[k][l] * deg_value;
-			vvvrawJ[k][l] += vvvD[i][j] * deg_value;
+			rawJarrays[i][j] += Darrays[k][l] * deg_value;
+			rawJarrays[k][l] += Darrays[i][j] * deg_value;
 			if ( kscale > 0. ){
-				vvvrawK[i][k] += vvvD[j][l] * deg_value;
-				vvvrawK[j][l] += vvvD[i][k] * deg_value;
-				vvvrawK[i][l] += vvvD[j][k] * deg_value;
-				vvvrawK[j][k] += vvvD[i][l] * deg_value;
+				rawKarrays[i][k] += Darrays[j][l] * deg_value;
+				rawKarrays[j][l] += Darrays[i][k] * deg_value;
+				rawKarrays[i][l] += Darrays[j][k] * deg_value;
+				rawKarrays[j][k] += Darrays[i][l] * deg_value;
 			}
 		}
 	}
+	std::vector<EigenMatrix> rawJs = Arrays2Matrices(rawJarrays, nmatrices);
+	std::vector<EigenMatrix> rawKs = Arrays2Matrices(rawKarrays, nmatrices);
 	std::vector<EigenMatrix> rawGs(nmatrices, EigenZero(nbasis, nbasis));
 	for ( int k = 0; k < nmatrices; k++ ){
-		EigenMatrix rawJ = EigenZero(nbasis, nbasis);
-		EigenMatrix rawK = EigenZero(nbasis, nbasis);
-		for ( int i = 0; i < nbasis; i++ ){
-			for ( int j = 0; j < nbasis; j++ ){
-				rawJ(i, j) = vvvrawJ[i][j](k);
-				rawK(i, j) = vvvrawK[i][j](k);
-			}
-		}
-		const EigenMatrix J = 0.5 *  ( rawJ + rawJ.transpose() );
-		const EigenMatrix K = 0.25 * ( rawK + rawK.transpose() );
+		const EigenMatrix J = 0.5 *  ( rawJs[k] + rawJs[k].transpose() );
+		const EigenMatrix K = 0.25 * ( rawKs[k] + rawKs[k].transpose() );
 		rawGs[k] = J - 0.5 * kscale * K;
 	}
 	return rawGs;
 }
-
 
 EigenMatrix Ghf(
 		short int* is, short int* js, short int* ks, short int* ls,
