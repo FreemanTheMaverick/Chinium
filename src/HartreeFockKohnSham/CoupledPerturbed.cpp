@@ -131,6 +131,7 @@ std::tuple<
 		}
 		for ( int imatrix = 0; imatrix < nmatrices; imatrix++ )
 			Ds[imatrix] += D_raw_arrays[imatrix];
+		delete [] D_raw_arrays;
 		Eigen::setNbThreads(nthreads);
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] )
 			undoneDs[jundone++] = Ds[imatrix];
