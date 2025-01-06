@@ -1,5 +1,5 @@
-nprocs
-1
+nthreads
+8
 
 xyz
 7
@@ -18,16 +18,16 @@ spin
 1
 
 grid
-sg-1
+SG-1
 
 guess
-sad
+sap
 
 method
 b3lyp
 
 basis
-6-31g**
+6-31g2
 
 derivative
 1

@@ -1,11 +1,11 @@
-nprocs
+nthreads
 1
 
 xyz
 3
-O    0    0.       0.
+O    0     0.      0.
 H    0    -0.757   0.587
-H    0    0.757    0.587
+H    0     0.757   0.587
 
 charge
 0
@@ -14,16 +14,19 @@ spin
 1
 
 guess
-core
+read
 
 grid
-sg-1
+SG-3
 
 method
-rhf
+b3lyp
 
 basis
-cc-pvqz
+read
+
+temperature
+0.1
 
 derivative
-1
+2

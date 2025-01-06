@@ -1,4 +1,4 @@
-nprocs
+nthreads
 8
 
 xyz
@@ -35,7 +35,7 @@ method
 rhf
 
 grid
-sg-2
+SG-2
 
 basis
 cc-pvdz
