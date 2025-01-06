@@ -16,7 +16,7 @@ int main(int argc, char* argv[]){ (void)argc;
 	std::string inp = argv[1];
 	std::string job_name = inp;
 	size_t suffix_pos = inp.find_last_of('.');
-	if ( suffix_pos != std::string::npos ) job_name.substr(0, suffix_pos);
+	if ( suffix_pos != std::string::npos ) job_name = job_name.substr(0, suffix_pos);
 	std::string mwfn_name = job_name + ".mwfn";
 
 	// Reading input file
@@ -37,12 +37,27 @@ int main(int argc, char* argv[]){ (void)argc;
 	if ( atoms.empty() || basis.empty() || guess.compare("READ") == 0 )
 		mwfn = Multiwfn(mwfn_name, 1);
 
-	// Configuration following input file
+	// Atoms and basis
 	if ( !atoms.empty() ){
-		mwfn.setCenters(atoms, 1);
-		mwfn.PrintCenters();
+		if ( !basis.empty() ){
+			mwfn.setCenters(atoms, 1);
+			mwfn.setBasis(basis, 1);
+		}else{
+			assert( mwfn.getNumCenters() == (int)atoms.size() && "Different numbers of atoms between the input file and the read mwfn file!" );
+			for ( int iatom = 0; iatom < mwfn.getNumCenters(); iatom++ ){
+				mwfn.Centers[iatom].Index = (int)atoms[iatom][0];
+				mwfn.Centers[iatom].Nuclear_charge = atoms[iatom][1];
+				mwfn.Centers[iatom].Coordinates[0] = atoms[iatom][2];
+				mwfn.Centers[iatom].Coordinates[1] = atoms[iatom][3];
+				mwfn.Centers[iatom].Coordinates[2] = atoms[iatom][4];
+			}
+		}
+	}else{ // If atoms are not specified in the input file
+		if ( !basis.empty() ) mwfn.setBasis(basis, 1);
+		// Else do nothing (just keep the existent atoms and basis in the mwfn)
 	}
-	if ( !basis.empty() ) mwfn.setBasis(basis, 1);
+	mwfn.PrintCenters();
+
 	if ( !grid.empty() ) mwfn.GenerateGrid(grid, 1);
 
 	// FT-DFT related
