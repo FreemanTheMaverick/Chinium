@@ -6,23 +6,22 @@
 #include <cstdio>
 #include <chrono>
 #include <cassert>
+#include <memory>
+#include <Maniverse/Manifold/Orthogonal.h>
+#include <Maniverse/Optimizer/TrustRegion.h>
 
 #include "../Macro.h"
-#include "../Manifold/Orthogonal.h"
-#include "../Optimization/Ox.h"
 
 #include <iostream>
 
-#define test(X) std::cout<<"X "<<X.rows()<<" "<<X.cols()<<std::endl;
 
 EigenMatrix FosterBoys(
 		EigenMatrix Cref,
 		EigenMatrix Wxao, EigenMatrix Wyao, EigenMatrix Wzao,
 		EigenMatrix W2aoSum, int output){
-	double L = 0;
 	const EigenMatrix kappa = Eigen::MatrixXd::Random(Cref.cols(), Cref.cols()) / 10 ;
 	const EigenMatrix p = ( kappa - kappa.transpose() ).exp();
-	Orthogonal M = Orthogonal(p);
+	Orthogonal M = Orthogonal(p, 1);
 	const EigenMatrix Wxref = Cref.transpose() * Wxao * Cref;
 	const EigenMatrix Wyref = Cref.transpose() * Wyao * Cref;
 	const EigenMatrix Wzref = Cref.transpose() * Wzao * Cref;
@@ -33,8 +32,8 @@ EigenMatrix FosterBoys(
 			double,
 			EigenMatrix,
 			std::function<EigenMatrix (EigenMatrix)>
-		>(EigenMatrix)
-	> func = [Wxref, Wyref, Wzref, W2refSum](EigenMatrix U){
+		>(EigenMatrix, int)
+	> func = [Wxref, Wyref, Wzref, W2refSum](EigenMatrix U, int order){
 		const EigenMatrix Wx = U.transpose() * Wxref * U;
 		const EigenMatrix Wy = U.transpose() * Wyref * U;
 		const EigenMatrix Wz = U.transpose() * Wzref * U;
@@ -60,7 +59,8 @@ EigenMatrix FosterBoys(
 		const EigenMatrix UTWxref = U.transpose() * Wxref;
 		const EigenMatrix UTWyref = U.transpose() * Wyref;
 		const EigenMatrix UTWzref = U.transpose() * Wzref;
-		const std::function<EigenMatrix (EigenMatrix)> He = [
+		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix v){ return v; };
+		if ( order == 2) He = [
 			DiagWx, DiagWy, DiagWz,
 			twoW2refSum,
 			fourWxref, fourWyref, fourWzref,
@@ -80,6 +80,14 @@ EigenMatrix FosterBoys(
 		return std::make_tuple(L, Ge, He);
 	};
 
-	assert( Ox( func, {1.e-6, 1.e-4, 1.e-7}, 100, L, M, output) && "Convergence failed!" );
+	double L = 0;
+	TrustRegionSetting tr_setting;
+	assert(
+			TrustRegion(
+				func, tr_setting, {1.e-6, 1.e-4, 1.e-7},
+				1, 100, L, M, output
+			) && "Convergence Failed!"
+	);
+
 	return M.P;
 }

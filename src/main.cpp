@@ -103,7 +103,7 @@ int main(int argc, char* argv[]){ (void)argc;
 		} // if ( method.compare("RHF") != 0 || guess.compare("SAP") == 0 )
 		if ( guess.compare("READ") != 0 ) mwfn.GuessSCF(guess, 1);
 		mwfn.setOccupation((EigenVector)(EigenZero(nelec / 2, 1).array() + 2).matrix());
-		mwfn.HartreeFockKohnSham(2, nthreads);
+		mwfn.HartreeFockKohnSham(4, nthreads);
 		std::printf("Total energy: %17.10f\n", mwfn.E_tot);
 		mwfn.PrintOrbitals();
 		mwfn.Export(mwfn_name, 1);

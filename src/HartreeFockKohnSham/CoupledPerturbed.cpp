@@ -11,7 +11,7 @@
 
 #include "../Macro.h"
 #include "../Multiwfn.h"
-#include "../Optimization/DIIS.h"
+#include "../DIIS.h"
 #include "../Grid/GridAO.h"
 #include "../Grid/GridDensity.h"
 #include "../ExchangeCorrelation/MwfnXC1.h"

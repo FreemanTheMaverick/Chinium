@@ -1,19 +1,18 @@
 .PHONY: all
 
-all: MAIN GATEWAY GRID OPTIMIZATION HARTREEFOCKKOHNSHAM MULTIWFN INTEGRAL LOCALIZATION MANIFOLD EXCHANGECORRELATION
-#all: MAIN
+all: MAIN GATEWAY DIIS GRID HARTREEFOCKKOHNSHAM MULTIWFN INTEGRAL LOCALIZATION EXCHANGECORRELATION
 
 MAIN: main.cpp
 	$(CXX) -o ../obj/main.o main.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
 GATEWAY: Gateway.cpp
 	$(CXX) -o ../obj/Gateway.o Gateway.cpp -c $(GeneralFlags) $(EIGEN3Flags)
-	
+
+DIIS: DIIS.cpp
+	$(CXX) -o ../obj/DIIS.o DIIS.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(MANIVERSEFlags)
+
 EXCHANGECORRELATION:
 	$(MAKE) -C ExchangeCorrelation
-
-OPTIMIZATION:
-	$(MAKE) -C Optimization
 
 HARTREEFOCKKOHNSHAM:
 	$(MAKE) -C HartreeFockKohnSham
@@ -29,6 +28,3 @@ GRID:
 
 LOCALIZATION:
 	$(MAKE) -C Localization
-
-MANIFOLD:
-	$(MAKE) -C Manifold

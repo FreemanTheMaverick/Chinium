@@ -1,4 +1,4 @@
-Flags = $(GeneralFlags) $(EIGEN3Flags)
+Flags = $(GeneralFlags) $(EIGEN3Flags) $(MANIVERSEFlags)
 
 .PHONY: all
 

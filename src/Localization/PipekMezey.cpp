@@ -6,28 +6,27 @@
 #include <cstdio>
 #include <chrono>
 #include <cassert>
+#include <memory>
+#include <Maniverse/Manifold/Orthogonal.h>
+#include <Maniverse/Optimizer/TrustRegion.h>
 
 #include "../Macro.h"
-#include "../Manifold/Orthogonal.h"
-#include "../Optimization/Ox.h"
 
 #include <iostream>
 
-#define test(X) std::cout<<"X "<<X.rows()<<" "<<X.cols()<<std::endl;
 
 EigenMatrix PipekMezey(std::vector<EigenMatrix> Qrefs, int output){
-	double L = 0;
 	const EigenMatrix kappa = Eigen::MatrixXd::Random(Qrefs[0].cols(), Qrefs[0].cols()) / 100000000 ;
 	const EigenMatrix p = ( kappa - kappa.transpose() ).exp();
-	Orthogonal M = Orthogonal(p);
+	Orthogonal M = Orthogonal(p, 1);
 
 	std::function<
 		std::tuple<
 			double,
 			EigenMatrix,
 			std::function<EigenMatrix (EigenMatrix)>
-		>(EigenMatrix)
-	> func = [Qrefs](EigenMatrix U){
+		>(EigenMatrix, int)
+	> func = [Qrefs](EigenMatrix U, int order){
 
 		std::vector<EigenDiagonal> Qdiags(Qrefs.size());
 		for ( int i = 0; i < (int)Qrefs.size(); i++ )
@@ -45,7 +44,8 @@ EigenMatrix PipekMezey(std::vector<EigenMatrix> Qrefs, int output){
 		std::vector<EigenMatrix> QrefUs(Qrefs.size());
 		for ( int i = 0; i < (int)Qrefs.size(); i++ )
 			QrefUs[i] = Qrefs[i] * U;
-		const std::function<EigenMatrix (EigenMatrix)> He = [Qdiags, Qrefs, QrefUs](EigenMatrix v){
+		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix v){ return v; };
+		if ( order == 2) He = [Qdiags, Qrefs, QrefUs](EigenMatrix v){
 			EigenMatrix hess1 = EigenZero(v.rows(), v.cols());
 			EigenMatrix hess2 = EigenZero(v.rows(), v.cols());
 			for ( int i = 0; i < (int)Qrefs.size(); i++ ){
@@ -58,6 +58,14 @@ EigenMatrix PipekMezey(std::vector<EigenMatrix> Qrefs, int output){
 		return std::make_tuple(L, Ge, He);
 	};
 
-	assert( Ox( func, {1.e-6, 1.e-4, 1.e-7}, 100, L, M, output) && "Convergence failed!" );
+	double L = 0;
+	TrustRegionSetting tr_setting;
+	assert(
+			TrustRegion(
+				func, tr_setting, {1.e-6, 1.e-4, 1.e-7},
+				1, 100, L, M, output
+			) && "Convergence Failed!"
+	);
+
 	return M.P;
 }
