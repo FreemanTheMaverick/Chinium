@@ -14,19 +14,19 @@ spin
 1
 
 guess
-read
+sap
 
 grid
 SG-3
 
 method
-b3lyp
+rhf
 
 basis
-read
+cc-pvdz
 
-temperature
-0.1
+atemperature
+0.0000000000000000001
 
 derivative
-2
+1

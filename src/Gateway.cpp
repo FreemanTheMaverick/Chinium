@@ -140,6 +140,26 @@ std::string ReadJobType(std::string inp){
 	return jobtype;
 }
 
+std::string ReadSCF(std::string inp){
+	std::ifstream file(inp);
+	std::string thisline;
+	bool found = 0;
+	std::string scf = "DIIS";
+	while ( std::getline(file, thisline) && ! found ){
+		__To_Upper__(thisline);
+		if ( thisline.compare("SCFTYPE") == 0 ){
+			found = 1;
+			std::getline(file, thisline);
+			__To_Upper__(thisline);
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing SCF TYPE!");
+			std::stringstream ss(thisline);
+			ss >> scf;
+		}
+	}
+	if ( scf.compare("DIIS") != 0 && scf.compare("NEWTON") != 0 && scf.compare("QUASI") != 0 ) throw std::runtime_error("Invalid SCF type!");
+	return scf;
+}
+
 std::string ReadGuess(std::string inp){
 	std::ifstream file(inp);
 	std::string thisline;

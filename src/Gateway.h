@@ -8,6 +8,8 @@ int ReadNumThreads(std::string inp);
 
 std::string ReadJobType(std::string inp);
 
+std::string ReadSCF(std::string inp);
+
 std::string ReadGuess(std::string inp);
 
 std::string ReadGrid(std::string inp);

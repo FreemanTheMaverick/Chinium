@@ -16,12 +16,15 @@
 #include <iostream>
 
 
-EigenMatrix getRepulsionDiag(libint2::BasisSet& obs){ // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
+std::tuple<EigenMatrix, EigenMatrix> getRepulsionDiag(libint2::BasisSet& obs){ // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
 	const int nbasis = libint2::nbf(obs);
-	EigenMatrix repulsiondiag(nbasis, nbasis);
+	EigenMatrix Diag1212 = EigenZero(nbasis, nbasis);
+	EigenMatrix Diag1122 = EigenZero(nbasis, nbasis);
 	libint2::initialize();
-	libint2::Engine engine(libint2::Operator::coulomb, obs.max_nprim(), obs.max_l());
-	const auto& buf_vec = engine.results();
+	libint2::Engine engine1212(libint2::Operator::coulomb, obs.max_nprim(), obs.max_l());
+	libint2::Engine engine1122(libint2::Operator::coulomb, obs.max_nprim(), obs.max_l());
+	const auto& buf_vec1212 = engine1212.results();
+	const auto& buf_vec1122 = engine1122.results();
 	const auto shell2bf = obs.shell2bf();
 	for ( short int s1 = 0; s1 < (short int)obs.size(); s1++ ){
 		const short int bf1_first = shell2bf[s1];
@@ -29,11 +32,9 @@ EigenMatrix getRepulsionDiag(libint2::BasisSet& obs){ // Computing the diagonal 
 		for ( short int s2 = 0; s2 <= s1; s2++ ){
 			const short int bf2_first = shell2bf[s2];
 			const short int n2 = obs[s2].size();
-			engine.compute(obs[s1], obs[s2], obs[s1], obs[s2]); // Computing the integrals in the shell quartet (12|12).
-			const auto* buf_1234 = buf_vec[0];
-			if ( buf_1234 == nullptr ){
-				continue;
-			}
+			engine1212.compute(obs[s1], obs[s2], obs[s1], obs[s2]); // Computing the integrals in the shell quartet (12|12).
+			const auto* buf_1212 = buf_vec1212[0];
+			if ( buf_1212 == nullptr ) goto CALC1122;
 			for ( short int f1 = 0, f1234 = 0; f1 < n1; f1++ ){ // Integrals are stored in buffer as four-dimensional tensor.
 				const short int bf1 = f1 + bf1_first;
 				for ( short int f2 = 0; f2 < n2; f2++ ){
@@ -43,8 +44,27 @@ EigenMatrix getRepulsionDiag(libint2::BasisSet& obs){ // Computing the diagonal 
 						for ( short int f4 = 0; f4 < n2; f4++, f1234++ ){
 							const short int bf4 = f4 + bf2_first;
 							if ( bf1 == bf3 && bf2 == bf4 && bf1 >= bf2 ){ // Considering only the unique diagonal elements with (bf1==bf3 && bf2==bf4).
-								repulsiondiag(bf1, bf2) = buf_1234[f1234]; // Repulsion diagonal integral matrix is symmetric.
-								repulsiondiag(bf2, bf1) = buf_1234[f1234];
+								Diag1212(bf1, bf2) = buf_1212[f1234]; // Repulsion diagonal integral matrix is symmetric.
+								Diag1212(bf2, bf1) = buf_1212[f1234];
+							}
+						}
+					}
+				}
+			}
+			CALC1122: engine1122.compute(obs[s1], obs[s1], obs[s2], obs[s2]); // Computing the integrals in the shell quartet (11|22).
+			const auto* buf_1122 = buf_vec1122[0];
+			if ( buf_1122 == nullptr ) continue;
+			for ( short int f1 = 0, f1234 = 0; f1 < n1; f1++ ){ // Integrals are stored in buffer as four-dimensional tensor.
+				const short int bf1 = f1 + bf1_first;
+				for ( short int f2 = 0; f2 < n2; f2++ ){
+					const short int bf2 = f2 + bf2_first;
+					for ( short int f3 = 0; f3 < n1; f3++ ){
+						const short int bf3 = f3 + bf1_first;
+						for ( short int f4 = 0; f4 < n2; f4++, f1234++ ){
+							const short int bf4 = f4 + bf2_first;
+							if ( bf1 == bf3 && bf2 == bf4 && bf1 >= bf2 ){ // Considering only the unique diagonal elements with (bf1==bf3 && bf2==bf4).
+								Diag1122(bf1, bf2) = buf_1122[f1234]; // Repulsion diagonal integral matrix is symmetric.
+								Diag1122(bf2, bf1) = buf_1122[f1234];
 							}
 						}
 					}
@@ -53,7 +73,7 @@ EigenMatrix getRepulsionDiag(libint2::BasisSet& obs){ // Computing the diagonal 
 		}
 	}
 	libint2::finalize();
-	return repulsiondiag;
+	return std::make_tuple(Diag1212, Diag1122);
 }
 
 std::tuple<long int, long int> getRepulsionLength(libint2::BasisSet& obs, EigenMatrix repulsiondiag, double threshold){ // Numbers of nonequivalent two-electron integrals and shell quartets after Cauchy-Schwarz screening.
@@ -480,17 +500,17 @@ void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthre
 	const long int nshells = obs.size();
 	auto start = __now__;
 
-	if (this->RepulsionDiag.cols() == 0){
+	if (std::get<0>(this->RepulsionDiags).cols() == 0){
 		if (output) std::printf("Calculating diagonal elements of repulsion integrals ... ");
 		start = __now__;
-		this->RepulsionDiag = getRepulsionDiag(obs);
+		this->RepulsionDiags = getRepulsionDiag(obs);
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 	}
 
 	if (this->RepulsionLength == 0 || this->ShellQuartetLength == 0){
 		if (output) std::printf("Calculating numbers of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
 		start = __now__;
-		std::tie(this->RepulsionLength, this->ShellQuartetLength) = getRepulsionLength(obs, this->RepulsionDiag, threshold);
+		std::tie(this->RepulsionLength, this->ShellQuartetLength) = getRepulsionLength(obs, std::get<0>(this->RepulsionDiags), threshold);
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 		if (output) std::printf("Before screening: %ld integrals and %ld shell quartets\n", nbasis*(nbasis+1)*(nbasis*(nbasis+1)/2+1)/4, nshells*(nshells+1)*(nshells*(nshells+1)/2+1)/4);
 		if (output) std::printf("After screening: %ld integrals and %ld shell quartets\n", this->RepulsionLength, this->ShellQuartetLength);
@@ -505,7 +525,7 @@ void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthre
 		if (!this->ShellKs) this->ShellKs = new short int[this->ShellQuartetLength];
 		if (!this->ShellLs) this->ShellLs = new short int[this->ShellQuartetLength];
 		getRepulsionIndices(
-				obs, this->RepulsionDiag, threshold,
+				obs, std::get<0>(this->RepulsionDiags), threshold,
 				this->ShellIs, this->ShellJs,
 				this->ShellKs, this->ShellLs);
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));

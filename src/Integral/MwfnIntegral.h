@@ -27,7 +27,7 @@
 	void getTwoCenter(std::vector<int> orders, const bool output);
 
 	// Four-center integrals
-	EigenMatrix RepulsionDiag;
+	std::tuple<EigenMatrix, EigenMatrix> RepulsionDiags;
 	long int ShellQuartetLength = 0;
 	short int* ShellIs = nullptr;
 	short int* ShellJs = nullptr;

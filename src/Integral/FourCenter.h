@@ -1,4 +1,4 @@
-EigenMatrix getRepulsionDiag(libint2::BasisSet& obs); // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
+std::tuple<EigenMatrix, EigenMatrix> getRepulsionDiag(libint2::BasisSet& obs); // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
 
 std::tuple<long int, long int> getRepulsionLength(libint2::BasisSet& obs, EigenMatrix repulsiondiag, double threshold); // Numbers of nonequivalent two-electron integrals and shell quartets after Cauchy-Schwarz screening.
 

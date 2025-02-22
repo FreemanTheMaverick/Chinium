@@ -25,6 +25,7 @@ int main(int argc, char* argv[]){ (void)argc;
 	const int nelec = ReadNumElectrons(inp);
 	const int nthreads = ReadNumThreads(inp);
 	const std::string jobtype = ReadJobType(inp);
+	const std::string scf = ReadSCF(inp);
 	const std::string guess = ReadGuess(inp);
 	const std::string grid = ReadGrid(inp);
 	const std::string method = ReadMethod(inp);
@@ -103,7 +104,7 @@ int main(int argc, char* argv[]){ (void)argc;
 		} // if ( method.compare("RHF") != 0 || guess.compare("SAP") == 0 )
 		if ( guess.compare("READ") != 0 ) mwfn.GuessSCF(guess, 1);
 		mwfn.setOccupation((EigenVector)(EigenZero(nelec / 2, 1).array() + 2).matrix());
-		mwfn.HartreeFockKohnSham(4, nthreads);
+		mwfn.HartreeFockKohnSham(scf, 4, nthreads);
 		std::printf("Total energy: %17.10f\n", mwfn.E_tot);
 		mwfn.PrintOrbitals();
 		mwfn.Export(mwfn_name, 1);
