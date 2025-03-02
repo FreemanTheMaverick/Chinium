@@ -29,7 +29,7 @@ std::vector<long int> getThreadPointers(long int nitems, int nthreads){
 
 std::vector<EigenMatrix> GhfMultiple(
 		short int* is, short int* js, short int* ks, short int* ls,
-		char* degs, double* ints, long int length,
+		double* ints, long int length,
 		std::vector<EigenMatrix>& Ds, double kscale, int nthreads){
 	std::vector<long int> heads = getThreadPointers(length, nthreads);
 	const int nbasis = Ds[0].rows();
@@ -47,21 +47,20 @@ std::vector<EigenMatrix> GhfMultiple(
 		short int* jranger = js + head;
 		short int* kranger = ks + head;
 		short int* lranger = ls + head;
-		char* degranger = degs + head;
 		double* repulsionranger = ints + head;
 		for ( long int iint = 0; iint < nints; iint++ ){
 			const short int i = *(iranger++);
 			const short int j = *(jranger++);
 			const short int k = *(kranger++);
 			const short int l = *(lranger++);
-			const double deg_value = *(degranger++) * *(repulsionranger++);
-			rawJarrays[i][j] += Darrays[k][l] * deg_value;
-			rawJarrays[k][l] += Darrays[i][j] * deg_value;
+			const double repulsion = *(repulsionranger++);
+			rawJarrays[i][j] += Darrays[k][l] * repulsion;
+			rawJarrays[k][l] += Darrays[i][j] * repulsion;
 			if ( kscale > 0. ){
-				rawKarrays[i][k] += Darrays[j][l] * deg_value;
-				rawKarrays[j][l] += Darrays[i][k] * deg_value;
-				rawKarrays[i][l] += Darrays[j][k] * deg_value;
-				rawKarrays[j][k] += Darrays[i][l] * deg_value;
+				rawKarrays[i][k] += Darrays[j][l] * repulsion;
+				rawKarrays[j][l] += Darrays[i][k] * repulsion;
+				rawKarrays[i][l] += Darrays[j][k] * repulsion;
+				rawKarrays[j][k] += Darrays[i][l] * repulsion;
 			}
 		}
 	}
@@ -78,7 +77,7 @@ std::vector<EigenMatrix> GhfMultiple(
 
 EigenMatrix Ghf(
 		short int* is, short int* js, short int* ks, short int* ls,
-		char* degs, double* ints, long int length,
+		double* ints, long int length,
 		EigenMatrix D, double kscale, int nthreads){
 	Eigen::setNbThreads(1);
 	std::vector<long int> heads = getThreadPointers(length, nthreads);
@@ -93,21 +92,20 @@ EigenMatrix Ghf(
 		short int* jranger = js + head;
 		short int* kranger = ks + head;
 		short int* lranger = ls + head;
-		char* degranger = degs + head;
 		double* repulsionranger = ints + head;
 		for ( long int iint = 0; iint < nints; iint++ ){
 			const short int i = *(iranger++);
 			const short int j = *(jranger++);
 			const short int k = *(kranger++);
 			const short int l = *(lranger++);
-			const double deg_value = *(degranger++) * *(repulsionranger++);
-			rawJ(i, j) += D(k, l) * deg_value;
-			rawJ(k, l) += D(i, j) * deg_value;
+			const double repulsion = *(repulsionranger++);
+			rawJ(i, j) += D(k, l) * repulsion;
+			rawJ(k, l) += D(i, j) * repulsion;
 			if ( kscale > 0. ){
-				rawK(i, k) += D(j, l) * deg_value;
-				rawK(j, l) += D(i, k) * deg_value;
-				rawK(i, l) += D(j, k) * deg_value;
-				rawK(j, k) += D(i, l) * deg_value;
+				rawK(i, k) += D(j, l) * repulsion;
+				rawK(j, l) += D(i, k) * repulsion;
+				rawK(i, l) += D(j, k) * repulsion;
+				rawK(j, k) += D(i, l) * repulsion;
 			}
 		}
 	}
@@ -258,9 +256,9 @@ std::tuple<double, EigenMatrix> Gxc(
 // Needs modification for unrestricted SCF
 std::tuple<EigenMatrix, EigenMatrix, double> Multiwfn::calcFock(EigenMatrix D, int nthreads){
 	const EigenMatrix Fhf = this->Kinetic + this->Nuclear + Ghf(
-		this->RepulsionIs, this->RepulsionJs,
-		this->RepulsionKs, this->RepulsionLs,
-		this->RepulsionDegs, this->Repulsions, this->RepulsionLength,
+		this->BasisIs.data(), this->BasisJs.data(),
+		this->BasisKs.data(), this->BasisLs.data(),
+		this->RepulsionInts.data(), this->RepulsionInts.size(),
 		D, this->XC.EXX, nthreads);
 	double Exc = 0;
 	EigenMatrix Fxc = EigenZero(Fhf.rows(), Fhf.cols());

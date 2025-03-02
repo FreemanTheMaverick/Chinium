@@ -28,18 +28,15 @@
 
 	// Four-center integrals
 	std::tuple<EigenMatrix, EigenMatrix> RepulsionDiags;
-	long int ShellQuartetLength = 0;
-	short int* ShellIs = nullptr;
-	short int* ShellJs = nullptr;
-	short int* ShellKs = nullptr;
-	short int* ShellLs = nullptr;
-	long int RepulsionLength = 0;
-	short int* RepulsionIs = nullptr;
-	short int* RepulsionJs = nullptr;
-	short int* RepulsionKs = nullptr;
-	short int* RepulsionLs = nullptr;
-	char* RepulsionDegs = nullptr;
-	double* Repulsions = nullptr;
+	std::vector<short int> ShellIs;
+	std::vector<short int> ShellJs;
+	std::vector<short int> ShellKs;
+	std::vector<short int> ShellLs;
+	std::vector<short int> BasisIs;
+	std::vector<short int> BasisJs;
+	std::vector<short int> BasisKs;
+	std::vector<short int> BasisLs;
+	std::vector<double> RepulsionInts;
 	std::vector<std::vector<EigenMatrix>> GGrads;
 	EigenMatrix GHess;
 	void getRepulsion(std::vector<int> orders, double threshold, int nthreads, const bool output);

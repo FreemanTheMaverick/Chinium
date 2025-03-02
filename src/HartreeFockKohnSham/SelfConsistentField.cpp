@@ -105,29 +105,28 @@ void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 	const EigenMatrix Z = this->getCoefficientMatrix();
 
 	const EigenMatrix Hcore = this->Kinetic + this->Nuclear;
-	short int* is = this->RepulsionIs;
-	short int* js = this->RepulsionJs;
-	short int* ks = this->RepulsionKs;
-	short int* ls = this->RepulsionLs;
-	char* degs = this->RepulsionDegs;
-	double* ints = this->Repulsions;
-	long int length = this->RepulsionLength;
+	short int* is = this->BasisIs.data();
+	short int* js = this->BasisJs.data();
+	short int* ks = this->BasisKs.data();
+	short int* ls = this->BasisLs.data();
+	double* ints = this->RepulsionInts.data();
+	long int length = this->RepulsionInts.size();
 	double E = 0;
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 
 	if ( scf.compare("NEWTON") == 0 || scf.compare("QUASI") == 0 ){
 		EigenMatrix Dprime = (this->getOccupation() / 2).asDiagonal();
 		Grassmann M = Grassmann(Dprime, 1);
-		const EigenMatrix HessApprox = Z.transpose() * ( 2 * std::get<0>(this->RepulsionDiags) - std::get<1>(this->RepulsionDiags) ) * Z;
+		//const EigenMatrix HessApprox = Z.transpose() * ( 2 * std::get<0>(this->RepulsionDiags) - std::get<1>(this->RepulsionDiags) ) * Z;
 		std::function<
 			std::tuple<
 				double,
 				EigenMatrix,
 				std::function<EigenMatrix (EigenMatrix)>
 			> (EigenMatrix, int)
-		> dfunc = [this, &eigensolver, scf, nocc, Z, Hcore, is, js, ks, ls, degs, ints, length, nthreads, HessApprox](EigenMatrix Dprime_, int order){
+		> dfunc = [this, &eigensolver, scf, nocc, Z, Hcore, is, js, ks, ls, ints, length, nthreads](EigenMatrix Dprime_, int order){
 			const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
-			const EigenMatrix F_ = Hcore + Ghf(is, js, ks, ls, degs, ints, length, D_, 1, nthreads);
+			const EigenMatrix F_ = Hcore + Ghf(is, js, ks, ls, ints, length, D_, 1, nthreads);
 			const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
 			eigensolver.compute(Fprime_);
 			const EigenMatrix es = eigensolver.eigenvalues();
@@ -136,12 +135,13 @@ void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 			this->setCoefficientMatrix(Z * U);
 			const double E_ = 0.5 * ( D_ * ( Hcore + F_ ) ).trace();
 			std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-			if ( order == 2 && scf.compare("NEWTON") == 0 ) He = [Z, is, js, ks, ls, degs, ints, length, nthreads](EigenMatrix vprime){
+			if ( order == 2 && scf.compare("NEWTON") == 0 ) He = [Z, is, js, ks, ls, ints, length, nthreads](EigenMatrix vprime){
 				const EigenMatrix v = Z * vprime * Z.transpose();
-				return (EigenMatrix)(Z.transpose() * Ghf(is, js, ks, ls, degs, ints, length, v, 1, nthreads) * Z);
+				return (EigenMatrix)(Z.transpose() * Ghf(is, js, ks, ls, ints, length, v, 1, nthreads) * Z);
 			};
-			else if ( order == 2 && scf.compare("QUASI") == 0 ) He = [HessApprox](EigenMatrix vprime){
-				return HessApprox.cwiseProduct(vprime);
+			else if ( order == 2 && scf.compare("QUASI") == 0 ) He = [](EigenMatrix vprime){
+				return EigenZero(vprime.rows(), vprime.cols());
+				//return vprime;
 			};
 			return std::make_tuple(E_, Fprime_, He);
 		};
@@ -150,7 +150,7 @@ void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 		assert(
 				TrustRegion(
 					dfunc, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-					scf.compare("NEWTON") == 0 ? 1 : 100,
+					scf.compare("NEWTON") == 0 ? 1 : 5,
 					100, E, M, output-1
 				) && "Convergence failed!"
 		);

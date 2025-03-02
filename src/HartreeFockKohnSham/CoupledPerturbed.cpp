@@ -36,7 +36,7 @@ std::tuple<
 		std::vector<EigenMatrix>& Ss,
 		std::vector<EigenMatrix>& Fskeletons,
 		short int* is, short int* js, short int* ks, short int* ls,
-		char* degs, double* ints, long int length,
+		double* ints, long int length,
 		double kscale,
 		std::vector<int> orders,
 		double* ws,
@@ -107,7 +107,7 @@ std::tuple<
 		}
 		Eigen::setNbThreads(1);
 		std::vector<std::vector<EigenArray>> Uarrays = Matrices2Arrays(Us);
-		EigenMatrix* D_raw_arrays = new EigenMatrix[nmatrices];
+		EigenMatrix* D_raw_arrays = new EigenMatrix[nmatrices]; // Must be a raw pointer for OMP reduction.
 		for ( int imatrix = 0; imatrix < nmatrices; imatrix++ ){
 			D_raw_arrays[imatrix].resize(nbasis, nbasis);
 			D_raw_arrays[imatrix] = EigenZero(nbasis, nbasis);
@@ -141,7 +141,7 @@ std::tuple<
 		auto fock_start = __now__;
 		std::vector<EigenMatrix> undoneFUs = GhfMultiple(
 				is, js, ks, ls,
-				degs, ints, length,
+				ints, length,
 				undoneDs, kscale, nthreads
 		);
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] ){
@@ -228,7 +228,7 @@ std::vector<EigenVector> DensityOccupationGradient(
 		std::vector<EigenMatrix>& Ss,
 		std::vector<EigenMatrix>& Fskeletons,
 		short int* is, short int* js, short int* ks, short int* ls,
-		char* degs, double* ints, long int length,
+		double* ints, long int length,
 		double kscale,
 		std::vector<int> orders,
 		double* ws,
@@ -287,7 +287,7 @@ std::vector<EigenVector> DensityOccupationGradient(
 		}
 		std::vector<EigenMatrix> undoneFUs = GhfMultiple(
 				is, js, ks, ls,
-				degs, ints, length,
+				ints, length,
 				undoneDs, kscale, nthreads
 		);
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] ){

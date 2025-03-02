@@ -20,4 +20,4 @@ void getRepulsion0(
 		short int* shellks, short int* shellls,
 		short int* basisis, short int* basisjs,
 		short int* basisks, short int* basisls,
-		char* degs, double* repulsions);
+		double* repulsionints);

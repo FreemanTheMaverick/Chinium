@@ -237,7 +237,7 @@ void getRepulsion0(
 		short int* shellks, short int* shellls,
 		short int* basisis, short int* basisjs,
 		short int* basisks, short int* basisls,
-		char* degs, double* repulsions){
+		double* repulsionints){
 	const auto shell2bf = obs.shell2bf();
 	libint2::initialize();
 	const int nthreads = bqheads.size();
@@ -246,12 +246,11 @@ void getRepulsion0(
 		const long int nsq = sqheads[ithread + 1] - sqheads[ithread];
 		const long int sqhead = sqheads[ithread];
 		const long int bqhead = bqheads[ithread];
-		double* repulsionranger = repulsions + bqhead;
+		double* repulsionranger = repulsionints + bqhead;
 		short int* bf1ranger = basisis + bqhead;
 		short int* bf2ranger = basisjs + bqhead;
 		short int* bf3ranger = basisks + bqhead;
 		short int* bf4ranger = basisls + bqhead;
-		char* degranger = degs + bqhead;
 		short int* s1ranger = shellis + sqhead;
 		short int* s2ranger = shelljs + sqhead;
 		short int* s3ranger = shellks + sqhead;
@@ -287,12 +286,11 @@ void getRepulsion0(
 							const char ab_cd_deg = (bf1 == bf3) ? (bf2 == bf4 ? 1 : 2) : 2;
 							const char abcd_deg = ab_deg * cd_deg * ab_cd_deg;
 							if ( bf2 <= bf1 && bf3 <= bf1 && bf4 <= ( (bf1 == bf3) ? bf2 : bf3 ) ){
-								*(repulsionranger++) = ints_shellset[f1234];
 								*(bf1ranger++) = bf1;
 								*(bf2ranger++) = bf2;
 								*(bf3ranger++) = bf3;
 								*(bf4ranger++) = bf4;
-								*(degranger++) = abcd_deg;
+								*(repulsionranger++) = ints_shellset[f1234] * abcd_deg;
 							}
 						}
 					}
@@ -498,6 +496,8 @@ void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthre
 	__Make_Basis_Set__
 	const long int nbasis = libint2::nbf(obs);
 	const long int nshells = obs.size();
+	long int ShellQuartetLength = 0;
+	long int RepulsionLength = 0;
 	auto start = __now__;
 
 	if (std::get<0>(this->RepulsionDiags).cols() == 0){
@@ -507,57 +507,68 @@ void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthre
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 	}
 
-	if (this->RepulsionLength == 0 || this->ShellQuartetLength == 0){
+	if ( this->RepulsionInts.empty() || this->ShellIs.empty() ){
 		if (output) std::printf("Calculating numbers of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
 		start = __now__;
-		std::tie(this->RepulsionLength, this->ShellQuartetLength) = getRepulsionLength(obs, std::get<0>(this->RepulsionDiags), threshold);
-		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
-		if (output) std::printf("Before screening: %ld integrals and %ld shell quartets\n", nbasis*(nbasis+1)*(nbasis*(nbasis+1)/2+1)/4, nshells*(nshells+1)*(nshells*(nshells+1)/2+1)/4);
-		if (output) std::printf("After screening: %ld integrals and %ld shell quartets\n", this->RepulsionLength, this->ShellQuartetLength);
-		if (output) std::printf("Memory needed for 4c-2e repulsion integrals and their indices: %f GB\n",(double)this->RepulsionLength * ( 2. * 4. + 1. + 8. ) / 1024. / 1024. / 1024.);
+		std::tie(RepulsionLength, ShellQuartetLength) = getRepulsionLength(obs, std::get<0>(this->RepulsionDiags), threshold);
+		if (output){
+			std::printf("Done in %f s\n", __duration__(start, __now__));
+			std::printf(
+					"Before screening: %ld integrals and %ld shell quartets\n",
+					nbasis * ( nbasis + 1 ) * ( nbasis * ( nbasis + 1 ) / 2 + 1 ) / 4,
+					nshells * ( nshells + 1 ) * ( nshells * ( nshells + 1 ) / 2 + 1 ) / 4
+			);
+			std::printf(
+					"After screening: %ld integrals and %ld shell quartets\n",
+					RepulsionLength, ShellQuartetLength
+			);
+			std::printf(
+					"Memory needed for 4c-2e repulsion integrals and their indices: %f GB\n",
+					(double)RepulsionLength * ( 2. * 4. + 8. ) / 1024. / 1024. / 1024.
+			);
+		}
 	}
 
-	if ( (!this->ShellIs) || (!this->ShellJs) || (!this->ShellKs) || (!this->ShellLs) ){
+	if ( this->ShellIs.empty() ){
 		if (output) std::printf("Generating indices of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
 		start = __now__;
-		if (!this->ShellIs) this->ShellIs = new short int[this->ShellQuartetLength];
-		if (!this->ShellJs) this->ShellJs = new short int[this->ShellQuartetLength];
-		if (!this->ShellKs) this->ShellKs = new short int[this->ShellQuartetLength];
-		if (!this->ShellLs) this->ShellLs = new short int[this->ShellQuartetLength];
+		this->ShellIs.resize(ShellQuartetLength);
+		this->ShellJs.resize(ShellQuartetLength);
+		this->ShellKs.resize(ShellQuartetLength);
+		this->ShellLs.resize(ShellQuartetLength);
 		getRepulsionIndices(
 				obs, std::get<0>(this->RepulsionDiags), threshold,
-				this->ShellIs, this->ShellJs,
-				this->ShellKs, this->ShellLs);
+				this->ShellIs.data(), this->ShellJs.data(),
+				this->ShellKs.data(), this->ShellLs.data()
+		);
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 	}
 
 	if (output) std::printf("Arranging for %d threads to calculate 4c-2e repulsion integrals ... ", nthreads);
 	start = __now__;
-	std::vector<long int> sqheads = {};
-	std::vector<long int> bqheads = {};
-	std::tie(sqheads, bqheads) = getThreadPointers(
-		obs, this->ShellQuartetLength, nthreads,
-		this->ShellIs, this->ShellJs,
-		this->ShellKs, this->ShellLs);
-	sqheads.push_back(this->ShellQuartetLength);
+	auto [sqheads, bqheads] = getThreadPointers( // std::vector<long int>
+		obs, ShellQuartetLength, nthreads,
+		this->ShellIs.data(), this->ShellJs.data(),
+		this->ShellKs.data(), this->ShellLs.data()
+	);
+	sqheads.push_back(ShellQuartetLength);
 	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 
 	if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
 		if (output) std::printf("Calculating 4c-2e repulsion integrals ... ");
 		start = __now__;
-		if (!this->RepulsionIs) this->RepulsionIs = new short int[this->RepulsionLength];
-		if (!this->RepulsionJs) this->RepulsionJs = new short int[this->RepulsionLength];
-		if (!this->RepulsionKs) this->RepulsionKs = new short int[this->RepulsionLength];
-		if (!this->RepulsionLs) this->RepulsionLs = new short int[this->RepulsionLength];
-		if (!this->RepulsionDegs) this->RepulsionDegs = new char[this->RepulsionLength];
-		if (!this->Repulsions)this->Repulsions = new double[this->RepulsionLength];
+		this->BasisIs.resize(RepulsionLength);
+		this->BasisJs.resize(RepulsionLength);
+		this->BasisKs.resize(RepulsionLength);
+		this->BasisLs.resize(RepulsionLength);
+		this->RepulsionInts.resize(RepulsionLength);
 		getRepulsion0(
 			obs, sqheads, bqheads,
-			this->ShellIs, this->ShellJs,
-			this->ShellKs, this->ShellLs,
-			this->RepulsionIs, this->RepulsionJs,
-			this->RepulsionKs, this->RepulsionLs,
-			this->RepulsionDegs, this->Repulsions);
+			this->ShellIs.data(), this->ShellJs.data(),
+			this->ShellKs.data(), this->ShellLs.data(),
+			this->BasisIs.data(), this->BasisJs.data(),
+			this->BasisKs.data(), this->BasisLs.data(),
+			this->RepulsionInts.data());
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 	}
 
@@ -568,8 +579,8 @@ void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthre
 			obs,
 			shell2atom,
 			sqheads,
-			this->ShellIs, this->ShellJs,
-			this->ShellKs, this->ShellLs,
+			this->ShellIs.data(), this->ShellJs.data(),
+			this->ShellKs.data(), this->ShellLs.data(),
 			this->getDensity() / 2, this->XC.EXX
 		);
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
@@ -582,8 +593,8 @@ void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthre
 			obs,
 			shell2atom,
 			sqheads,
-			this->ShellIs, this->ShellJs,
-			this->ShellKs, this->ShellLs,
+			this->ShellIs.data(), this->ShellJs.data(),
+			this->ShellKs.data(), this->ShellLs.data(),
 			this->getDensity() / 2, this->XC.EXX
 		);
 		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
