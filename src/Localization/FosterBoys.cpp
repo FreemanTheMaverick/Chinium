@@ -85,7 +85,7 @@ EigenMatrix FosterBoys(
 	assert(
 			TrustRegion(
 				func, tr_setting, {1.e-6, 1.e-4, 1.e-7},
-				1, 100, L, M, output
+				0.001, 1, 100, L, M, output
 			) && "Convergence Failed!"
 	);
 

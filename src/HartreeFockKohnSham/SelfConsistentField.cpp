@@ -95,7 +95,6 @@ bool DIISSCF(
 void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 	Eigen::setNbThreads(nthreads);
 
-	const int nocc = this->getNumElec(1);
 	const double T = this->Temperature;
 	const double Mu = this->ChemicalPotential;
 	if (output > 0) std::printf("Self-consistent field in %s-canonical ensemble\n", T > 0 ? "grand" : "micro");
@@ -114,7 +113,7 @@ void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 	double E = 0;
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 
-	if ( scf.compare("NEWTON") == 0 || scf.compare("QUASI") == 0 ){
+	if ( scf.compare("NEWTON") == 0 ){
 		EigenMatrix Dprime = (this->getOccupation() / 2).asDiagonal();
 		Grassmann M = Grassmann(Dprime, 1);
 		//const EigenMatrix HessApprox = Z.transpose() * ( 2 * std::get<0>(this->RepulsionDiags) - std::get<1>(this->RepulsionDiags) ) * Z;
@@ -124,7 +123,7 @@ void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 				EigenMatrix,
 				std::function<EigenMatrix (EigenMatrix)>
 			> (EigenMatrix, int)
-		> dfunc = [this, &eigensolver, scf, nocc, Z, Hcore, is, js, ks, ls, ints, length, nthreads](EigenMatrix Dprime_, int order){
+		> dfunc_newton = [this, &eigensolver, Z, Hcore, is, js, ks, ls, ints, length, nthreads](EigenMatrix Dprime_, int order){
 			const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
 			const EigenMatrix F_ = Hcore + Ghf(is, js, ks, ls, ints, length, D_, 1, nthreads);
 			const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
@@ -135,23 +134,53 @@ void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 			this->setCoefficientMatrix(Z * U);
 			const double E_ = 0.5 * ( D_ * ( Hcore + F_ ) ).trace();
 			std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-			if ( order == 2 && scf.compare("NEWTON") == 0 ) He = [Z, is, js, ks, ls, ints, length, nthreads](EigenMatrix vprime){
+			if ( order == 2 ) He = [Z, is, js, ks, ls, ints, length, nthreads](EigenMatrix vprime){
 				const EigenMatrix v = Z * vprime * Z.transpose();
 				return (EigenMatrix)(Z.transpose() * Ghf(is, js, ks, ls, ints, length, v, 1, nthreads) * Z);
 			};
-			else if ( order == 2 && scf.compare("QUASI") == 0 ) He = [](EigenMatrix vprime){
+			return std::make_tuple(E_, Fprime_, He);
+		};
+		TrustRegionSetting tr_setting;
+		assert(
+				TrustRegion(
+					dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
+					0.00001, 1, 100, E, M, output-1
+				) && "Convergence failed!"
+		);
+		this->E_tot += 2 * E;
+	}else if ( scf.compare("QUASI") == 0 ){
+		EigenMatrix Dprime = (this->getOccupation() / 2).asDiagonal();
+		Grassmann M = Grassmann(Dprime, 1);
+		std::function<
+			std::tuple<
+				double,
+				EigenMatrix,
+				std::function<EigenMatrix (EigenMatrix)>
+			> (EigenMatrix, int)
+		> dfunc_quasi = [this, &eigensolver, Z, Hcore, is, js, ks, ls, ints, length, nthreads](EigenMatrix Dprime_, int order){
+			const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
+			auto [Fhf_, Fxc_, Exc_] = this->calcFock(D_, nthreads); // EigenMatrix, EigenMatrix, double
+			const EigenMatrix F_ = Fhf_ + Fxc_;
+			const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
+			eigensolver.compute(Fprime_);
+			const EigenMatrix es = eigensolver.eigenvalues();
+			const EigenMatrix U = eigensolver.eigenvectors();
+			this->setEnergy(es);
+			this->setCoefficientMatrix(Z * U);
+			const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
+			std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
+			if ( order == 2 ) He = [](EigenMatrix vprime){
 				return EigenZero(vprime.rows(), vprime.cols());
 				//return vprime;
 			};
 			return std::make_tuple(E_, Fprime_, He);
 		};
-
 		TrustRegionSetting tr_setting;
+		if ( this->XC.XCcode ) tr_setting.R0 = 0.5;
 		assert(
 				TrustRegion(
-					dfunc, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-					scf.compare("NEWTON") == 0 ? 1 : 5,
-					100, E, M, output-1
+					dfunc_quasi, tr_setting, {1.e-8, 1.e-5, 1.e-5},
+					0.005, 20, 100, E, M, output-1
 				) && "Convergence failed!"
 		);
 		this->E_tot += 2 * E;
@@ -177,10 +206,7 @@ void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 				);
 			}
 			const EigenMatrix D_ = this->getDensity() / 2.;
-			EigenMatrix Fhf_ = EigenZero(Fupdate.rows(), Fupdate.cols());
-			EigenMatrix Fxc_ = EigenZero(Fupdate.rows(), Fupdate.cols());
-			double Exc_ = 0;
-			std::tie(Fhf_, Fxc_, Exc_) = this->calcFock(D_, nthreads);
+			auto [Fhf_, Fxc_, Exc_] = this->calcFock(D_, nthreads); // EigenMatrix, EigenMatrix, double
 			const EigenMatrix F_ = Fhf_ + Fxc_;
 			const EigenMatrix G = F_ * D_ * S - S * D_ * F_;
 			E_ += (D_ * ( this->Kinetic + this->Nuclear + Fhf_ )).trace() + Exc_;

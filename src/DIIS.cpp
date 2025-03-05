@@ -63,7 +63,7 @@ EigenMatrix ADIIS(EigenVector A, EigenMatrix B, std::deque<EigenMatrix>& Fs, int
 	assert(
 			TrustRegion(
 				func, tr_setting, {1.e-4, 1.e-6, 1e-2},
-				1, 100000, L, M, output-1
+				0.001, 1, 100000, L, M, output-1
 			) && "Convergence Failed!"
 	);
 
