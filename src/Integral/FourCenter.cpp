@@ -527,6 +527,9 @@ void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthre
 					(double)RepulsionLength * ( 2. * 4. + 8. ) / 1024. / 1024. / 1024.
 			);
 		}
+	}else{
+		RepulsionLength = this->BasisIs.size();
+		ShellQuartetLength = this->ShellIs.size();
 	}
 
 	if ( this->ShellIs.empty() ){

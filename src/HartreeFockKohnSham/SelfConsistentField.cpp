@@ -92,6 +92,187 @@ bool DIISSCF(
 	return 0;
 }
 
+std::tuple<double, EigenVector, EigenMatrix> RestrictedNewton(
+		EigenMatrix Dprime, EigenMatrix Z, EigenMatrix Hcore,
+		short int* is, short int* js, short int* ks, short int* ls,
+		double* ints, long int length, int output, int nthreads){
+	double E = 0;
+	EigenVector epsilons = EigenZero(Z.cols(), 1);
+	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+	Grassmann M = Grassmann(Dprime, 1);
+	std::function<
+		std::tuple<
+			double,
+			EigenMatrix,
+			std::function<EigenMatrix (EigenMatrix)>
+		> (EigenMatrix, int)
+	> dfunc_newton = [&epsilons, &C, &eigensolver, Z, Hcore, is, js, ks, ls, ints, length, nthreads](EigenMatrix Dprime_, int order){
+		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
+		const EigenMatrix F_ = Hcore + Grhf(is, js, ks, ls, ints, length, D_, 1, nthreads);
+		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
+		eigensolver.compute(Fprime_);
+		epsilons = eigensolver.eigenvalues();
+		C = Z * eigensolver.eigenvectors();
+		const double E_ = 0.5 * ( D_ * ( Hcore + F_ ) ).trace();
+		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
+		if ( order == 2 ) He = [Z, is, js, ks, ls, ints, length, nthreads](EigenMatrix vprime){
+			const EigenMatrix v = Z * vprime * Z.transpose();
+			return (EigenMatrix)(Z.transpose() * Grhf(is, js, ks, ls, ints, length, v, 1, nthreads) * Z);
+		};
+		return std::make_tuple(E_, Fprime_, He);
+	};
+	TrustRegionSetting tr_setting;
+	assert(
+			TrustRegion(
+				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
+				0.00001, 1, 100, E, M, output
+			) && "Convergence failed!"
+	);
+	return std::make_tuple(E, epsilons, C);
+}
+
+std::tuple<double, EigenVector, EigenMatrix> RestrictedQuasiNewton(
+		EigenMatrix Dprime, EigenMatrix Z, EigenMatrix Hcore,
+		short int* is, short int* js, short int* ks, short int* ls,
+		double* ints, long int length,
+		ExchangeCorrelation& xc,
+		double* ws, long int ngrids, int nbasis,
+		double* aos,
+		double* ao1xs, double* ao1ys, double* ao1zs,
+		double* ao2ls,
+		double* rhos,
+		double* rho1xs, double* rho1ys, double* rho1zs, double* sigmas,
+		double* lapls, double* taus,
+		double* es,
+		double* erhos, double* esigmas,
+		double* elapls, double* etaus,
+		int output, int nthreads){
+	double E = 0;
+	EigenVector epsilons = EigenZero(Z.cols(), 1);
+	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+	Grassmann M = Grassmann(Dprime, 1);
+	std::function<
+		std::tuple<
+			double,
+			EigenMatrix,
+			std::function<EigenMatrix (EigenMatrix)>
+		> (EigenMatrix, int)
+	> dfunc_quasi = [&](EigenMatrix Dprime_, int order){
+		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
+		const EigenMatrix Ghf_ = Grhf(is, js, ks, ls, ints, length, D_, xc.EXX, nthreads);
+		auto [Exc_, Gxc_] = xc.XCcode ? Gxc( // double, EigenMatrix
+				xc,
+				ws, ngrids, nbasis,
+				aos,
+				ao1xs, ao1ys, ao1zs,
+				ao2ls,
+				{D_},
+				rhos,
+				rho1xs, rho1ys, rho1zs, sigmas,
+				lapls, taus,
+				es,
+				erhos, esigmas,
+				elapls, etaus,
+				nthreads
+		) : std::make_tuple(0, EigenZero(nbasis, nbasis));
+		const EigenMatrix Fhf_ = Hcore + Ghf_;
+		const EigenMatrix F_ = Fhf_+ Gxc_;
+		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
+		eigensolver.compute(Fprime_);
+		epsilons = eigensolver.eigenvalues();
+		C = Z * eigensolver.eigenvectors();
+		const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
+		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
+		if ( order == 2 ) He = [](EigenMatrix vprime){
+			return EigenZero(vprime.rows(), vprime.cols());
+		};
+		return std::make_tuple(E_, Fprime_, He);
+	};
+	TrustRegionSetting tr_setting;
+	if ( xc.XCcode ) tr_setting.R0 = 0.5;
+	assert(
+			TrustRegion(
+				dfunc_quasi, tr_setting, {1.e-8, 1.e-5, 1.e-5},
+				0.005, 20, 100, E, M, output
+			) && "Convergence failed!"
+	);
+	return std::make_tuple(E, epsilons, C);
+}
+
+std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
+		double T, double Mu, EigenVector Occupations,
+		EigenMatrix F, EigenMatrix S, EigenMatrix Z, EigenMatrix Hcore,
+		short int* is, short int* js, short int* ks, short int* ls,
+		double* ints, long int length,
+		ExchangeCorrelation& xc,
+		double* ws, long int ngrids, int nbasis,
+		double* aos,
+		double* ao1xs, double* ao1ys, double* ao1zs,
+		double* ao2ls,
+		double* rhos,
+		double* rho1xs, double* rho1ys, double* rho1zs, double* sigmas,
+		double* lapls, double* taus,
+		double* es,
+		double* erhos, double* esigmas,
+		double* elapls, double* etaus,
+		int output, int nthreads){
+	double E = 0;
+	EigenVector epsilons = EigenZero(Z.cols(), 1);
+	EigenVector occupations = Occupations;
+	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+	std::function<
+		std::tuple<
+			double,
+			EigenMatrix,
+			EigenMatrix,
+			EigenMatrix
+		> (EigenMatrix)
+	> ffunc = [&](EigenMatrix Fupdate){
+		const EigenMatrix Fprime_ = Z.transpose() * Fupdate * Z;
+		eigensolver.compute(Fprime_);
+		epsilons = eigensolver.eigenvalues();
+		C = Z * eigensolver.eigenvectors();
+		double E_ = 0;
+		if ( T ){
+			const EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
+			occupations = ns.matrix();
+			E_ += 2 * (
+					T * (
+						ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log()
+					).sum()
+					- Mu * ns.sum()
+			);
+		}
+		const EigenMatrix D_ = C * occupations.asDiagonal() * C.transpose();
+		const EigenMatrix Ghf_ = Grhf(is, js, ks, ls, ints, length, D_, xc.EXX, nthreads);
+		auto [Exc_, Gxc_] = xc.XCcode ? Gxc( // double, EigenMatrix
+				xc,
+				ws, ngrids, nbasis,
+				aos,
+				ao1xs, ao1ys, ao1zs,
+				ao2ls,
+				{2 * D_},
+				rhos,
+				rho1xs, rho1ys, rho1zs, sigmas,
+				lapls, taus,
+				es,
+				erhos, esigmas,
+				elapls, etaus,
+				nthreads
+		) : std::make_tuple(0, EigenZero(nbasis, nbasis));
+		const EigenMatrix Fhf_ = Hcore + Ghf_;
+		const EigenMatrix F_ = Fhf_ + Gxc_;
+		const EigenMatrix G = F_ * D_ * S - S * D_ * F_;
+		E_ += (D_ * ( Hcore + Fhf_ )).trace() + Exc_;
+		return std::make_tuple(E_, F_, G, D_);
+	};
+	assert( DIISSCF( ffunc, {1.e3, 0.15, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, E, F, output) && "Convergence failed!" );
+	return std::make_tuple(E, epsilons, occupations, C);
+}
+
 void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 	Eigen::setNbThreads(nthreads);
 
@@ -110,140 +291,82 @@ void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 	short int* ls = this->BasisLs.data();
 	double* ints = this->RepulsionInts.data();
 	long int length = this->RepulsionInts.size();
-	double E = 0;
-	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+
+	ExchangeCorrelation& xc = this->XC;
+	double* ws = this->Ws;
+	long int ngrids = this->NumGrids;
+	int nbasis = this->getNumBasis();
+	double* aos = this->AOs;
+	double* ao1xs = this->AO1Xs;
+	double* ao1ys = this->AO1Ys;
+	double* ao1zs = this->AO1Zs;
+	double* ao2ls = this->AO2Ls;
+	double* rhos = this->Rhos;
+	double* rho1xs = this->Rho1Xs;
+	double* rho1ys = this->Rho1Ys;
+	double* rho1zs = this->Rho1Zs;
+	double* sigmas = this->Sigmas;
+	double* lapls = this->Lapls;
+	double* taus = this->Taus;
+	double* es = this->Es;
+	double* e1rhos = this->E1Rhos;
+	double* e1sigmas = this->E1Sigmas;
+	double* e1lapls = this->E1Lapls;
+	double* e1taus = this->E1Taus;
 
 	if ( scf.compare("NEWTON") == 0 ){
 		EigenMatrix Dprime = (this->getOccupation() / 2).asDiagonal();
-		Grassmann M = Grassmann(Dprime, 1);
-		//const EigenMatrix HessApprox = Z.transpose() * ( 2 * std::get<0>(this->RepulsionDiags) - std::get<1>(this->RepulsionDiags) ) * Z;
-		std::function<
-			std::tuple<
-				double,
-				EigenMatrix,
-				std::function<EigenMatrix (EigenMatrix)>
-			> (EigenMatrix, int)
-		> dfunc_newton = [this, &eigensolver, Z, Hcore, is, js, ks, ls, ints, length, nthreads](EigenMatrix Dprime_, int order){
-			const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
-			const EigenMatrix F_ = Hcore + Ghf(is, js, ks, ls, ints, length, D_, 1, nthreads);
-			const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
-			eigensolver.compute(Fprime_);
-			const EigenMatrix es = eigensolver.eigenvalues();
-			const EigenMatrix U = eigensolver.eigenvectors();
-			this->setEnergy(es);
-			this->setCoefficientMatrix(Z * U);
-			const double E_ = 0.5 * ( D_ * ( Hcore + F_ ) ).trace();
-			std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-			if ( order == 2 ) He = [Z, is, js, ks, ls, ints, length, nthreads](EigenMatrix vprime){
-				const EigenMatrix v = Z * vprime * Z.transpose();
-				return (EigenMatrix)(Z.transpose() * Ghf(is, js, ks, ls, ints, length, v, 1, nthreads) * Z);
-			};
-			return std::make_tuple(E_, Fprime_, He);
-		};
-		TrustRegionSetting tr_setting;
-		assert(
-				TrustRegion(
-					dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-					0.00001, 1, 100, E, M, output-1
-				) && "Convergence failed!"
-		);
+		auto [E, epsilons, C] = RestrictedNewton(Dprime, Z, Hcore, is, js, ks, ls, ints, length, output-1, nthreads);
 		this->E_tot += 2 * E;
+		this->setEnergy(epsilons);
+		this->setCoefficientMatrix(C);
 	}else if ( scf.compare("QUASI") == 0 ){
 		EigenMatrix Dprime = (this->getOccupation() / 2).asDiagonal();
-		Grassmann M = Grassmann(Dprime, 1);
-		std::function<
-			std::tuple<
-				double,
-				EigenMatrix,
-				std::function<EigenMatrix (EigenMatrix)>
-			> (EigenMatrix, int)
-		> dfunc_quasi = [this, &eigensolver, Z, Hcore, is, js, ks, ls, ints, length, nthreads](EigenMatrix Dprime_, int order){
-			const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
-			auto [Fhf_, Fxc_, Exc_] = this->calcFock(D_, nthreads); // EigenMatrix, EigenMatrix, double
-			const EigenMatrix F_ = Fhf_ + Fxc_;
-			const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
-			eigensolver.compute(Fprime_);
-			const EigenMatrix es = eigensolver.eigenvalues();
-			const EigenMatrix U = eigensolver.eigenvectors();
-			this->setEnergy(es);
-			this->setCoefficientMatrix(Z * U);
-			const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
-			std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-			if ( order == 2 ) He = [](EigenMatrix vprime){
-				return EigenZero(vprime.rows(), vprime.cols());
-				//return vprime;
-			};
-			return std::make_tuple(E_, Fprime_, He);
-		};
-		TrustRegionSetting tr_setting;
-		if ( this->XC.XCcode ) tr_setting.R0 = 0.5;
-		assert(
-				TrustRegion(
-					dfunc_quasi, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-					0.005, 20, 100, E, M, output-1
-				) && "Convergence failed!"
+		auto [E, epsilons, C] = RestrictedQuasiNewton(
+				Dprime, Z, Hcore,
+				is, js, ks, ls,
+				ints, length,
+				xc,
+				ws, ngrids, nbasis,
+				aos,
+				ao1xs, ao1ys, ao1zs,
+				ao2ls,
+				rhos,
+				rho1xs, rho1ys, rho1zs, sigmas,
+				lapls, taus,
+				es,
+				e1rhos, e1sigmas,
+				e1lapls, e1taus,
+				output-1, nthreads
 		);
 		this->E_tot += 2 * E;
-	}
-
-	else if ( scf.compare("DIIS") == 0 ){
+		this->setEnergy(epsilons);
+		this->setCoefficientMatrix(C);
+	}else if ( scf.compare("DIIS") == 0 ){
 		EigenMatrix F = this->getFock();
-		std::function<std::tuple<double, EigenMatrix, EigenMatrix, EigenMatrix> (EigenMatrix)> ffunc = [&](EigenMatrix Fupdate){
-			const EigenMatrix Fprime_ = Z.transpose() * Fupdate * Z;
-			eigensolver.compute(Fprime_);
-			this->setEnergy(eigensolver.eigenvalues());
-			this->setCoefficientMatrix(Z * eigensolver.eigenvectors());
-			double E_ = 0;
-			if ( T ){
-				const EigenArray es = eigensolver.eigenvalues();
-				const EigenArray ns = 1. / ( 1. + ( ( es - Mu ) / T ).exp() );
-				this->setOccupation( 2 * (EigenVector)ns.matrix());
-				E_ += 2 * (
-						T * (
-							ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log()
-						).sum()
-						- Mu * ns.sum()
-				);
-			}
-			const EigenMatrix D_ = this->getDensity() / 2.;
-			auto [Fhf_, Fxc_, Exc_] = this->calcFock(D_, nthreads); // EigenMatrix, EigenMatrix, double
-			const EigenMatrix F_ = Fhf_ + Fxc_;
-			const EigenMatrix G = F_ * D_ * S - S * D_ * F_;
-			E_ += (D_ * ( this->Kinetic + this->Nuclear + Fhf_ )).trace() + Exc_;
-			return std::make_tuple(E_, F_, G, D_);
-		};
-
-		assert( DIISSCF( ffunc, {1.e3, 0.15, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, E, F, output-1) && "Convergence failed!" );
+		EigenVector Occupations = this->getOccupation() / 2;
+		auto [E, epsilons, occupations, C] = RestrictedDIIS(
+				T, Mu, Occupations,
+				F, S, Z, Hcore,
+				is, js, ks, ls,
+				ints, length,
+				xc,
+				ws, ngrids, nbasis,
+				aos,
+				ao1xs, ao1ys, ao1zs,
+				ao2ls,
+				rhos,
+				rho1xs, rho1ys, rho1zs, sigmas,
+				lapls, taus,
+				es,
+				e1rhos, e1sigmas,
+				e1lapls, e1taus,
+				output-1, nthreads
+		);
 		this->E_tot += E;
+		this->setEnergy(epsilons);
+		this->setOccupation(occupations * 2);
+		this->setCoefficientMatrix(C);
 	}
-
-	/*
-	EigenMatrix Call = this->getCoefficientMatrix();
-	GrassmannQLocal Cprime = GrassmannQLocal(Z.inverse() * Call.leftCols(nocc));
-	std::function<
-		std::tuple<
-			double,
-			EigenMatrix,
-			std::function<EigenMatrix (EigenMatrix)>
-		> (EigenMatrix)
-	> cfunc = [Z, Hcore, is, js, ks, ls, degs, ints, length, nthreads](EigenMatrix Cprime_){
-		const EigenMatrix Dprime_ = Cprime_ * Cprime_.transpose();
-		const EigenMatrix C_ = Z * Cprime_;
-		const EigenMatrix D_ = C_ * C_.transpose();
-		const EigenMatrix F_ = Hcore + Ghf(is, js, ks, ls, degs, ints, length, D_, 1, nthreads);
-		const EigenMatrix Fprime_ = Z * F_ * Z; // Euclidean gradient
-		const double E_ = ( D_ * ( Hcore + F_ ) ).trace();
-		const EigenMatrix ZCprime_ = Z * Cprime_;
-		const std::function<EigenMatrix (EigenMatrix)> He = [Z, ZCprime_, is, js, ks, ls, degs, ints, length, nthreads, Fprime_](EigenMatrix v){
-std::cout<<11<<std::endl;
-			const EigenMatrix tmp1 = ZCprime_ * v.transpose() * Z;
-std::cout<<22<<std::endl;
-			const EigenMatrix tmp2 = Z * Ghf(is, js, ks, ls, degs, ints, length, tmp1, 1, nthreads) * ZCprime_;
-std::cout<<33<<std::endl;
-			return 4 * tmp2 + 2 * Fprime_ * v;
-		};
-		return std::make_tuple(E_, Fprime_ * Cprime_, He);
-	};
-	*/
 
 }

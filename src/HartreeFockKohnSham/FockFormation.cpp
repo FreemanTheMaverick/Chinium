@@ -75,7 +75,7 @@ std::vector<EigenMatrix> GhfMultiple(
 	return rawGs;
 }
 
-EigenMatrix Ghf(
+EigenMatrix Grhf(
 		short int* is, short int* js, short int* ks, short int* ls,
 		double* ints, long int length,
 		EigenMatrix D, double kscale, int nthreads){
@@ -113,6 +113,56 @@ EigenMatrix Ghf(
 	const EigenMatrix J = 0.5 * ( rawJ + rawJ.transpose() );
 	const EigenMatrix K = 0.25 * ( rawK + rawK.transpose() );
 	return J - 0.5 * kscale * K;
+}
+
+std::tuple<EigenMatrix, EigenMatrix, EigenMatrix, EigenMatrix> Guhf(
+		short int* is, short int* js, short int* ks, short int* ls,
+		double* ints, long int length,
+		EigenMatrix Da, EigenMatrix Db, double kscale, int nthreads){
+	Eigen::setNbThreads(1);
+	std::vector<long int> heads = getThreadPointers(length, nthreads);
+	EigenMatrix rawJa = EigenZero(Da.rows(), Da.cols());
+	EigenMatrix rawJb = EigenZero(Da.rows(), Da.cols());
+	EigenMatrix rawKa = EigenZero(Da.rows(), Da.cols());
+	EigenMatrix rawKb = EigenZero(Da.rows(), Da.cols());
+	#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
+	#pragma omp parallel for reduction(EigenMatrixSum: rawJa, rawJb, rawKa, rawKb) num_threads(nthreads)
+	for ( int ithread = 0; ithread < nthreads; ithread++ ){
+		const long int head = heads[ithread];
+		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
+		short int* iranger = is + head;
+		short int* jranger = js + head;
+		short int* kranger = ks + head;
+		short int* lranger = ls + head;
+		double* repulsionranger = ints + head;
+		for ( long int iint = 0; iint < nints; iint++ ){
+			const short int i = *(iranger++);
+			const short int j = *(jranger++);
+			const short int k = *(kranger++);
+			const short int l = *(lranger++);
+			const double repulsion = *(repulsionranger++);
+			rawJa(i, j) += Da(k, l) * repulsion;
+			rawJa(k, l) += Da(i, j) * repulsion;
+			rawJb(i, j) += Db(k, l) * repulsion;
+			rawJb(k, l) += Db(i, j) * repulsion;
+			if ( kscale > 0. ){
+				rawKa(i, k) += Da(j, l) * repulsion;
+				rawKa(j, l) += Da(i, k) * repulsion;
+				rawKa(i, l) += Da(j, k) * repulsion;
+				rawKa(j, k) += Da(i, l) * repulsion;
+				rawKb(i, k) += Db(j, l) * repulsion;
+				rawKb(j, l) += Db(i, k) * repulsion;
+				rawKb(i, l) += Db(j, k) * repulsion;
+				rawKb(j, k) += Db(i, l) * repulsion;
+			}
+		}
+	}
+	Eigen::setNbThreads(nthreads);
+	const EigenMatrix Ja = 0.5 * ( rawJa + rawJa.transpose() );
+	const EigenMatrix Jb = 0.5 * ( rawJb + rawJb.transpose() );
+	const EigenMatrix Ka = 0.25 * ( rawKa + rawKa.transpose() );
+	const EigenMatrix Kb = 0.25 * ( rawKb + rawKb.transpose() );
+	return std::make_tuple(Ja, Jb, Ka, Kb);
 }
 
 #define __Check_and_Zero__(array, multiple)\
@@ -252,32 +302,3 @@ std::tuple<double, EigenMatrix> Gxc(
 
 	return std::make_tuple(Exc, Gxc);
 }
-
-// Needs modification for unrestricted SCF
-std::tuple<EigenMatrix, EigenMatrix, double> Multiwfn::calcFock(EigenMatrix D, int nthreads){
-	const EigenMatrix Fhf = this->Kinetic + this->Nuclear + Ghf(
-		this->BasisIs.data(), this->BasisJs.data(),
-		this->BasisKs.data(), this->BasisLs.data(),
-		this->RepulsionInts.data(), this->RepulsionInts.size(),
-		D, this->XC.EXX, nthreads);
-	double Exc = 0;
-	EigenMatrix Fxc = EigenZero(Fhf.rows(), Fhf.cols());
-	if (this->XC.Xcode != 0 || this->XC.XCcode != 0)
-		std::tie(Exc, Fxc) = Gxc(
-			this->XC,
-			this->Ws, this->NumGrids, this->getNumBasis(),
-			this->AOs,
-			this->AO1Xs, this->AO1Ys, this->AO1Zs,
-			this->AO2Ls,
-			{D*2},
-			this->Rhos,
-			this->Rho1Xs, this->Rho1Ys, this->Rho1Zs, this->Sigmas,
-			this->Lapls, this->Taus,
-			this->Es,
-			this->E1Rhos, this->E1Sigmas,
-			nullptr, nullptr,
-			nthreads);
-	return std::make_tuple(Fhf, Fxc, Exc);
-}
-
-
