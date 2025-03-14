@@ -4,6 +4,7 @@
 #include <string>
 #include <cstdio>
 #include <memory>
+#include <chrono>
 #include <Maniverse/Manifold/Simplex.h>
 #include <Maniverse/Optimizer/TrustRegion.h>
 
@@ -73,4 +74,114 @@ EigenMatrix ADIIS(EigenVector A, EigenMatrix B, std::deque<EigenMatrix>& Fs, int
 	return F;
 }
 
+bool GeneralizedDIIS(
+		std::function<
+			std::vector<std::tuple< // Multiple variables
+					double, EigenMatrix, EigenMatrix // Objective, Residual, Next step
+			>>
+			(std::vector<EigenMatrix>&)
+		>& RawUpdate,
+		double tolerance, int max_size, int max_iter,
+		double& E, std::vector<EigenMatrix>& M, int output,
+		std::function<
+			std::vector<EigenMatrix> // Multiple variables
+			(
+				std::vector<EigenVector>, // DIIS weights
+				std::deque<std::vector<EigenMatrix>>&
+			)
+		>& DiisUpdate){
 
+	if (output > 0){
+		std::printf("********* Generalized Direct Inversion in the Iterative Subspace *********\n\n");
+		std::printf("Maximum number of iterations: %d\n", max_iter);
+		std::printf("Maximum size of DIIS space: %d\n", max_size);
+		std::printf("Number of co-optimized matrices: %d\n", (int)M.size());
+		std::printf("Convergence threshold for residual : %E\n\n", tolerance);
+	}
+
+	std::deque<std::vector<double>> Objective;
+	std::deque<std::vector<EigenMatrix>> Residual;
+	std::deque<std::vector<EigenMatrix>> After;
+	std::vector<EigenVector> Weight;
+	const int nmatrices = M.size();
+
+	E = 0;
+	double ResiNorm = 0;
+	bool converged = 0;
+	const auto all_start = __now__;
+
+	for ( int iiter = 0; iiter < max_iter && ( ! converged ); iiter++ ){
+
+		const auto iter_start = __now__;
+		if (output > 0) std::printf("Iteration %d\n", iiter);
+
+		if ( (int)Objective.size() == max_size ){
+			Objective.pop_front();
+			Residual.pop_front();
+			After.pop_front();
+		}
+
+		std::vector<double> objective;
+		std::vector<EigenMatrix> residual;
+		std::vector<EigenMatrix> after;
+		std::vector<std::tuple<double, EigenMatrix, EigenMatrix>> tups = RawUpdate(M);
+		for ( auto& tup : tups ){
+			objective.push_back(std::get<0>(tup));
+			residual.push_back(std::get<1>(tup));
+			after.push_back(std::get<2>(tup));
+		}
+		Objective.push_back(objective);
+		Residual.push_back(residual);
+		After.push_back(after);
+		const int size = Objective.size();
+
+		const double oldE = E;
+		E = objective[0];
+		for ( double obj : objective ) E = E > obj ? E : obj;
+		const double deltaE = E - oldE;
+		ResiNorm = residual[0].norm();
+		for ( EigenMatrix& res : residual )
+			ResiNorm = ResiNorm > res.norm() ? ResiNorm : res.norm();
+		if (output > 0){
+			std::printf("Target = %.10f\n", E);
+			std::printf("Difference in target = %E\n", deltaE);
+			std::printf("Maximal residual = %E\n", ResiNorm);
+		}
+
+		converged = ResiNorm < tolerance;
+		if (converged){
+			if (output > 0) std::printf("Converged!\n");
+		}else{
+			if (output > 0) std::printf("Not converged yet!\n");
+			if ( size < 2 ){
+				if (output > 0) std::printf("Update: Naive\n");
+				M = after;
+			}else{
+				if (output > 0) std::printf("Update: CDIIS\n");
+				Weight.clear();
+				for ( int mat = 0; mat < nmatrices; mat++ ){
+					EigenMatrix H = EigenZero(size + 1, size + 1);
+					EigenVector b = EigenZero(size + 1, 1); b(size) = 1;
+					for ( int i = 0; i < size; i++ ){
+						H(i, size) = H(size, i) = 1;
+						for ( int j = i; j < size; j++ )
+							H(i, j) = H(j, i) = Residual[i][mat].cwiseProduct(Residual[j][mat]).sum();
+					}
+					const EigenVector weight = H.colPivHouseholderQr().solve(b).head(size);
+					Weight.push_back(weight);
+					if (output > 0){
+						std::printf("DIIS weight:");
+						for ( int i = 0; i < weight.size(); i++ )
+							std::printf(" %f", weight[i]);
+						std::printf("\n");
+					}
+				}
+				M = DiisUpdate(Weight, After);
+			}
+		}
+
+		if (output > 0) std::printf("Elapsed time: %f seconds for current iteration; %f seconds in total\n\n", __duration__(iter_start, __now__), __duration__(all_start, __now__));
+	}
+
+	return converged;
+}

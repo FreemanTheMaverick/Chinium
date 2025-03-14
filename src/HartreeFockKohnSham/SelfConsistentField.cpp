@@ -202,6 +202,78 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedQuasiNewton(
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
+		double T, double Mu, EigenVector Occ,
+		EigenMatrix F, EigenMatrix S, EigenMatrix Z, EigenMatrix Hcore,
+		short int* is, short int* js, short int* ks, short int* ls,
+		double* ints, long int length,
+		ExchangeCorrelation& xc,
+		double* ws, long int ngrids, int nbasis,
+		double* aos,
+		double* ao1xs, double* ao1ys, double* ao1zs,
+		double* ao2ls,
+		double* rhos,
+		double* rho1xs, double* rho1ys, double* rho1zs, double* sigmas,
+		double* lapls, double* taus,
+		double* es,
+		double* erhos, double* esigmas,
+		double* elapls, double* etaus,
+		int output, int nthreads){
+	double E = 0;
+	EigenVector epsilons = EigenZero(Z.cols(), 1);
+	EigenVector occupations = Occ;
+	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+	std::function<
+			std::vector<std::tuple<double, EigenMatrix, EigenMatrix>>
+			(std::vector<EigenMatrix>&)
+	> RawUpdate = [&](std::vector<EigenMatrix>& Fs){
+		assert(Fs.size() == 1 && "Only one Fock matrix should be optimized in spin-restricted SCF!");
+		const EigenMatrix F_ = Fs[0];
+		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z;
+		eigensolver.compute(Fprime_);
+		epsilons = eigensolver.eigenvalues();
+		C = Z * eigensolver.eigenvectors();
+		double E_ = 0;
+		if ( T ){
+			const EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
+			occupations = ns.matrix();
+			E_ += 2 * (
+					T * (
+						ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log()
+					).sum()
+					- Mu * ns.sum()
+			);
+		}
+		const EigenMatrix D_ = C * occupations.asDiagonal() * C.transpose();
+		const EigenMatrix Ghf_ = Grhf(is, js, ks, ls, ints, length, D_, xc.EXX, nthreads);
+		auto [Exc_, Gxc_] = xc.XCcode ? Gxc( // double, EigenMatrix
+				xc,
+				ws, ngrids, nbasis,
+				aos,
+				ao1xs, ao1ys, ao1zs,
+				ao2ls,
+				{2 * D_},
+				rhos,
+				rho1xs, rho1ys, rho1zs, sigmas,
+				lapls, taus,
+				es,
+				erhos, esigmas,
+				elapls, etaus,
+				nthreads
+		) : std::make_tuple(0, EigenZero(nbasis, nbasis));
+		const EigenMatrix Fhf_ = Hcore + Ghf_;
+		const EigenMatrix Fnew_ = Fhf_ + Gxc_;
+		E_ += (D_ * ( Hcore + Fhf_ )).trace() + Exc_;
+		const EigenMatrix G_ = Fnew_ * D_ * S - S * D_ * Fnew_;
+		return std::vector<std::tuple<double, EigenMatrix, EigenMatrix>>{std::make_tuple(E_, G_, Fnew_)};
+	};
+	std::vector<EigenMatrix> Fs = {F};
+	assert( GeneralizedDIIS(RawUpdate, 1e-5, 10, 100, E, Fs, output) && "Convergence failed!");
+	return std::make_tuple(E, epsilons, occupations, C);
+}
+
+/*
+std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		double T, double Mu, EigenVector Occupations,
 		EigenMatrix F, EigenMatrix S, EigenMatrix Z, EigenMatrix Hcore,
 		short int* is, short int* js, short int* ks, short int* ls,
@@ -272,6 +344,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 	assert( DIISSCF( ffunc, {1.e3, 0.15, 1.e3}, {1.e-8, 1.e-5, 1.e-5}, 20, 100, E, F, output) && "Convergence failed!" );
 	return std::make_tuple(E, epsilons, occupations, C);
 }
+*/
 
 void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 	Eigen::setNbThreads(nthreads);
@@ -344,9 +417,9 @@ void Multiwfn::HartreeFockKohnSham(std::string scf, int output, int nthreads){
 		this->setCoefficientMatrix(C);
 	}else if ( scf.compare("DIIS") == 0 ){
 		EigenMatrix F = this->getFock();
-		EigenVector Occupations = this->getOccupation() / 2;
+		EigenVector Occ = this->getOccupation() / 2;
 		auto [E, epsilons, occupations, C] = RestrictedDIIS(
-				T, Mu, Occupations,
+				T, Mu, Occ,
 				F, S, Z, Hcore,
 				is, js, ks, ls,
 				ints, length,
