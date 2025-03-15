@@ -494,7 +494,7 @@ void Multiwfn::Export(std::string mwfn_filename, const bool output){
 	std::fprintf(file, "$Centers\n");
 	int icenter = 1;
 	for ( MwfnCenter& center : this->Centers ) std::fprintf(
-			file, "%d %s %d %f %f %f %f\n",
+			file, "%d %s %d %f % f % f % f\n",
 			icenter++,
 			center.getSymbol().c_str(),
 			center.Index,
@@ -552,12 +552,12 @@ void Multiwfn::Export(std::string mwfn_filename, const bool output){
 	for ( MwfnOrbital& orbital : this->Orbitals ){
 		std::fprintf(file, "Index= %9d\n", iorbital + 1);
 		std::fprintf(file, "Type= %d\n", orbital.Type);
-		std::fprintf(file, "Energy= %E\n", orbital.Energy);
+		std::fprintf(file, "Energy= %.10E\n", orbital.Energy);
 		std::fprintf(file, "Occ= %E\n", orbital.Occ);
 		std::fprintf(file, "Sym= %s\n", orbital.Sym.c_str());
 		std::fprintf(file, "$Coeff\n");
 		for ( int j = 0; j < this->getNumBasis(); j++ )
-			std::fprintf(file, " %E", CoefficientMatrix(j, iorbital));
+			std::fprintf(file, " %.10E", CoefficientMatrix(j, iorbital));
 		std::fprintf(file, "\n\n");
 		iorbital++;
 	}
