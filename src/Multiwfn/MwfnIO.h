@@ -1,5 +1,5 @@
 	double getCharge();
-	double getNumElec(int spin);
+	double getNumElec(int spin = -1);
 
 	int getNumCenters();
 
@@ -10,17 +10,17 @@
 	int getNumPrimShells();
 
 	EigenMatrix MatrixTransform();
-	EigenMatrix getCoefficientMatrix();
-	void setCoefficientMatrix(EigenMatrix matrix);
+	EigenMatrix getCoefficientMatrix(int spin = 0);
+	void setCoefficientMatrix(EigenMatrix matrix, int spin = 0);
 
-	EigenVector getEnergy();
-	void setEnergy(EigenVector energies);
-	void setEnergy(std::vector<double> energies);
-	EigenVector getOccupation();
-	void setOccupation(EigenVector occupancies);
-	EigenMatrix getFock();
-	EigenMatrix getDensity();
-	EigenMatrix getEnergyDensity();
+	EigenVector getEnergy(int spin = 0);
+	void setEnergy(EigenVector energies, int spin = 0);
+	void setEnergy(std::vector<double> energies, int spin = 0);
+	EigenVector getOccupation(int spin = 0);
+	void setOccupation(EigenVector occupancies, int spin = 0);
+	EigenMatrix getFock(int spin = 0);
+	EigenMatrix getDensity(int spin = 0);
+	EigenMatrix getEnergyDensity(int spin = 0);
 
 	Multiwfn() = default;
 	Multiwfn(std::string mwfn_filename, const bool output);

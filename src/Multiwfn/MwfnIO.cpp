@@ -16,7 +16,7 @@
 
 
 #define __Construct_Orbitals__\
-	this->Orbitals.resize(nindbasis);\
+	this->Orbitals.resize(nindbasis * ( this->Wfntype == 0 ? 1 : 2));\
 	for ( MwfnOrbital& orbital : this->Orbitals ){\
 		orbital.Coeff.resize(nbasis);\
 	}\
@@ -57,13 +57,13 @@
 	int total = lower ? ( ( 1 + ncols ) * ncols / 2 ) : ( nrows * ncols );\
 	__Read_Array_Head__\
 		if (lower){\
-			mat(irow, jcol)=mat(jcol, irow) = SafeStod(word);\
+			mat(irow, jcol)=mat(jcol, irow) = SafeStoD(word);\
 			if ( irow == jcol ){\
 				irow++;\
 				jcol = 0;\
 			}else jcol++;\
 		}else{\
-			mat(irow, jcol) = SafeStod(word);\
+			mat(irow, jcol) = SafeStoD(word);\
 			if ( jcol + 1 == ncols ){\
 				irow++;\
 				jcol = 0;\
@@ -72,7 +72,7 @@
 	__Read_Array_Tail__
 
 EigenMatrix Multiwfn::MatrixTransform(){ // Chinium orders basis functions in the order like P-1, P0, P+1 and D-2, D-1, D0, D+1, D+2, while .mwfn does like Px, Py, Pz and D0, D+1, D-1, D+2, D-2. This function is used to transform matrices between two forms. 
-	std::map<int,EigenMatrix> SPDFGHI; // 0 1 2 3 4 5 6 -6 -5 -4 -3 -2 -1
+	std::map<int, EigenMatrix> SPDFGHI; // 0 1 2 3 4 5 6 -6 -5 -4 -3 -2 -1
 	SPDFGHI[0] = EigenOne(1, 1);
 	SPDFGHI[1] = EigenOne(3, 3);
 	SPDFGHI[2] = EigenOne(6, 6);
@@ -146,7 +146,7 @@ EigenMatrix Multiwfn::MatrixTransform(){ // Chinium orders basis functions in th
 	return transform;
 }
 
-double SafeStod(std::string word){ // In FT theory, some occupation numbers can be of dimension of 1E-50 or less. These small values cannot be stored as doubles and are likely to cause "out_of_range" error.
+static double SafeStoD(std::string word){ // In FT theory, some occupation numbers can be of dimension of 1E-50 or less. These small values cannot be stored as doubles and are likely to cause "out_of_range" error.
 	double value = 1919810;
 	try{
 		value = std::stod(word);
@@ -178,10 +178,10 @@ Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 			this->Wfntype = std::stoi(word);
 		}else if ( word.compare("E_tot=") == 0 ){
 			ss >> word;
-			this->E_tot = SafeStod(word);
+			this->E_tot = SafeStoD(word);
 		}else if ( word.compare("VT_ratio=") == 0 ){
 			ss >> word;
-			this->VT_ratio = SafeStod(word);
+			this->VT_ratio = SafeStoD(word);
 		}
 
 		// Field 2
@@ -198,13 +198,13 @@ Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 				ss >> word;
 				center.Index = std::stoi(word);
 				ss >> word;
-				center.Nuclear_charge = SafeStod(word);
+				center.Nuclear_charge = SafeStoD(word);
 				ss >> word;
-				center.Coordinates[0] = SafeStod(word) * __angstrom2bohr__;
+				center.Coordinates[0] = SafeStoD(word) * __angstrom2bohr__;
 				ss >> word;
-				center.Coordinates[1] = SafeStod(word) * __angstrom2bohr__;
+				center.Coordinates[1] = SafeStoD(word) * __angstrom2bohr__;
 				ss >> word;
-				center.Coordinates[2] = SafeStod(word) * __angstrom2bohr__;
+				center.Coordinates[2] = SafeStoD(word) * __angstrom2bohr__;
 			}
 		}
 
@@ -250,13 +250,13 @@ Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 			const int total = Shells.size();
 			__Read_Array2_Head__
 				const int total2 = Shells[k].Exponents.size();
-				Shells[k].Exponents[l] = SafeStod(word);
+				Shells[k].Exponents[l] = SafeStoD(word);
 			__Read_Array2_Tail__
 		}else if ( word.compare("$Contraction") == 0 ){
 			const int total = Shells.size();
 			__Read_Array2_Head__
 				const int total2 = Shells[k].Coefficients.size();
-				Shells[k].Coefficients[l] = SafeStod(word);
+				Shells[k].Coefficients[l] = SafeStoD(word);
 			__Read_Array2_Tail__
 		}
 
@@ -276,17 +276,17 @@ Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 			this->Orbitals[tmp_int].Type = std::stoi(word);
 		}else if ( word.compare("Energy=") == 0 ){
 			ss >> word;
-			this->Orbitals[tmp_int].Energy = SafeStod(word);
+			this->Orbitals[tmp_int].Energy = SafeStoD(word);
 		}else if ( word.compare("Occ=") == 0 ){
 			ss >> word;
-			this->Orbitals[tmp_int].Occ = SafeStod(word);
+			this->Orbitals[tmp_int].Occ = SafeStoD(word);
 		}else if ( word.compare("Sym=") == 0 ){
 			ss >> word;
 			this->Orbitals[tmp_int].Sym = word;
 		}else if ( word.compare("$Coeff") == 0){
 			const int total = this->Orbitals[tmp_int].Coeff.size();
 			__Read_Array_Head__
-				CoefficientMatrix(k, tmp_int) = SafeStod(word);
+				this->Orbitals[tmp_int].Coeff(k) = SafeStoD(word);
 			__Read_Array_Tail__
 		}
 
@@ -324,8 +324,10 @@ Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 		}
 		*/
 	}
-	EigenMatrix tmp_mat = mwfntransform.transpose() * CoefficientMatrix;
-	this->setCoefficientMatrix(tmp_mat);
+	for ( int spin : ( this->Wfntype == 0 ? std::vector<int>{0} : std::vector<int>{1, 2} ) ){
+		const EigenMatrix tmp_mat = mwfntransform.transpose() * this->getCoefficientMatrix(spin);
+		this->setCoefficientMatrix(tmp_mat, spin);
+	}
 	this->Normalize();
 }
 
@@ -337,12 +339,21 @@ void PrintMatrix(std::FILE * file, EigenMatrix matrix, bool lower){
 	}
 }
 
-double Multiwfn::getNumElec(int spin){ // Need modification for UHF wavefunctions.
+#define __Check_Spin_Type_Shift__\
+	if ( this->Wfntype == 0 ) assert( spin == 0 && "Invalid spin type!" );\
+	if ( this->Wfntype == 1 ) assert( ( spin == 1 || spin == 2 ) && "Invalide spin type!" );\
+	const int shift = ( this->Wfntype == 0 ? 0 : spin - 1 ) * this->getNumIndBasis();
+
+double Multiwfn::getNumElec(int spin){ // Total number of electrons if spin == -1 .
 	double nelec = 0;
-	for ( MwfnOrbital& orbital : this->Orbitals ){
-		nelec += orbital.Occ;
+	if ( spin == -1 ){
+		for ( int i = 0; i < (int)this->Orbitals.size(); i++ )
+			nelec += this->Orbitals[i].Occ;
+	}else{
+		__Check_Spin_Type_Shift__
+		for ( int i = 0; i < this->getNumIndBasis(); i++ )
+			nelec += this->Orbitals[i + shift].Occ;
 	}
-	if ( spin != 0) nelec /= 2;
 	return nelec;
 }
 
@@ -350,7 +361,7 @@ double Multiwfn::getCharge(){
 	double nuclear_charge = 0;
 	for ( MwfnCenter& center : this->Centers )
 		nuclear_charge += center.Nuclear_charge;
-	double nelec = this->getNumElec(0);
+	double nelec = this->getNumElec(-1);
 	return nuclear_charge - nelec;
 }
 
@@ -366,7 +377,7 @@ int Multiwfn::getNumBasis(){
 }
 
 int Multiwfn::getNumIndBasis(){
-	return this->Orbitals.size();
+	return this->Orbitals.size() / ( this->Wfntype == 0 ? 1 : 2);
 }
 
 int Multiwfn::getNumPrims(){
@@ -392,61 +403,67 @@ int Multiwfn::getNumPrimShells(){
 	return nprimshells;
 }
 
-EigenMatrix Multiwfn::getCoefficientMatrix(){
+EigenMatrix Multiwfn::getCoefficientMatrix(int spin){
+	__Check_Spin_Type_Shift__
 	EigenMatrix matrix = EigenZero(this->getNumBasis(), this->getNumIndBasis());
 	for ( int irow = 0; irow < this->getNumBasis(); irow++ )
 		for ( int jcol = 0; jcol < this->getNumIndBasis(); jcol++ )
-			matrix(irow, jcol) = this->Orbitals[jcol].Coeff(irow);
+			matrix(irow, jcol) = this->Orbitals[jcol + shift].Coeff(irow);
 	return matrix;
 }
 
-void Multiwfn::setCoefficientMatrix(EigenMatrix matrix){
+void Multiwfn::setCoefficientMatrix(EigenMatrix matrix, int spin){
+	__Check_Spin_Type_Shift__
 	this->Orbitals.resize(matrix.cols());
 	for ( int jcol = 0; jcol < this->getNumIndBasis(); jcol++ )
-		this->Orbitals[jcol].Coeff = matrix.col(jcol);
+		this->Orbitals[jcol + shift].Coeff = matrix.col(jcol);
 }
 
-EigenVector Multiwfn::getEnergy(){
+EigenVector Multiwfn::getEnergy(int spin){
+	__Check_Spin_Type_Shift__
 	EigenVector energies(this->getNumIndBasis());
 	for ( int iorbital = 0; iorbital < this->getNumIndBasis(); iorbital++ )
-		energies(iorbital) = this->Orbitals[iorbital].Energy;
+		energies(iorbital) = this->Orbitals[iorbital + shift].Energy;
 	return energies;
 }
 
-void Multiwfn::setEnergy(EigenVector energies){
+void Multiwfn::setEnergy(EigenVector energies, int spin){
+	__Check_Spin_Type_Shift__
 	for ( int iorbital = 0; iorbital < this->getNumIndBasis(); iorbital++ )
-		this->Orbitals[iorbital].Energy = energies(iorbital);
+		this->Orbitals[iorbital + shift].Energy = energies(iorbital);
 }
 
-EigenVector Multiwfn::getOccupation(){
+EigenVector Multiwfn::getOccupation(int spin){
+	__Check_Spin_Type_Shift__
 	EigenVector occupancies(this->getNumIndBasis());
 	for ( int iorbital = 0; iorbital < this->getNumIndBasis(); iorbital++ )
-		occupancies(iorbital) = this->Orbitals[iorbital].Occ;
+		occupancies(iorbital) = this->Orbitals[iorbital + shift].Occ;
 	return occupancies;
 }
 
-void Multiwfn::setOccupation(EigenVector occupancies){
+void Multiwfn::setOccupation(EigenVector occupancies, int spin){
+	__Check_Spin_Type_Shift__
 	for ( int iorbital = 0; iorbital < std::min((int)occupancies.size(), this->getNumIndBasis()); iorbital++ )
-		this->Orbitals[iorbital].Occ = occupancies(iorbital);
+		this->Orbitals[iorbital + shift].Occ = occupancies(iorbital);
 }
 
-EigenMatrix Multiwfn::getFock(){
+EigenMatrix Multiwfn::getFock(int spin){
 	const EigenMatrix S = this->Overlap;
-	const EigenMatrix E = this->getEnergy().asDiagonal();
-	const EigenMatrix C = this->getCoefficientMatrix();
+	const EigenDiagonal E = this->getEnergy(spin).asDiagonal();
+	const EigenMatrix C = this->getCoefficientMatrix(spin);
 	return S * C * E * C.transpose() * S;
 }
 
-EigenMatrix Multiwfn::getDensity(){
-	const EigenMatrix N = this->getOccupation().asDiagonal();
-	const EigenMatrix C = this->getCoefficientMatrix();
+EigenMatrix Multiwfn::getDensity(int spin){
+	const EigenDiagonal N = this->getOccupation(spin).asDiagonal();
+	const EigenMatrix C = this->getCoefficientMatrix(spin);
 	return C * N * C.transpose();
 }
 
-EigenMatrix Multiwfn::getEnergyDensity(){
-	const EigenMatrix N = this->getOccupation().asDiagonal();
-	const EigenMatrix E = this->getEnergy().asDiagonal();
-	const EigenMatrix C = this->getCoefficientMatrix();
+EigenMatrix Multiwfn::getEnergyDensity(int spin){
+	const EigenDiagonal N = this->getOccupation(spin).asDiagonal();
+	const EigenDiagonal E = this->getEnergy(spin).asDiagonal();
+	const EigenMatrix C = this->getCoefficientMatrix(spin);
 	return C * N * E * C.transpose();
 }
 
@@ -457,10 +474,15 @@ void Multiwfn::Export(std::string mwfn_filename, const bool output){
 
 	// Field 1
 	std::fprintf(file, "\n\n# Overview\n");
-	std::fprintf(file, "Wfntype= %d\n", 0);
+	std::fprintf(file, "Wfntype= %d\n", this->Wfntype);
 	std::fprintf(file, "Charge= %f\n", this->getCharge());
-	std::fprintf(file, "Naelec= %f\n", this->getNumElec(1));
-	std::fprintf(file, "Nbelec= %f\n", this->getNumElec(2));
+	if ( this->Wfntype == 0 ){
+		std::fprintf(file, "Naelec= %f\n", this->getNumElec() / 2);
+		std::fprintf(file, "Nbelec= %f\n", this->getNumElec() / 2);
+	}else{
+		std::fprintf(file, "Naelec= %f\n", this->getNumElec(1));
+		std::fprintf(file, "Nbelec= %f\n", this->getNumElec(2));
+	}
 	if ( this->E_tot != -114514 )
 		std::fprintf(file, "E_tot= %f\n", this->E_tot);
 	if ( this->VT_ratio != -114514 )

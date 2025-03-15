@@ -22,11 +22,11 @@ SG-3
 method
 rhf
 
+scftype
+diis
+
 basis
 cc-pvdz
-
-atemperature
-0.0000000000000000001
 
 derivative
 1
