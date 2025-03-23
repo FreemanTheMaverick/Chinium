@@ -158,10 +158,10 @@ std::tuple<EigenMatrix, EigenMatrix, EigenMatrix, EigenMatrix> Guhf(
 		}
 	}
 	Eigen::setNbThreads(nthreads);
-	const EigenMatrix Ja = 0.5 * ( rawJa + rawJa.transpose() );
-	const EigenMatrix Jb = 0.5 * ( rawJb + rawJb.transpose() );
-	const EigenMatrix Ka = 0.25 * ( rawKa + rawKa.transpose() );
-	const EigenMatrix Kb = 0.25 * ( rawKb + rawKb.transpose() );
+	const EigenMatrix Ja = 0.25 * ( rawJa + rawJa.transpose() );
+	const EigenMatrix Jb = 0.25 * ( rawJb + rawJb.transpose() );
+	const EigenMatrix Ka = 0.125 * ( rawKa + rawKa.transpose() );
+	const EigenMatrix Kb = 0.125 * ( rawKb + rawKb.transpose() );
 	return std::make_tuple(Ja, Jb, Ka, Kb);
 }
 

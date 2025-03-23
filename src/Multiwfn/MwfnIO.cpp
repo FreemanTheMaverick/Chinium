@@ -16,11 +16,10 @@
 
 
 #define __Construct_Orbitals__\
-	this->Orbitals.resize(nindbasis * ( this->Wfntype == 0 ? 1 : 2));\
+	this->Orbitals.resize(nindbasis * ( this->Wfntype == 0 ? 1 : 2 ));\
 	for ( MwfnOrbital& orbital : this->Orbitals ){\
 		orbital.Coeff.resize(nbasis);\
 	}\
-	CoefficientMatrix = EigenZero(nbasis, nindbasis);
 
 #define __Read_Array_Head__\
 	int k = 0;\
@@ -167,7 +166,6 @@ Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 	std::vector<MwfnShell> Shells = {};
 	std::vector<int> Shell_centers={};
 	EigenMatrix mwfntransform;
-	EigenMatrix CoefficientMatrix;
 	while ( std::getline(file, line) ){
 		std::stringstream ss(line);
 		ss >> word;
@@ -263,7 +261,7 @@ Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 		// Field 4
 		else if ( word.compare("Index=") == 0 ){
 			if ( mwfntransform.cols() == 0 ){ // This indicates the end of Field 5.
-				for ( int ishell = 0; ishell < int(Shells.size()); ishell++ ){
+				for ( int ishell = 0; ishell < (int)Shells.size(); ishell++ ){
 					const int jcenter = Shell_centers[ishell] - 1;
 					this->Centers[jcenter].Shells.push_back(std::move(Shells[ishell]));
 				}
@@ -341,7 +339,7 @@ void PrintMatrix(std::FILE * file, EigenMatrix matrix, bool lower){
 
 #define __Check_Spin_Type_Shift__\
 	if ( this->Wfntype == 0 ) assert( spin == 0 && "Invalid spin type!" );\
-	if ( this->Wfntype == 1 ) assert( ( spin == 1 || spin == 2 ) && "Invalide spin type!" );\
+	if ( this->Wfntype == 1 ) assert( ( spin == 1 || spin == 2 ) && "Invalid spin type!" );\
 	const int shift = ( this->Wfntype == 0 ? 0 : spin - 1 ) * this->getNumIndBasis();
 
 double Multiwfn::getNumElec(int spin){ // Total number of electrons if spin == -1 .
@@ -406,15 +404,13 @@ int Multiwfn::getNumPrimShells(){
 EigenMatrix Multiwfn::getCoefficientMatrix(int spin){
 	__Check_Spin_Type_Shift__
 	EigenMatrix matrix = EigenZero(this->getNumBasis(), this->getNumIndBasis());
-	for ( int irow = 0; irow < this->getNumBasis(); irow++ )
-		for ( int jcol = 0; jcol < this->getNumIndBasis(); jcol++ )
-			matrix(irow, jcol) = this->Orbitals[jcol + shift].Coeff(irow);
+	for ( int jcol = 0; jcol < this->getNumIndBasis(); jcol++ )
+		matrix.col(jcol) = this->Orbitals[jcol + shift].Coeff;
 	return matrix;
 }
 
 void Multiwfn::setCoefficientMatrix(EigenMatrix matrix, int spin){
 	__Check_Spin_Type_Shift__
-	this->Orbitals.resize(matrix.cols());
 	for ( int jcol = 0; jcol < this->getNumIndBasis(); jcol++ )
 		this->Orbitals[jcol + shift].Coeff = matrix.col(jcol);
 }
@@ -547,7 +543,6 @@ void Multiwfn::Export(std::string mwfn_filename, const bool output){
 	// Field 4
 	std::fprintf(file, "\n\n# Orbitals\n");
 	EigenMatrix mwfntransform = this->MatrixTransform();
-	EigenMatrix CoefficientMatrix = mwfntransform * this->getCoefficientMatrix();
 	int iorbital = 0;
 	for ( MwfnOrbital& orbital : this->Orbitals ){
 		std::fprintf(file, "Index= %9d\n", iorbital + 1);
@@ -556,8 +551,10 @@ void Multiwfn::Export(std::string mwfn_filename, const bool output){
 		std::fprintf(file, "Occ= %E\n", orbital.Occ);
 		std::fprintf(file, "Sym= %s\n", orbital.Sym.c_str());
 		std::fprintf(file, "$Coeff\n");
-		for ( int j = 0; j < this->getNumBasis(); j++ )
-			std::fprintf(file, " %.10E", CoefficientMatrix(j, iorbital));
+		for ( int j = 0; j < this->getNumBasis(); j++ ){
+			const EigenVector c = mwfntransform * orbital.Coeff;
+			std::fprintf(file, " %.10E", c(j));
+		}
 		std::fprintf(file, "\n\n");
 		iorbital++;
 	}
@@ -728,6 +725,21 @@ void Multiwfn::PrintOrbitals(){
 					iorbital,
 					orbital.Energy * __hartree2ev__,
 					orbital.Occ
+			);
+		}
+	}else if ( this->Wfntype == 1 ){
+		std::printf("| Number | Energy (eV) | Occupation | Number | Energy (eV) | Occupation |\n");
+		for ( int iorbital = 0; iorbital < this->getNumIndBasis(); iorbital++ ){
+			MwfnOrbital& orbitala = this->Orbitals[iorbital];
+			MwfnOrbital& orbitalb = this->Orbitals[iorbital + this->getNumIndBasis()];
+			std::printf(
+					"| %6d | % 11.4f | %10.8f | %6d | % 11.4f | %10.8f |\n",
+					iorbital,
+					orbitala.Energy * __hartree2ev__,
+					orbitala.Occ,
+					iorbital + this->getNumIndBasis(),
+					orbitalb.Energy * __hartree2ev__,
+					orbitalb.Occ
 			);
 		}
 	}

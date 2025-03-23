@@ -11,7 +11,6 @@
 
 #include "../Macro.h"
 #include "../Multiwfn.h"
-#include "../DIIS.h"
 #include "../Grid/GridAO.h"
 #include "../Grid/GridDensity.h"
 #include "../ExchangeCorrelation/MwfnXC1.h"
@@ -24,6 +23,28 @@
 #define __Allocate_and_Zero__(array)\
 	if (array) std::memset(array, 0, ngrids * sizeof(double));\
 	else array = new double[ngrids]();
+
+static EigenMatrix CDIIS(std::deque<EigenMatrix>& Gs, std::deque<EigenMatrix>& Fs){
+	const int size = Fs.size();
+	EigenMatrix B = EigenZero(size + 1, size + 1);
+	EigenVector b(size + 1); b.setZero();
+	b[size] = -1;
+	for ( int i = 0; i < size; i++ ){
+		for ( int j = 0; j <= i; j++ ){
+			const double bij = (Gs[i].transpose() * Gs[j]).trace();
+			B(i, j) = bij;
+			B(j, i) = bij;
+		}
+		B(i, size) = -1;
+		B(size, i) = -1;
+		b[i] = 0;
+	}
+	EigenVector x = B.colPivHouseholderQr().solve(b);
+	EigenMatrix F = EigenZero(Fs[0].rows(), Fs[0].cols());
+	for ( int i = 0; i < size; i++ )
+		F += x(i) * Fs[i];
+	return F;
+}
 
 std::tuple<
 	std::vector<EigenMatrix>,

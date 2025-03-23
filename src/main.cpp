@@ -22,7 +22,8 @@ int main(int argc, char* argv[]){ (void)argc;
 	// Reading input file
 	const std::vector<std::vector<double>> atoms = ReadXYZ(inp);
 	const std::string basis = ReadBasisSet(inp);
-	const int nelec = ReadNumElectrons(inp);
+	auto [na, nb] = ReadNumElectrons(inp);
+	const int wfntype = ReadWfnType(inp);
 	const int nthreads = ReadNumThreads(inp);
 	const std::string jobtype = ReadJobType(inp);
 	const std::string scf = ReadSCF(inp);
@@ -32,7 +33,7 @@ int main(int argc, char* argv[]){ (void)argc;
 	const int derivative = ReadDerivative(inp);
 	const double temperature = ReadTemperature(inp);
 	const double chemicalpotential = ReadChemicalPotential(inp);
-
+	
 	// Deciding whether to read existing mwfn file.
 	Multiwfn mwfn;
 	if ( atoms.empty() || basis.empty() || guess.compare("READ") == 0 )
@@ -66,7 +67,13 @@ int main(int argc, char* argv[]){ (void)argc;
 	mwfn.ChemicalPotential = chemicalpotential;
 
 	// Initializing E and its derivatives
-	mwfn.Wfntype = 0;
+	if ( guess.compare("READ") != 0 ){
+		mwfn.Wfntype = wfntype;
+		if ( wfntype == -1 ){
+			if ( na == nb ) mwfn.Wfntype = 0;
+			else mwfn.Wfntype = 1;
+		}
+	}
 	mwfn.E_tot = 0;
 	mwfn.Gradient = EigenZero(mwfn.getNumCenters(), 3);
 	mwfn.Hessian = EigenZero(3 * mwfn.getNumCenters(), 3 * mwfn.getNumCenters());
@@ -82,8 +89,8 @@ int main(int argc, char* argv[]){ (void)argc;
 		}
 		mwfn.getRepulsion({0}, -1., nthreads, 1);
 
-		if ( method.compare("RHF") != 0 || guess.compare("SAP") == 0 ){
-			if ( method.compare("RHF") != 0 ){
+		if ( method.compare("HF") != 0 || guess.compare("SAP") == 0 ){
+			if ( method.compare("HF") != 0 ){
 				mwfn.XC.Read(method, 1);
 				mwfn.PrepareXC("ev",1);
 				if ( derivative > 1 ) mwfn.PrepareXC("f",1);
@@ -101,9 +108,18 @@ int main(int argc, char* argv[]){ (void)argc;
 						mwfn.getGridAO(2, 1); break;
 				}
 			}else mwfn.getGridAO(0, 1); // For SAP initial guess.
-		} // if ( method.compare("RHF") != 0 || guess.compare("SAP") == 0 )
-		if ( guess.compare("READ") != 0 ) mwfn.GuessSCF(guess, 1);
-		mwfn.setOccupation((EigenVector)(EigenZero(nelec / 2, 1).array() + 2).matrix());
+		} // if ( method.compare("HF") != 0 || guess.compare("SAP") == 0 )
+		if ( guess.compare("READ") != 0 ){
+			if ( mwfn.Wfntype == 0 ){
+				mwfn.Orbitals.resize(mwfn.getNumBasis());
+				mwfn.setOccupation((EigenVector)(EigenZero(na, 1).array() + 2).matrix());
+			}else if ( mwfn.Wfntype == 1 ){
+				mwfn.Orbitals.resize(mwfn.getNumBasis() * 2);
+				mwfn.setOccupation((EigenVector)(EigenZero(na, 1).array() + 1).matrix(), 1);
+				mwfn.setOccupation((EigenVector)(EigenZero(nb, 1).array() + 1).matrix(), 2);
+			}
+			mwfn.GuessSCF(guess, 1);
+		}
 		mwfn.HartreeFockKohnSham(scf, 4, nthreads);
 		std::printf("Total energy: %17.10f\n", mwfn.E_tot);
 		mwfn.PrintOrbitals();

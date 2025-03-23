@@ -2,7 +2,9 @@ std::vector<std::vector<double>> ReadXYZ(std::string inp);
 
 std::string ReadBasisSet(std::string inp);
 
-int ReadNumElectrons(std::string inp);
+std::tuple<int, int> ReadNumElectrons(std::string inp);
+
+int ReadWfnType(std::string inp);
 
 int ReadNumThreads(std::string inp);
 

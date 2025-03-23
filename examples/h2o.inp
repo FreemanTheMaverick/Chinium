@@ -20,7 +20,7 @@ grid
 SG-3
 
 method
-rhf
+hf
 
 scftype
 diis

@@ -1,5 +1,6 @@
 #include <cmath>
 #include <vector>
+#include <tuple>
 #include <sstream>
 #include <fstream>
 #include <iostream>		
@@ -77,13 +78,14 @@ std::string ReadBasisSet(std::string inp){
 	return basis;
 }
 
-int ReadNumElectrons(std::string inp){
+std::tuple<int, int> ReadNumElectrons(std::string inp){
 	std::ifstream file(inp);
 	std::vector<std::vector<double>> atoms = ReadXYZ(inp);
 	int ne = 0;
 	for ( std::vector<double>& atom : atoms )
 		ne += std::round(atom[0]);
 	int charge = 0;
+	int spin = 0;
 	std::string thisline;
 	bool found = 0;
 	while ( std::getline(file, thisline) && ! found ){
@@ -91,14 +93,50 @@ int ReadNumElectrons(std::string inp){
 		if ( thisline.compare("CHARGE") == 0 ){
 			found = 1;
 			std::getline(file, thisline);
-			assert(thisline.length() > 0 && "Missing charge!");
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing charge!");
 			std::stringstream ss(thisline);
 			ss >> charge;
 		}
 	}
+	file.clear(); file.seekg(0); // Going back to head of file.
+	found = 0;
+	while ( std::getline(file, thisline) && ! found ){
+		__To_Upper__(thisline);
+		if ( thisline.compare("SPIN") == 0 ){
+			found = 1;
+			std::getline(file, thisline);
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing spin!");
+			std::stringstream ss(thisline);
+			ss >> spin;
+		}
+	}
 	ne -= charge;
-	assert(ne > 0 && "Invalid number of electrons!");
-	return ne;
+	if ( spin == 0 && ne % 2 == 0 ) spin = 1;
+	else if ( spin == 0 && ne % 2 == 1 ) spin = 2;
+	if ( ( ne + spin ) % 2 == 0 ) throw std::runtime_error("Incompatible number of electrons and spin multiplicity!");
+	int na = ( ne + ( spin - 1 ) ) / 2;
+	int nb = ( ne - ( spin - 1 ) ) / 2;
+	if ( na < 0 || nb < 0 ) throw std::runtime_error("Negative number of electrons!");
+	return std::make_tuple(na, nb);
+}
+
+int ReadWfnType(std::string inp){
+	std::ifstream file(inp);
+	std::string thisline;
+	bool found = 0;
+	int wfntype = -1; // 0 for spin-restricted, 1 for spin-unrestricted, -1 for depending on nelec and spin.
+	while ( std::getline(file, thisline) && ! found ){
+		__To_Upper__(thisline);
+		if ( thisline.compare("WFNTYPE")==0 ){
+			found = 1;
+			std::getline(file, thisline);
+			assert(thisline.length() > 0 && "Missing WfnType!");
+			std::stringstream ss(thisline);
+			ss >> wfntype;
+		}
+	}
+	if ( wfntype != 0 && wfntype != 1 && wfntype != -1 ) std::runtime_error("Invalid type of wavefunction!");
+	return wfntype;
 }
 
 int ReadNumThreads(std::string inp){
@@ -203,7 +241,7 @@ std::string ReadMethod(std::string inp){
 	std::ifstream file(inp);
 	std::string thisline;
 	bool found = 0;
-	std::string method = "RHF";
+	std::string method = "HF";
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
 		if ( thisline.compare("METHOD") == 0 ){

@@ -1,6 +1,6 @@
 .PHONY: all
 
-all: MAIN GATEWAY DIIS GRID HARTREEFOCKKOHNSHAM MULTIWFN INTEGRAL LOCALIZATION EXCHANGECORRELATION
+all: MAIN GATEWAY DIIS_ GRID HARTREEFOCKKOHNSHAM MULTIWFN INTEGRAL LOCALIZATION EXCHANGECORRELATION
 
 MAIN: main.cpp
 	$(CXX) -o ../obj/main.o main.cpp -c $(GeneralFlags) $(EIGEN3Flags)
@@ -8,8 +8,8 @@ MAIN: main.cpp
 GATEWAY: Gateway.cpp
 	$(CXX) -o ../obj/Gateway.o Gateway.cpp -c $(GeneralFlags) $(EIGEN3Flags)
 
-DIIS: DIIS.cpp
-	$(CXX) -o ../obj/DIIS.o DIIS.cpp -c $(GeneralFlags) $(EIGEN3Flags) $(MANIVERSEFlags)
+DIIS_:
+	$(MAKE) -C DIIS
 
 EXCHANGECORRELATION:
 	$(MAKE) -C ExchangeCorrelation

@@ -84,8 +84,15 @@ void Multiwfn::GuessSCF(std::string guess, const bool output){
 		Eigen::GeneralizedSelfAdjointEigenSolver<EigenMatrix> solver;
 		solver.compute(this->Kinetic + this->Nuclear + V, this->Overlap);
 		for ( int spin : ( this->Wfntype == 0 ? std::vector<int>{0} : std::vector<int>{1, 2} ) ){
-			this->setCoefficientMatrix(solver.eigenvectors(), spin);
-			this->setEnergy(solver.eigenvalues(), spin);
+			const EigenMatrix C = solver.eigenvectors();
+			const EigenMatrix eps = solver.eigenvalues();
+			this->setCoefficientMatrix(C, spin);
+			this->setEnergy(eps, spin);
+			if ( this->Temperature > 0 ){
+				const EigenArray n = 1. / ( 1. + ( ( eps.array() - this->ChemicalPotential ) / this->Temperature ).exp() );
+				if ( spin == 0 ) this->setOccupation(2 * n, 0);
+				else this->setOccupation(n, spin);
+			}
 		}
 	}
 }
