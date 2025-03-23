@@ -33,7 +33,6 @@ class DIIS{ public:
 	virtual ~DIIS() = default;
 
 	int getNumMatrices();
-	int getMaxSize();
 	int getCurrentSize();
 	void Steal(DIIS& another_diis);
 	void Append(std::vector<double>& objectives, std::vector<EigenMatrix>& updates, std::vector<EigenMatrix>& residuals, std::vector<EigenMatrix>& auxiliaries);
