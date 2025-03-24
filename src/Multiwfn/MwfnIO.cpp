@@ -709,7 +709,6 @@ void Multiwfn::PrintCenters(){
 				center.Coordinates[0],
 				center.Coordinates[1],
 				center.Coordinates[2]
-				
 		);
 	}
 }

@@ -109,7 +109,25 @@ int main(int argc, char* argv[]){ (void)argc;
 				}
 			}else mwfn.getGridAO(0, 1); // For SAP initial guess.
 		} // if ( method.compare("HF") != 0 || guess.compare("SAP") == 0 )
-		if ( guess.compare("READ") != 0 ){
+		if ( guess.compare("READ") == 0 ){ // Orthogonalizing the orbitals read from mwfn.
+			Eigen::SelfAdjointEigenSolver<EigenMatrix> solver;
+			const EigenMatrix S = mwfn.Overlap;
+			if ( mwfn.Wfntype == 0 ){
+				const EigenMatrix C = mwfn.getCoefficientMatrix(0);
+				solver.compute(C.transpose() * S * C);
+				const EigenMatrix X = solver.operatorInverseSqrt();
+				mwfn.setCoefficientMatrix(C * X, 0);
+			}else if ( mwfn.Wfntype == 1 ){
+				const EigenMatrix Ca = mwfn.getCoefficientMatrix(1);
+				solver.compute(Ca.transpose() * S * Ca);
+				const EigenMatrix Xa = solver.operatorInverseSqrt();
+				mwfn.setCoefficientMatrix(Ca * Xa, 1);
+				const EigenMatrix Cb = mwfn.getCoefficientMatrix(2);
+				solver.compute(Cb.transpose() * S * Cb);
+				const EigenMatrix Xb = solver.operatorInverseSqrt();
+				mwfn.setCoefficientMatrix(Cb * Xb, 2);
+			}
+		}else{
 			if ( mwfn.Wfntype == 0 ){
 				mwfn.Orbitals.resize(mwfn.getNumBasis());
 				mwfn.setOccupation((EigenVector)(EigenZero(na, 1).array() + 2).matrix());

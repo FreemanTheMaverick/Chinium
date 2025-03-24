@@ -113,8 +113,8 @@ bool DIIS::Run(std::vector<EigenMatrix>& Ms){
 		std::vector<EigenMatrix> updates(nmatrices);
 		std::vector<EigenMatrix> residuals(nmatrices);
 		std::vector<EigenMatrix> auxiliaries(nmatrices);
-		if ( iiter == 0 && this->getCurrentSize() >= 2 ){
-			std::printf("Hot restart -> Skipping computation in the first iteration\n");
+		if ( iiter == 0 && this->getCurrentSize() > 0 ){
+			if (this->Verbose) std::printf("Hot restart -> Skipping computation in the first iteration\n");
 			for ( int imat = 0; imat < nmatrices; imat++ ){
 				objectives[imat] = this->Objectivess[imat].back();
 				updates[imat] = this->Updatess[imat].back();

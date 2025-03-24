@@ -245,7 +245,6 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 	double E = 0;
 	EigenVector epsilons = EigenZero(Z.cols(), 1);
 	EigenVector occupations = Occ;
-	EigenVector old_occupations = Occ;
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 	std::function<std::tuple<
@@ -264,7 +263,6 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		E = 0;
 		if ( T ){
 			const EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
-			old_occupations = occupations;
 			occupations = (EigenVector)ns;
 			E += 2 * (
 					T * (
