@@ -1,0 +1,14 @@
+nthreads
+8
+
+grid
+SG-3
+
+method
+hf
+
+scftype
+diis
+
+basis
+cc-pvdz

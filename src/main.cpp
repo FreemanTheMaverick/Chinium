@@ -151,12 +151,12 @@ int main(int argc, char* argv[]){ (void)argc;
 			}
 			mwfn.HFKSDerivative(derivative, 2, nthreads);
 			if ( derivative > 0 ){
-				std::printf("Total Nuclear gradient:\n");
+				std::printf("Total nuclear gradient:\n");
 				for ( int iatom = 0; iatom < mwfn.getNumCenters(); iatom++ )
 					std::printf("| %3d  %2s  % 10.17f  % 10.17f  % 10.17f\n", iatom, mwfn.Centers[iatom].getSymbol().c_str(), mwfn.Gradient(iatom, 0), mwfn.Gradient(iatom, 1), mwfn.Gradient(iatom, 2));
 			}
 			if ( derivative > 1 ){
-				std::printf("Total Nuclear hessian:\n");
+				std::printf("Total nuclear hessian:\n");
 				for ( int xpert = 0; xpert < mwfn.getNumCenters() * 3; xpert++ ){
 					std::printf("|");
 					for (int ypert = 0; ypert <= xpert; ypert++ )

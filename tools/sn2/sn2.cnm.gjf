@@ -1,0 +1,22 @@
+%nproc=1
+%chk=sn2.cnm.chk
+# opt(ts,noeigen,calcfc,nomicro) freq nosym
+external="bash ${CHINIUM_PATH}/tools/gau_cnm.sh template sn2.mwfn"
+
+123
+
+-1 1
+ C                  0.00000000    0.00000000    0.45714286
+ H                  0.00000000    1.07000000    0.45714286
+ H                 -0.92664718   -0.53500000    0.45714286
+ H                  0.92664718   -0.53500000    0.45714286
+ F                  0.00000000    0.00000000    2.45714286
+ Cl                -0.00000000    0.00000000   -1.54285714
+
+--link1--
+%nproc=1
+%chk=sn2.cnm.chk
+# irc(rcfc,recalc=1,lqa,vtight) nosym geom=allcheck
+external="bash ${CHINIUM_PATH}/tools/gau_cnm.sh template sn2.mwfn"
+
+
