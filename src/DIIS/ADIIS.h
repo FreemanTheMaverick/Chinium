@@ -4,7 +4,6 @@ class ADIIS: public DIIS{ public:
 	ADIIS(
 		std::function<
 			std::tuple<
-				std::vector<double>,
 				std::vector<EigenMatrix>,
 				std::vector<EigenMatrix>,
 				std::vector<EigenMatrix>

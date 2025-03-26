@@ -11,7 +11,6 @@
 
 CDIIS::CDIIS(
 		std::function<std::tuple<
-			std::vector<double>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>

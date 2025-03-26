@@ -6,13 +6,11 @@ class DIIS{ public:
 	int MaxSize;
 	double Tolerance;
 	int MaxIter;
-	std::vector<std::deque<double>> Objectivess;
 	std::vector<std::deque<EigenMatrix>> Updatess;
 	std::vector<std::deque<EigenMatrix>> Residualss;
 	std::vector<std::deque<EigenMatrix>> Auxiliariess;
 	std::function<
 		std::tuple<
-			std::vector<double>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>
@@ -21,7 +19,6 @@ class DIIS{ public:
 
 	DIIS(
 		std::function<std::tuple<
-			std::vector<double>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>
@@ -35,7 +32,7 @@ class DIIS{ public:
 	int getNumMatrices();
 	int getCurrentSize();
 	void Steal(DIIS& another_diis);
-	void Append(std::vector<double>& objectives, std::vector<EigenMatrix>& updates, std::vector<EigenMatrix>& residuals, std::vector<EigenMatrix>& auxiliaries);
+	void Append(std::vector<EigenMatrix>& updates, std::vector<EigenMatrix>& residuals, std::vector<EigenMatrix>& auxiliaries);
 	bool Run(std::vector<EigenMatrix>& Ms);
 
 	virtual EigenVector Extrapolate(int index) = 0;

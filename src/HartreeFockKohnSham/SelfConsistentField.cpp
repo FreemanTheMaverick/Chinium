@@ -138,6 +138,7 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		EigenMatrix S, EigenMatrix Hcore,
 		short int* is, short int* js, short int* ks, short int* ls,
 		double* ints, long int length, int output, int nthreads){
+	double oldE = 0;
 	double E = 0;
 	EigenVector epsa = EigenZero(Za.cols(), 1);
 	EigenVector epsb = EigenZero(Zb.cols(), 1);
@@ -151,7 +152,6 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 	EigenMatrix sinvsqrt = es.operatorInverseSqrt();
 	std::function<
 		std::tuple<
-			std::vector<double>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>
@@ -168,6 +168,7 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		eigensolver.compute(Fbprime_);
 		epsb = eigensolver.eigenvalues();
 		Cb = Zb * eigensolver.eigenvectors();
+		oldE = E;
 		E = 0;
 		if ( T ){
 			const EigenArray nas = 1. / ( 1. + ( ( epsa.array() - Mu ) / T ).exp() );
@@ -199,6 +200,11 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		const EigenMatrix Fnewa_ = Fhfa_;
 		const EigenMatrix Fnewb_ = Fhfb_;
 		E += 0.5 * ( Dot(Da_, Hcore + Fnewa_) + Dot(Db_, Hcore + Fnewb_) );
+		if (output>0){
+			if ( T == 0 ) std::printf("Electronic energy = %.10f\n", E);
+			else std::printf("Electronic grand potential = %.10f\n", E);
+			std::printf("Changed by %E from the last step\n", E - oldE);
+		}
 		const EigenMatrix Ga_ = sinvsqrt * (Fnewa_ * Da_ * S - S * Da_ * Fnewa_ ) * sinvsqrt;
 		const EigenMatrix Gb_ = sinvsqrt * (Fnewb_ * Db_ * S - S * Db_ * Fnewb_ ) * sinvsqrt;
 		EigenMatrix Fnew_ = EigenZero(Fa.rows(), Fa.cols() * 2);
@@ -208,7 +214,6 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		EigenMatrix D_ = EigenZero(Fa.rows(), Fa.cols() * 2);
 		D_ << Da_, Db_;
 		return std::make_tuple(
-				std::vector<double>{E},
 				std::vector<EigenMatrix>{Fnew_},
 				std::vector<EigenMatrix>{G_},
 				std::vector<EigenMatrix>{D_}
@@ -242,13 +247,13 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		double* erhos, double* esigmas,
 		double* elapls, double* etaus,
 		int output, int nthreads){
+	double oldE = 0;
 	double E = 0;
 	EigenVector epsilons = EigenZero(Z.cols(), 1);
 	EigenVector occupations = Occ;
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 	std::function<std::tuple<
-			std::vector<double>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>
@@ -260,6 +265,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		eigensolver.compute(Fprime_);
 		epsilons = eigensolver.eigenvalues();
 		C = Z * eigensolver.eigenvectors();
+		oldE = E;
 		E = 0;
 		if ( T ){
 			const EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
@@ -291,9 +297,13 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix Fnew_ = Fhf_ + Gxc_;
 		E += (D_ * ( Hcore + Fhf_ )).trace() + Exc_;
+		if (output>0){
+			if ( T == 0 ) std::printf("Electronic energy = %.10f\n", E);
+			else std::printf("Electronic grand potential = %.10f\n", E);
+			std::printf("Changed by %E from the last step\n", E - oldE);
+		}
 		EigenMatrix G_ = Fnew_ * D_ * S - S * D_ * Fnew_;
 		return std::make_tuple(
-				std::vector<double>{E},
 				std::vector<EigenMatrix>{Fnew_},
 				std::vector<EigenMatrix>{G_},
 				std::vector<EigenMatrix>{D_}
