@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <vector>
+#include <functional>
 #include <deque>
 #include <tuple>
 #include <string>
@@ -15,6 +16,7 @@
 #include "../Grid/GridDensity.h"
 #include "../ExchangeCorrelation/MwfnXC1.h"
 #include "../Grid/GridPotential.h"
+#include "../DIIS/CDIIS.h"
 #include "FockFormation.h"
 #include "Parallel.h"
 
@@ -24,7 +26,7 @@
 	if (array) std::memset(array, 0, ngrids * sizeof(double));\
 	else array = new double[ngrids]();
 
-static EigenMatrix CDIIS(std::deque<EigenMatrix>& Gs, std::deque<EigenMatrix>& Fs){
+static EigenMatrix CDIIS_func(std::deque<EigenMatrix>& Gs, std::deque<EigenMatrix>& Fs){
 	const int size = Fs.size();
 	EigenMatrix B = EigenZero(size + 1, size + 1);
 	EigenVector b(size + 1); b.setZero();
@@ -105,23 +107,24 @@ std::tuple<
 	double* gd1ys = nullptr;
 	double* gd1zs = nullptr;
 
-	std::vector<std::deque<EigenMatrix>> Bs_deque(nmatrices);
-	std::vector<std::deque<EigenMatrix>> Rs_deque(nmatrices);
-	std::vector<int> dones(nmatrices, 0);
-	for ( int iiter = 0; iiter < 100; iiter++ ){
-		int nundones = nmatrices;
-		for ( int jdone : dones ) nundones -= jdone;
-		if ( nundones == 0 ) break;
-		if (output) std::printf("| Iteration %d with %d perturbations left ...\n", iiter, nundones); 
 
-		if (output) std::printf("| | Constructing gradients of density matrix ...");
-		auto start = __now__;
-		std::vector<EigenMatrix> undoneDs(nundones, EigenZero(nbasis, nbasis));
-		for ( int imatrix = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] ){
-			if ( Bs_deque[imatrix].size() > 1 )
-				Bs[imatrix] = CDIIS(Rs_deque[imatrix], Bs_deque[imatrix]);
+	std::function<std::tuple<
+		std::vector<EigenMatrix>,
+		std::vector<EigenMatrix>,
+		std::vector<EigenMatrix>
+		> (std::vector<EigenMatrix>&, std::vector<bool>&)
+	> update_func = [&](std::vector<EigenMatrix>& Bs_, std::vector<bool>& Dones_){
+		std::vector<EigenMatrix> newBs_ = Bs_;
+		std::vector<EigenMatrix> Rs_(nmatrices, EigenZero(nbasis, nbasis));
+		int num_undone = nmatrices;
+		for ( bool done : Dones_ ) if (done) num_undone--;
+
+		if (output) std::printf("Constructing gradients of density matrix ...");
+		auto density_start = __now__;
+		std::vector<EigenMatrix> undoneDs(num_undone, EigenZero(nbasis, nbasis));
+		for ( int imatrix = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			Ds[imatrix] = - Ns[imatrix];
-			for ( int p = 0; p < nindbasis; p++ ) for ( int q = 0; q < p; q++ ) if ( std::abs(es[p] - es[q]) > 1.e-6 ){
+			for ( int p = 0; p < nindbasis; p++ ) for ( int q = 0; q < p; q++ ) if ( std::abs(es[p] - es[q]) > __Occupation_Cutoff__ ){
 				const double Upq = Us[imatrix](p, q) = Bs[imatrix](p, q) / ( es(p) - es(q) );
 				Us[imatrix](q, p) = - Upq - CTSCs[imatrix](p, q);
 			}
@@ -146,7 +149,7 @@ std::tuple<
 			for ( int q = 0; q < p; q++ ) if ( std::abs(ns[p] - ns[q]) > 1.e-6 ){
 				CpCqT = C.col(p) * C.col(q).transpose();
 				n_CpCqT_sym = ( ns[q] - ns[p] ) * (CpCqT + CpCqT.transpose() );
-				for ( int imatrix = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] )
+				for ( int imatrix = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] )
 					D_raw_arrays[imatrix] += Up[q](imatrix) * n_CpCqT_sym;
 			}
 		}
@@ -154,18 +157,18 @@ std::tuple<
 			Ds[imatrix] += D_raw_arrays[imatrix];
 		delete [] D_raw_arrays;
 		Eigen::setNbThreads(nthreads);
-		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] )
+		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] )
 			undoneDs[jundone++] = Ds[imatrix];
-		if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
+		if (output) std::printf(" Done in %f s\n", __duration__(density_start, __now__));
 
-		if (output) std::printf("| | Constructing gradients of Fock matrix ...");
+		if (output) std::printf("Constructing gradients of Fock matrix ...");
 		auto fock_start = __now__;
 		std::vector<EigenMatrix> undoneFUs = GhfMultiple(
 				is, js, ks, ls,
 				ints, length,
 				undoneDs, kscale, nthreads
 		);
-		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] ){
+		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
 				assert(aos && "AOs on grids do not exist!");
 				assert(ao1xs && "First-order x-derivatives of AOs on grids do not exist!");
@@ -211,21 +214,15 @@ std::tuple<
 					gds, gd1xs, gd1ys, gd1zs
 			);
 			Fs[imatrix] = Fskeletons[imatrix] + undoneFUs[jundone];
-			const EigenMatrix Bnew = Bskeletons[imatrix] - C.transpose() * undoneFUs[jundone++] * C;
-			const EigenMatrix Bdiff = Bnew - Bs[imatrix];
-			Bs_deque[imatrix].push_back(Bnew);
-			Rs_deque[imatrix].push_back(Bdiff);
-			if ( Bs_deque[imatrix].size() > 6 ){
-				Bs_deque[imatrix].pop_front();
-				Rs_deque[imatrix].pop_front();
-			}
-			if ( Bdiff.cwiseAbs().maxCoeff() < 1.e-5 )
-				dones[imatrix] = 1;
-			Bs[imatrix] = Bnew;
+			newBs_[imatrix] = Bskeletons[imatrix] - C.transpose() * undoneFUs[jundone++] * C;
+			Rs_[imatrix] = newBs_[imatrix] - Bs_[imatrix];
 		}
 		if (output) std::printf(" Done in %f s\n", __duration__(fock_start, __now__));
-		if (output) std::printf("| | Done in %f s\n", __duration__(start, __now__));
-	}
+		return std::make_tuple(newBs_, Rs_, Rs_); // The last Rs_ is dummy.
+	};
+
+	CDIIS cdiis(&update_func, nmatrices, 10, 1e-5, 100, output>0);
+	if ( !cdiis.Run(Bs) ) throw std::runtime_error("Convergence failed!");
 
 	std::vector<EigenVector> Es(nmatrices, EigenZero(nindbasis, 1));
 	std::vector<EigenMatrix> Ws(nmatrices, EigenZero(nbasis, nbasis));
@@ -299,7 +296,7 @@ std::vector<EigenVector> DensityOccupationGradient(
 		std::vector<EigenMatrix> undoneDs(nundones, EigenZero(nbasis, nbasis));
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] ){
 			if ( Fs_deque[imatrix].size() > 1 )
-				Fs[imatrix] = CDIIS(Rs_deque[imatrix], Fs_deque[imatrix]);
+				Fs[imatrix] = CDIIS_func(Rs_deque[imatrix], Fs_deque[imatrix]);
 			Exs[imatrix] = (C.transpose() * Fs[imatrix] * C).diagonal() - CTSCEs[imatrix];
 			Ds[imatrix] = EigenZero(nbasis, nbasis);
 			for ( int p = 0; p < nindbasis; p++ )
