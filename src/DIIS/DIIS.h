@@ -14,7 +14,7 @@ class DIIS{ public:
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>
-		> (std::vector<EigenMatrix>&)
+		> (std::vector<EigenMatrix>&, std::vector<bool>&)
 	>* UpdateFunc;
 
 	DIIS(
@@ -22,7 +22,7 @@ class DIIS{ public:
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>
-			> (std::vector<EigenMatrix>&)
+			> (std::vector<EigenMatrix>&, std::vector<bool>&)
 		>* update_func,
 		int nmatrices, int max_size, double tolerance,
 		int max_iter, bool verbose

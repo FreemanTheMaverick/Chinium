@@ -14,7 +14,7 @@ CDIIS::CDIIS(
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>
-			> (std::vector<EigenMatrix>&)
+			> (std::vector<EigenMatrix>&, std::vector<bool>&)
 		>* update_func,
 		int nmatrices, int max_size, double tolerance,
 		int max_iter, bool verbose): DIIS(update_func, nmatrices, max_size, tolerance, max_iter, verbose){
@@ -25,10 +25,7 @@ EigenVector CDIIS::Extrapolate(int index){
 	EigenVector weight = EigenZero(this->getCurrentSize(), 1);
 	bool checked = 0;
 	double ridge = 1;
-	if (this->Verbose){
-		std::printf("CDIIS extrapolation on Matrix %d\n", index);
-		std::printf("| Size | Ridge factor | Determinant of LHS | Largest absolute weight |\n");
-	}
+	if (this->Verbose) std::printf("| Size | Ridge factor | Determinant of LHS | Largest absolute weight |\n");
 	const int size = this->getCurrentSize();
 	for ( int this_size = size; this_size > 1 && !checked; this_size--, ridge += 0.001 ){
 		EigenMatrix H = EigenZero(this_size + 1, this_size + 1);

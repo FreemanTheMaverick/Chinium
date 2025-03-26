@@ -13,7 +13,7 @@ DIIS::DIIS(
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>
-			> (std::vector<EigenMatrix>&)
+			> (std::vector<EigenMatrix>&, std::vector<bool>&)
 		>* update_func,
 		int nmatrices, int max_size, double tolerance,
 		int max_iter, bool verbose){
@@ -87,11 +87,11 @@ bool DIIS::Run(std::vector<EigenMatrix>& Ms){
 		std::printf("DIIS type: %s\n", this->Name.c_str());
 		std::printf("Maximum number of iterations: %d\n", this->MaxIter);
 		std::printf("Maximum size of DIIS space: %d\n", this->MaxSize);
-		std::printf("Number of co-optimized matrices: %d\n", this->getNumMatrices());
+		std::printf("Number of co-optimized matrices: %d\n", nmatrices);
 		std::printf("Convergence threshold for residual : %E\n\n", this->Tolerance);
 	}
 
-	double ResiNorm = 0;
+	std::vector<bool> dones(nmatrices);
 	bool converged = 0;
 	const auto all_start = __now__;
 
@@ -111,36 +111,45 @@ bool DIIS::Run(std::vector<EigenMatrix>& Ms){
 				auxiliaries[imat] = this->Auxiliariess[imat].back();
 			}
 		}else{
-			std::tie(updates, residuals, auxiliaries) = (*this->UpdateFunc)(Ms);
+			std::tie(updates, residuals, auxiliaries) = (*this->UpdateFunc)(Ms, dones);
 			this->Append(updates, residuals, auxiliaries);
 		}
 
-		ResiNorm = residuals[0].cwiseAbs().maxCoeff();
-		for ( EigenMatrix& res : residuals )
-			ResiNorm = ResiNorm > res.norm() ? ResiNorm : res.cwiseAbs().maxCoeff();
-		if (this->Verbose) std::printf("Maximal residual = %E\n", ResiNorm);
+		int num_dones = 0;
+		double max_max_residual = 0;
+		for ( int i = 0; i < nmatrices; i++ ){
+			const double max_residual = residuals[i].cwiseAbs().maxCoeff();
+			if ( i == 0 ) max_max_residual = max_residual;
+			else max_max_residual = max_max_residual > max_residual ? max_max_residual : max_residual;
+			dones[i] = max_residual < this->Tolerance;
+			if ( dones[i] ) num_dones++;
+		}
+		converged = max_max_residual < this->Tolerance;
+		if (this->Verbose){
+			std::printf("Maximal residual element = %E\n", max_max_residual);
+			std::printf("%d out of %d matrices have converged.\n", num_dones, nmatrices);
+		}
 
-		converged = ResiNorm < this->Tolerance;
 		if (converged){
-			if (this->Verbose) std::printf("Converged!\n");
+			if (this->Verbose) std::printf("Done!\n");
 		}else{
-			if (this->Verbose) std::printf("Not converged yet!\n");
-			if ( this->getCurrentSize() < 2 ){
-				if (this->Verbose) std::printf("Update: Naive\n");
+			const int current_size = this->getCurrentSize();
+			if (this->Verbose){
+				std::printf("Current DIIS space size: %d\n", current_size);
+			}
+			if ( current_size < 2 ){
+				if (this->Verbose) std::printf("Naive update\n");
 				Ms = updates;
 			}else{
-				if (this->Verbose){
-					std::printf("Update: DIIS\n");
-					std::printf("Current space size: %d\n", this->getCurrentSize());
-				}
-				for ( int mat = 0; mat < nmatrices; mat++ ){
+				for ( int mat = 0; mat < nmatrices; mat++ ) if ( !dones[mat] ){
+					if (this->Verbose) std::printf("%s extrapolation on Matrix %d\n", this->Name.c_str(), mat);
 					const EigenVector Ws = this->Extrapolate(mat);
 					Ms[mat].setZero();
-					for ( int i = 0; i < this->getCurrentSize(); i++ )
+					for ( int i = 0; i < current_size; i++ )
 						Ms[mat] += Ws[i] * Updatess[mat][i];
 					if (this->Verbose){
 						std::printf("DIIS weight:");
-						for ( int i = 0; i < this->getCurrentSize(); i++ )
+						for ( int i = 0; i < current_size; i++ )
 							std::printf(" %f", Ws[i]);
 						std::printf("\n");
 					}

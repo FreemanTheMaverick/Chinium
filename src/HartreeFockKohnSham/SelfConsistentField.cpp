@@ -155,8 +155,8 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>
-		> (std::vector<EigenMatrix>&)
-	> update_func = [&](std::vector<EigenMatrix>& Fs_){
+		> (std::vector<EigenMatrix>&, std::vector<bool>&)
+	> update_func = [&](std::vector<EigenMatrix>& Fs_, std::vector<bool>&){
 		assert(Fs_.size() == 1 && "Two Fock matrices packed together in spin-unrestricted SCF!");
 		const EigenMatrix Fa_ = Fs_[0].leftCols(Fa.cols());
 		const EigenMatrix Fb_ = Fs_[0].rightCols(Fb.cols());
@@ -257,8 +257,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>
-			>(std::vector<EigenMatrix>&)
-	> update_func = [&](std::vector<EigenMatrix>& Fs_){
+			>(std::vector<EigenMatrix>&, std::vector<bool>&)
+	> update_func = [&](std::vector<EigenMatrix>& Fs_, std::vector<bool>&){
 		assert(Fs_.size() == 1 && "Only one Fock matrix should be optimized in spin-restricted SCF!");
 		const EigenMatrix F_ = Fs_[0];
 		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z;
