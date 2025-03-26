@@ -603,7 +603,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 				this->NumGrids,
 				output - 1, nthreads
 		);
-		if (output) std::printf("| Done in %f s\n", __duration__(start, __now__));
+		if (output) std::printf("Coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));
 		this->Hessian += HFHessian(this->KineticHess + this->NuclearHess - this->OverlapHess + 0.5 * this->GHess, dDs, Fskeletons, dWs, Ss);
 
 		if ( this->Temperature > 0 ){
@@ -632,7 +632,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					this->NumGrids,
 					output - 1, nthreads
 			);
-			if (output) std::printf("| Done in %f s\n", __duration__(start, __now__));
+			if (output) std::printf("Density-based occupation-gradient coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));
 			EigenMatrix hessog = EigenZero(3 * natoms, 3 * natoms);
 			for ( int ipert = 0; ipert < 3 * natoms; ipert++ )
 				for ( int jpert = 0; jpert < 3 * natoms; jpert++ )

@@ -26,28 +26,6 @@
 	if (array) std::memset(array, 0, ngrids * sizeof(double));\
 	else array = new double[ngrids]();
 
-static EigenMatrix CDIIS_func(std::deque<EigenMatrix>& Gs, std::deque<EigenMatrix>& Fs){
-	const int size = Fs.size();
-	EigenMatrix B = EigenZero(size + 1, size + 1);
-	EigenVector b(size + 1); b.setZero();
-	b[size] = -1;
-	for ( int i = 0; i < size; i++ ){
-		for ( int j = 0; j <= i; j++ ){
-			const double bij = (Gs[i].transpose() * Gs[j]).trace();
-			B(i, j) = bij;
-			B(j, i) = bij;
-		}
-		B(i, size) = -1;
-		B(size, i) = -1;
-		b[i] = 0;
-	}
-	EigenVector x = B.colPivHouseholderQr().solve(b);
-	EigenMatrix F = EigenZero(Fs[0].rows(), Fs[0].cols());
-	for ( int i = 0; i < size; i++ )
-		F += x(i) * Fs[i];
-	return F;
-}
-
 std::tuple<
 	std::vector<EigenMatrix>,
 	std::vector<EigenMatrix>,
@@ -74,7 +52,7 @@ std::tuple<
 		int output, int nthreads){
 	Eigen::setNbThreads(nthreads);
 
-	// Step 1: Preparing data used by all perturbations
+	// Preparing data used by all perturbations
 	
 	// HF part
 	const int nmatrices = Ss.size();
@@ -261,7 +239,7 @@ std::vector<EigenVector> DensityOccupationGradient(
 		int output, int nthreads){
 	Eigen::setNbThreads(nthreads);
 
-	// Step 1: Preparing data used by all perturbations
+	// Preparing data used by all perturbations
 
 	// HF part
 	const int nmatrices = Ss.size();
@@ -283,21 +261,20 @@ std::vector<EigenVector> DensityOccupationGradient(
 	double* gd1ys = nullptr;
 	double* gd1zs = nullptr;
 
-	std::vector<std::deque<EigenMatrix>> Fs_deque(nmatrices);
-	std::vector<std::deque<EigenMatrix>> Rs_deque(nmatrices);
-	std::vector<int> dones(nmatrices, 0);
-	for ( int iiter = 0; iiter < 100; iiter++ ){
-		int nundones = nmatrices;
-		for ( int jdone : dones ) nundones -= jdone;
-		if ( nundones == 0 ) break;
-		if (output) std::printf("| Iteration %d with %d perturbations left ...", iiter, nundones); 
-		auto start = __now__;
+	std::function<std::tuple<
+		std::vector<EigenMatrix>,
+		std::vector<EigenMatrix>,
+		std::vector<EigenMatrix>
+		> (std::vector<EigenMatrix>&, std::vector<bool>&)
+	> update_func = [&](std::vector<EigenMatrix>& Fs_, std::vector<bool>& Dones_){
+		std::vector<EigenMatrix> newFs_ = Fs_;
+		std::vector<EigenMatrix> Rs_(nmatrices, EigenZero(nbasis, nbasis));
+		int num_undone = nmatrices;
+		for ( bool done : Dones_ ) if (done) num_undone--;
 
-		std::vector<EigenMatrix> undoneDs(nundones, EigenZero(nbasis, nbasis));
-		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] ){
-			if ( Fs_deque[imatrix].size() > 1 )
-				Fs[imatrix] = CDIIS_func(Rs_deque[imatrix], Fs_deque[imatrix]);
-			Exs[imatrix] = (C.transpose() * Fs[imatrix] * C).diagonal() - CTSCEs[imatrix];
+		std::vector<EigenMatrix> undoneDs(num_undone, EigenZero(nbasis, nbasis));
+		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
+			Exs[imatrix] = (C.transpose() * Fs_[imatrix] * C).diagonal() - CTSCEs[imatrix];
 			Ds[imatrix] = EigenZero(nbasis, nbasis);
 			for ( int p = 0; p < nindbasis; p++ )
 				Ds[imatrix] += Des[p] * Exs[imatrix](p);
@@ -308,7 +285,7 @@ std::vector<EigenVector> DensityOccupationGradient(
 				ints, length,
 				undoneDs, kscale, nthreads
 		);
-		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !dones[imatrix] ){
+		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
 				assert(aos && "AOs on grids do not exist!");
 				assert(ao1xs && "First-order x-derivatives of AOs on grids do not exist!");
@@ -353,16 +330,14 @@ std::vector<EigenVector> DensityOccupationGradient(
 					vrrs, vrss, vsss,
 					gds, gd1xs, gd1ys, gd1zs
 			);
-			const EigenMatrix Fnew = Fskeletons[imatrix] + undoneFUs[jundone++];
-			const EigenMatrix Fdiff = Fnew - Fs[imatrix];
-			Fs_deque[imatrix].push_back(Fnew);
-			Rs_deque[imatrix].push_back(Fdiff);
-			if ( Fdiff.cwiseAbs().maxCoeff() < 1.e-5 )
-				dones[imatrix] = 1;
-			Fs[imatrix] = Fnew;
+			newFs_[imatrix] = Fskeletons[imatrix] + undoneFUs[jundone++];
+			Rs_[imatrix] = newFs_[imatrix] - Fs[imatrix];
 		}
-		if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
-	}
+		return std::make_tuple(newFs_, Rs_, Rs_); // The last Rs_ is dummy.
+	};
+
+	CDIIS cdiis(&update_func, nmatrices, 10, 1e-5, 100, output>0);
+	if ( !cdiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
 
 	std::vector<EigenVector> Nxs(nmatrices, EigenZero(nindbasis, 1));
 	for ( int imatrix = 0; imatrix < nmatrices; imatrix++ )
