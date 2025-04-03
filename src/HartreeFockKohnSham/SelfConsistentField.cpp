@@ -18,8 +18,6 @@
 #include "../DIIS/ADIIS.h"
 #include "FockFormation.h"
 
-#include <iostream>
-
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedNewton(
 		EigenMatrix Dprime, EigenMatrix Z, EigenMatrix Hcore,
@@ -222,9 +220,10 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 	EigenMatrix F = EigenZero(Fa.rows(), Fa.cols() * 2);
 	F << Fa, Fb;
 	std::vector<EigenMatrix> Fs = {F};
-	ADIIS adiis(&update_func, 1, 20, 1e-1, 100, output>0);
+	ADIIS adiis(&update_func, 1, 20, 1e-1, 100, output>0 ? 2 : 0);
 	if ( T == 0 ) if ( !adiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
-	CDIIS cdiis(&update_func, 1, 20, 1e-5, 100, output>0);
+	CDIIS cdiis(&update_func, 1, 20, 1e-8, 100, output>0 ? 2 : 0);
+	if ( T > 0 ) cdiis.Damps.push_back(std::make_tuple(0.1, 100, 0.75));
 	cdiis.Steal(adiis);
 	if ( !cdiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsa, epsb, occa, occb, Ca, Cb);
@@ -253,6 +252,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 	EigenVector occupations = Occ;
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+
 	std::function<std::tuple<
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
@@ -310,9 +310,10 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		);
 	};
 	std::vector<EigenMatrix> Fs = {F};
-	ADIIS adiis(&update_func, 1, 20, 1e-1, 100, output>0);
+	ADIIS adiis(&update_func, 1, 20, 1e-1, 100, output>0 ? 2 : 0);
 	if ( T == 0 ) if ( !adiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
-	CDIIS cdiis(&update_func, 1, 20, 1e-5, 100, output>0);
+	CDIIS cdiis(&update_func, 1, 20, 1e-8, 100, output>0 ? 2 : 0);
+	if ( T > 0 ) cdiis.Damps.push_back(std::make_tuple(0.1, 100, 0.75));
 	cdiis.Steal(adiis);
 	if ( !cdiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilons, occupations, C);

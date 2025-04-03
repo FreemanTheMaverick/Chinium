@@ -20,7 +20,7 @@ ADIIS::ADIIS(
 			> (std::vector<EigenMatrix>&, std::vector<bool>&)
 		>* update_func,
 		int nmatrices, int max_size, double tolerance,
-		int max_iter, bool verbose): DIIS(update_func, nmatrices, max_size, tolerance, max_iter, verbose){
+		int max_iter, int verbose): DIIS(update_func, nmatrices, max_size, tolerance, max_iter, verbose){
 	this->Name = "Augmented-DIIS (ADIIS)";
 }
 
@@ -59,16 +59,16 @@ EigenVector ADIIS::Extrapolate(int index){
 		return std::make_tuple(L, G, H);
 	};
 
-	if( this->Verbose) std::printf("Calling Maniverse for optimization on the Simplex manifold\n");
+	if( this->Verbose > 1 ) std::printf("| Calling Maniverse for optimization on the Simplex manifold\n");
 	double L = 0;
 	TrustRegionSetting tr_setting;
 	const bool converged = TrustRegion(
 				func, tr_setting, {1.e-4, 1.e-6, 1e-2},
 				0.001, 1, 1000, L, M, 0
 	);
-	if ( this->Verbose && !converged ){
-		std::printf("Warning: Optimization of ADIIS weights did not fully converged!\n");
-		std::printf("Warning: This is probably fine if SCF convergence is met later.\n");
+	if ( this->Verbose > 1 && !converged ){
+		std::printf("| Warning: Optimization of ADIIS weights did not fully converged!\n");
+		std::printf("| Warning: This is probably fine if SCF convergence is met later.\n");
 	}
 
 	return (EigenVector)M.P;

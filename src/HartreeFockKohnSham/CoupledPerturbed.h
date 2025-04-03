@@ -1,3 +1,21 @@
+std::map<int, EigenMatrix> OccupationFluctuation(
+		EigenMatrix C, EigenVector es, EigenVector ns,
+		std::vector<int> frac_indeces,
+		short int* is, short int* js, short int* ks, short int* ls,
+		double* ints, long int length,
+		double kscale,
+		std::vector<int> orders,
+		double* ws,
+		double* aos,
+		double* ao1xs, double* ao1ys, double* ao1zs,
+		double* ao2xxs, double* ao2yys, double* ao2zzs,
+		double* ao2xys, double* ao2xzs, double* ao2yzs,
+		double* d1xs, double* d1ys, double* d1zs,
+		double* vrs, double* vss,
+		double* vrrs, double* vrss, double* vsss,
+		long int ngrids,
+		int output, int nthreads);
+
 std::tuple<
 	std::vector<EigenMatrix>,
 	std::vector<EigenMatrix>,
@@ -23,8 +41,10 @@ std::tuple<
 		long int ngrids,
 		int output, int nthreads);
 
-std::vector<EigenVector> DensityOccupationGradient(
-		EigenMatrix C, EigenVector es, EigenVector Nes,
+std::vector<EigenVector> OccupationGradient(
+		EigenMatrix C, EigenVector es,
+		std::map<int, EigenMatrix> Dns,
+		EigenVector Nes,
 		std::vector<EigenMatrix>& Ss,
 		std::vector<EigenMatrix>& Fskeletons,
 		short int* is, short int* js, short int* ks, short int* ls,

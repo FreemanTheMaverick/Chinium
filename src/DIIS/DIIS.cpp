@@ -16,7 +16,7 @@ DIIS::DIIS(
 			> (std::vector<EigenMatrix>&, std::vector<bool>&)
 		>* update_func,
 		int nmatrices, int max_size, double tolerance,
-		int max_iter, bool verbose){
+		int max_iter, int verbose){
 	this->Name = "DIIS";
 	this->Verbose = verbose;
 	this->MaxSize = max_size;
@@ -76,13 +76,22 @@ void DIIS::Append(
 	}
 }
 
+static double FindDamp(double max_residual, std::vector<std::tuple<double, double, double>> damps){
+	double this_mat_damp = 0;
+	for ( auto [lower, upper, damp] : damps ){
+		if ( lower < max_residual && max_residual < upper )
+			this_mat_damp = damp;
+	}
+	return this_mat_damp;
+}
+
 bool DIIS::Run(std::vector<EigenMatrix>& Ms){
 	const int nmatrices = this->getNumMatrices();
 	assert(
 			nmatrices == (int)Ms.size() &&
 			"Inconsistent numbers of matrices!"
 	);
-	if (this->Verbose){
+	if (this->Verbose > 0){
 		std::printf("************** Direct Inversion in the Iterative Subspace **************\n\n");
 		std::printf("DIIS type: %s\n", this->Name.c_str());
 		std::printf("Maximum number of iterations: %d\n", this->MaxIter);
@@ -98,13 +107,13 @@ bool DIIS::Run(std::vector<EigenMatrix>& Ms){
 	for ( int iiter = 0; iiter < this->MaxIter && ( ! converged ); iiter++ ){
 
 		const auto iter_start = __now__;
-		if (this->Verbose) std::printf("Iteration %d\n", iiter);
+		if (this->Verbose > 0) std::printf("Iteration %d\n", iiter);
 
 		std::vector<EigenMatrix> updates(nmatrices);
 		std::vector<EigenMatrix> residuals(nmatrices);
 		std::vector<EigenMatrix> auxiliaries(nmatrices);
 		if ( iiter == 0 && this->getCurrentSize() > 0 ){
-			if (this->Verbose) std::printf("Hot restart -> Skipping computation in the first iteration\n");
+			if (this->Verbose > 0) std::printf("Hot restart -> Skipping computation in the first iteration\n");
 			for ( int imat = 0; imat < nmatrices; imat++ ){
 				updates[imat] = this->Updatess[imat].back();
 				residuals[imat] = this->Residualss[imat].back();
@@ -116,39 +125,54 @@ bool DIIS::Run(std::vector<EigenMatrix>& Ms){
 		}
 
 		int num_dones = 0;
+		std::vector<double> max_residuals(nmatrices);
 		double max_max_residual = 0;
 		for ( int i = 0; i < nmatrices; i++ ){
-			const double max_residual = residuals[i].cwiseAbs().maxCoeff();
+			const double max_residual = max_residuals[i] = residuals[i].cwiseAbs().maxCoeff();
 			if ( i == 0 ) max_max_residual = max_residual;
 			else max_max_residual = max_max_residual > max_residual ? max_max_residual : max_residual;
 			dones[i] = max_residual < this->Tolerance;
 			if ( dones[i] ) num_dones++;
 		}
 		converged = max_max_residual < this->Tolerance;
-		if (this->Verbose){
-			std::printf("Maximal residual element = %E\n", max_max_residual);
+		if (this->Verbose > 0){
 			std::printf("%d out of %d matrices have converged.\n", num_dones, nmatrices);
+			std::printf("Maximal residual element = %E\n", max_max_residual);
 		}
 
 		if (converged){
-			if (this->Verbose) std::printf("Done!\n");
+			if (this->Verbose > 0) std::printf("Done!\n");
 		}else{
 			const int current_size = this->getCurrentSize();
-			if (this->Verbose){
-				std::printf("Current DIIS space size: %d\n", current_size);
-			}
+			if (this->Verbose > 0)
+				std::printf("Current DIIS space size: %d -> %s update\n", current_size, current_size < 2 ? "Naive" : "DIIS");
 			if ( current_size < 2 ){
-				if (this->Verbose) std::printf("Naive update\n");
-				Ms = updates;
+				for ( int mat = 0; mat < nmatrices; mat++ ){
+					const double max_residual = max_residuals[mat];
+					const double damp = FindDamp(max_residual, this->Damps);
+					if (this->Verbose > 1){
+						std::printf("Naive update on Matrix %d:\n", mat);
+						std::printf("| Maximal residual element: %E\n", max_residual);
+						std::printf("| Damping factor: %f\n", damp);
+					}
+					Ms[mat] *= damp;
+					Ms[mat] += ( 1. - damp ) * updates[mat];
+				}
 			}else{
 				for ( int mat = 0; mat < nmatrices; mat++ ) if ( !dones[mat] ){
-					if (this->Verbose) std::printf("%s extrapolation on Matrix %d\n", this->Name.c_str(), mat);
+					const double max_residual = max_residuals[mat];
+					const double damp = FindDamp(max_residual, this->Damps);
+					if (this->Verbose > 1){
+						std::printf("%s extrapolation on Matrix %d:\n", this->Name.c_str(), mat);
+						std::printf("| Maximal residual element: %E\n", max_residual);
+						std::printf("| Damping factor: %f\n", damp);
+					}
+					Ms[mat] *= damp;
 					const EigenVector Ws = this->Extrapolate(mat);
-					Ms[mat].setZero();
 					for ( int i = 0; i < current_size; i++ )
-						Ms[mat] += Ws[i] * Updatess[mat][i];
-					if (this->Verbose){
-						std::printf("DIIS weight:");
+						Ms[mat] += ( 1. - damp ) * Ws[i] * Updatess[mat][i];
+					if (this->Verbose > 1){
+						std::printf("| DIIS weight:");
 						for ( int i = 0; i < current_size; i++ )
 							std::printf(" %f", Ws[i]);
 						std::printf("\n");

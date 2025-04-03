@@ -17,7 +17,7 @@ CDIIS::CDIIS(
 			> (std::vector<EigenMatrix>&, std::vector<bool>&)
 		>* update_func,
 		int nmatrices, int max_size, double tolerance,
-		int max_iter, bool verbose): DIIS(update_func, nmatrices, max_size, tolerance, max_iter, verbose){
+		int max_iter, int verbose): DIIS(update_func, nmatrices, max_size, tolerance, max_iter, verbose){
 	this->Name = "CDIIS";
 }
 
@@ -25,7 +25,7 @@ EigenVector CDIIS::Extrapolate(int index){
 	EigenVector weight = EigenZero(this->getCurrentSize(), 1);
 	bool checked = 0;
 	double ridge = 1;
-	if (this->Verbose) std::printf("| Size | Ridge factor | Determinant of LHS | Largest absolute weight |\n");
+	if (this->Verbose > 1) std::printf("| | Size | Ridge factor | Determinant of LHS | Largest absolute weight |\n");
 	const int size = this->getCurrentSize();
 	for ( int this_size = size; this_size > 1 && !checked; this_size--, ridge += 0.001 ){
 		EigenMatrix H = EigenZero(this_size + 1, this_size + 1);
@@ -41,7 +41,7 @@ EigenVector CDIIS::Extrapolate(int index){
 		const double det = H.determinant();
 		const double largest_abs_coefficient = weight.cwiseAbs().maxCoeff();
 		checked = largest_abs_coefficient < 5 || det > 1e-12;
-		if (this->Verbose) std::printf("| %d | %f | %E | %f |\n", this_size, ridge, det, largest_abs_coefficient);
+		if (this->Verbose > 1) std::printf("| | %4d | %12f | % 18E | %23f |\n", this_size, ridge, det, largest_abs_coefficient);
 	}
 	return weight;
 }

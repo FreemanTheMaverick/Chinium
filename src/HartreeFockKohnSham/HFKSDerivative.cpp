@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <vector>
+#include <map>
 #include <tuple>
 #include <string>
 #include <cmath>
@@ -84,7 +85,8 @@ EigenMatrix XCGradient(
 					*this_g += ws[kgrid] * esigmas[kgrid] * (
 							  rho1xs[kgrid] * this_gd1xs[kgrid]
 							+ rho1ys[kgrid] * this_gd1ys[kgrid]
-							+ rho1zs[kgrid] * this_gd1zs[kgrid]);
+							+ rho1zs[kgrid] * this_gd1zs[kgrid]
+					);
 				}
 			}
 		}
@@ -129,13 +131,13 @@ std::vector<std::vector<EigenMatrix>> GxcSkeleton(
 			double tmp1 = 0;
 			double tmp2 = 0;
 			if (std::find(orders.begin(), orders.end(), 0) != orders.end()) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
-				tmp1 = 2 * ws[kgrid] * vrs[kgrid] * jao[kgrid];
+				tmp1 = ws[kgrid] * vrs[kgrid] * jao[kgrid];
 				Gs[iatom][0](i, j) -= tmp1 * ix[kgrid];
 				Gs[iatom][1](i, j) -= tmp1 * iy[kgrid];
 				Gs[iatom][2](i, j) -= tmp1 * iz[kgrid];
 			}
 			if (std::find(orders.begin(), orders.end(), 1) != orders.end()) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
-				tmp1 = 4 * ws[kgrid] * vss[kgrid];
+				tmp1 = 2 * ws[kgrid] * vss[kgrid];
 				tmp2 = d1xs[kgrid] * jx[kgrid] + d1ys[kgrid] * jy[kgrid] + d1zs[kgrid] * jz[kgrid];
 				Gs[iatom][0](i, j) -= tmp1 * (
 					(
@@ -166,7 +168,7 @@ std::vector<std::vector<EigenMatrix>> GxcSkeleton(
 	}
 	for ( int iatom = 0; iatom < natoms; iatom++ ) for ( int xyz = 0; xyz < 3; xyz++ ){
 		const EigenMatrix G = Gs[iatom][xyz];
-		Gs[iatom][xyz] = 0.5 * ( G + G.transpose() );
+		Gs[iatom][xyz] = G + G.transpose();
 	}
 	return Gs;
 }
@@ -175,7 +177,6 @@ EigenMatrix HFHessian(
 		EigenMatrix Eskeleton,
 		std::vector<EigenMatrix>& dDs, std::vector<EigenMatrix>& Fskeletons,
 		std::vector<EigenMatrix>& dWs, std::vector<EigenMatrix>& Sgrads){
-	Eigen::setNbThreads(1);
 	const int nmatrices = dDs.size();
 	EigenMatrix hfh = EigenZero(nmatrices, nmatrices);
 	for ( int xpert = 0; xpert < nmatrices; xpert++ )
@@ -292,15 +293,15 @@ EigenMatrix HxcSkeleton(
 						hij += ws[kgrid] * vrs[kgrid] * hdij[kgrid];
 					}
 				}
-				const double* hd1xi = hd1xs[ipert][jpert];
-				const double* hd1yi = hd1ys[ipert][jpert];
-				const double* hd1zi = hd1zs[ipert][jpert];
+				const double* hd1xij = hd1xs[ipert][jpert];
+				const double* hd1yij = hd1ys[ipert][jpert];
+				const double* hd1zij = hd1zs[ipert][jpert];
 				if (first){
 					for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
 						hij += 2 * ws[kgrid] * vss[kgrid] * (
-								hd1xi[kgrid] * d1xs[kgrid] +
-								hd1yi[kgrid] * d1ys[kgrid] +
-								hd1zi[kgrid] * d1zs[kgrid] 
+								hd1xij[kgrid] * d1xs[kgrid] +
+								hd1yij[kgrid] * d1ys[kgrid] +
+								hd1zij[kgrid] * d1zs[kgrid] 
 						);
 					}
 				}
@@ -312,8 +313,6 @@ EigenMatrix HxcSkeleton(
 		delete [] gss[ipert / 3][ipert % 3];
 	return h;
 }
-
-
 
 #define __Allocate_and_Zero__(array)\
 	if (array) std::memset(array, 0, this->getNumBasis() * ngrids_this_batch * sizeof(double));\
@@ -334,9 +333,10 @@ EigenMatrix HxcSkeleton(
 		}
 
 #define __max_num_grids__ 100000
-
+#define __Occupation_Cutoff__ 1.e-8
 
 void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
+
 	Eigen::setNbThreads(nthreads);
 	const int natoms = this->getNumCenters();
 	const int nbasis = this->getNumBasis();
@@ -579,7 +579,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 			Fskeletons[3 * icenter + xyz] = Hgrads[icenter][xyz] + this->GGrads[icenter][xyz] + fxcskeleton1s[icenter][xyz] + fxcskeleton2s[icenter][xyz];
 		}
 		if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
-		
+
 		if (output) std::printf("Coupled-perturbed self-consistent-field ...\n");
 		start = __now__;
 		auto [Us, dDs, dEs, dWs, dFs] = NonIdempotent( // std::vector<EigenMatrix>
@@ -607,14 +607,47 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 		this->Hessian += HFHessian(this->KineticHess + this->NuclearHess - this->OverlapHess + 0.5 * this->GHess, dDs, Fskeletons, dWs, Ss);
 
 		if ( this->Temperature > 0 ){
-			if (output) std::printf("Density-based occupation-gradient coupled-perturbed self-consistent-field ...\n");
+			std::vector<int> frac_indeces;
+			for ( int i = 0; i < this->getNumIndBasis(); i++ ){
+				if ( this->Orbitals[i].Occ > 2 * __Occupation_Cutoff__ && this->Orbitals[i].Occ < 2. - 2 * __Occupation_Cutoff__)
+					frac_indeces.push_back(i);
+			}
+			std::map<int, EigenMatrix> Dns;
+			if ( !frac_indeces.empty() ){
+				if (output) std::printf("Occupation-fluctuation coupled-perturbed self-consistent-field ...\n");
+				start = __now__;
+				Dns = OccupationFluctuation(
+						this->getCoefficientMatrix(),
+						this->getEnergy(),
+						this->getOccupation() / 2.,
+						frac_indeces,
+						this->BasisIs.data(), this->BasisJs.data(),
+						this->BasisKs.data(), this->BasisLs.data(),
+						this->RepulsionInts.data(),
+						this->RepulsionInts.size(), this->XC.EXX,
+						orders,
+						this->Ws,
+						this->AOs,
+						this->AO1Xs, this->AO1Ys, this->AO1Zs,
+						this->AO2XXs, this->AO2YYs, this->AO2ZZs,
+						this->AO2XYs, this->AO2XZs, this->AO2YZs,
+						this->Rho1Xs, this->Rho1Ys, this->Rho1Zs,
+						this->E1Rhos, this->E1Sigmas,
+						this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
+						this->NumGrids,
+						output - 1, nthreads
+				);
+				if (output) std::printf("Occupation-fluctuation coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));
+			}
+
+			if (output) std::printf("Occupation-gradient coupled-perturbed self-consistent-field ...\n");
 			start = __now__;
 			const EigenArray ns = this->getOccupation().array() / 2;
 			const EigenVector Nes = (ns * ( ns - 1. )) / this->Temperature;
-			const std::vector<EigenVector> dNs = DensityOccupationGradient(
+			const std::vector<EigenVector> dNs = OccupationGradient(
 					this->getCoefficientMatrix(),
 					this->getEnergy(),
-					Nes,
+					Dns, Nes,
 					Ss, dFs,
 					this->BasisIs.data(), this->BasisJs.data(),
 					this->BasisKs.data(), this->BasisLs.data(),
@@ -632,7 +665,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					this->NumGrids,
 					output - 1, nthreads
 			);
-			if (output) std::printf("Density-based occupation-gradient coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));
+			if (output) std::printf("Occupation-gradient coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));
 			EigenMatrix hessog = EigenZero(3 * natoms, 3 * natoms);
 			for ( int ipert = 0; ipert < 3 * natoms; ipert++ )
 				for ( int jpert = 0; jpert < 3 * natoms; jpert++ )

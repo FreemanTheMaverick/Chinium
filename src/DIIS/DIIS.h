@@ -2,10 +2,11 @@
 
 class DIIS{ public:
 	std::string Name;
-	bool Verbose;
+	int Verbose;
 	int MaxSize;
 	double Tolerance;
 	int MaxIter;
+	std::vector<std::tuple<double, double, double>> Damps;
 	std::vector<std::deque<EigenMatrix>> Updatess;
 	std::vector<std::deque<EigenMatrix>> Residualss;
 	std::vector<std::deque<EigenMatrix>> Auxiliariess;
@@ -25,7 +26,7 @@ class DIIS{ public:
 			> (std::vector<EigenMatrix>&, std::vector<bool>&)
 		>* update_func,
 		int nmatrices, int max_size, double tolerance,
-		int max_iter, bool verbose
+		int max_iter, int verbose
 	);
 	virtual ~DIIS() = default;
 
