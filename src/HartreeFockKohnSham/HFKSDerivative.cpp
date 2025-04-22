@@ -10,26 +10,18 @@
 #include <omp.h>
 
 #include "../Macro.h"
-#include "../Multiwfn.h"
+#include "../Multiwfn/Multiwfn.h"
+#include "../Integral/Int2C1E.h"
+#include "../Integral/Int4C2E.h"
 #include "../Grid/GridAO.h"
 #include "../Grid/GridDensity.h"
 #include "../ExchangeCorrelation/MwfnXC1.h"
 #include "../Grid/GridPotential.h"
+
 #include "CoupledPerturbed.h"
 
 #include <iostream>
 
-EigenMatrix HFGradient(
-		EigenMatrix D, std::vector<std::vector<EigenMatrix>>& Hgrads,
-		EigenMatrix W, std::vector<std::vector<EigenMatrix>>& Sgrads,
-		std::vector<std::vector<EigenMatrix>>& Ggrads){
-	Eigen::setNbThreads(1);
-	EigenMatrix g = EigenZero(Hgrads.size(), 3);
-	for ( int iatom = 0; iatom < (int)Hgrads.size(); iatom++ )
-		for ( int xyz = 0; xyz < 3; xyz++ )
-			g(iatom, xyz) = ( D * Hgrads[iatom][xyz] - W * Sgrads[iatom][xyz] + 0.5 * D * Ggrads[iatom][xyz] ).trace();
-	return g;
-}
 
 #define __Check_Vector_Array__(vec)\
 	vec.size() && vec[0].size() && vec[0][0]
@@ -173,21 +165,6 @@ std::vector<std::vector<EigenMatrix>> GxcSkeleton(
 	return Gs;
 }
 
-EigenMatrix HFHessian(
-		EigenMatrix Eskeleton,
-		std::vector<EigenMatrix>& dDs, std::vector<EigenMatrix>& Fskeletons,
-		std::vector<EigenMatrix>& dWs, std::vector<EigenMatrix>& Sgrads){
-	const int nmatrices = dDs.size();
-	EigenMatrix hfh = EigenZero(nmatrices, nmatrices);
-	for ( int xpert = 0; xpert < nmatrices; xpert++ )
-		for ( int ypert = 0; ypert <= xpert; ypert++ )
-			hfh(xpert, ypert) = hfh(ypert, xpert) =
-				( dDs[xpert] * Fskeletons[ypert] ).trace()
-				- ( dWs[xpert] * Sgrads[ypert] ).trace();
-	hfh += Eskeleton;
-	return 2 * hfh;
-}
-
 EigenMatrix HxcSkeleton(
 		std::vector<int> orders,
 		long int ngrids, double* ws,
@@ -315,49 +292,70 @@ EigenMatrix HxcSkeleton(
 }
 
 #define __Allocate_and_Zero__(array)\
-	if (array) std::memset(array, 0, this->getNumBasis() * ngrids_this_batch * sizeof(double));\
-	else array = new double[this->getNumBasis() * ngrids_this_batch]();
+	if (array) std::memset(array, 0, mwfn.getNumBasis() * ngrids_this_batch * sizeof(double));\
+	else array = new double[mwfn.getNumBasis() * ngrids_this_batch]();
 
 #define __Allocate_and_Zero_2__(vector)\
-	for ( int icenter = 0; icenter < this->getNumCenters(); icenter++ )\
+	for ( int icenter = 0; icenter < mwfn.getNumCenters(); icenter++ )\
 		for ( int xyz = 0; xyz < 3; xyz++ ){\
 			if (vector[icenter][xyz]) std::memset(vector[icenter][xyz], 0, ngrids_this_batch * sizeof(double));\
 			else vector[icenter][xyz] = new double[ngrids_this_batch]();\
 		}
 
 #define __Allocate_and_Zero_3__(vector)\
-	for ( int ipert = 0; ipert < 3*this->getNumCenters(); ipert++ )\
-		for ( int jpert = 0; jpert < 3*this->getNumCenters(); jpert++ ){\
+	for ( int ipert = 0; ipert < 3*mwfn.getNumCenters(); ipert++ )\
+		for ( int jpert = 0; jpert < 3*mwfn.getNumCenters(); jpert++ ){\
 			if (vector[ipert][jpert]) std::memset(vector[ipert][jpert], 0, ngrids_this_batch * sizeof(double));\
 			else vector[ipert][jpert] = new double[ngrids_this_batch]();\
 		}
 
+#define __VectorIncrement__(A, B, b)\
+	assert(A.size() == B.size() && "The two std::vector<EigenMatrix>-s have different sizes!");\
+	for ( int i = 0; i < (int)B.size(); i++ ){\
+		A[i] += (b) * B[i];\
+	}
+
+#define __VectorVectorIncrement__(A, B, b)\
+	assert(A.size() == B.size() && "The two std::vector<std::vector<EigenMatrix>>-s have different sizes!");\
+	for ( int j = 0; j < (int)B.size(); j++ ){\
+		__VectorIncrement__(A[j], B[j], b)\
+	}
+
+#define __GradAdd__(A)\
+	for ( int iatom = 0, tot = 0; iatom < natoms; iatom++ ) for ( int xyz = 0; xyz < 3; xyz++, tot++){\
+		Gradient[tot] += A(iatom, xyz);\
+	}
+
+#define __HessAdd__(A)\
+	for ( int i = 0; i < 3 * natoms; i++ ) for ( int j = 0; j < 3 * natoms; j++){\
+		Hessian[i][j] += ( A(i, j) + A(j, i) ) / 2;\
+	}
+
 #define __max_num_grids__ 100000
 #define __Occupation_Cutoff__ 1.e-8
 
-void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
+std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, int derivative, int output, int nthreads){
 
 	Eigen::setNbThreads(nthreads);
-	const int natoms = this->getNumCenters();
-	const int nbasis = this->getNumBasis();
-	const long int ngrids = this->NumGrids;
+	const int natoms = mwfn.getNumCenters();
+	std::vector<double> Gradient(3 * natoms, 0);
+	std::vector<std::vector<double>> Hessian(3 * natoms, std::vector<double>(3 * natoms, 0));
+	const int nbasis = mwfn.getNumBasis();
+	const long int ngrids = mwfn.NumGrids;
 	std::vector<int> bf2atom(nbasis);
 	for ( int iatom = 0, kbasis = 0; iatom < natoms; iatom++ )
-		for ( int jbasis = 0; jbasis < this->Centers[iatom].getNumBasis(); jbasis++, kbasis++ )
+		for ( int jbasis = 0; jbasis < mwfn.Centers[iatom].getNumBasis(); jbasis++, kbasis++ )
 			bf2atom[kbasis] = iatom;
 
-	assert((int)this->OverlapGrads.size() == natoms && "Overlap matrix gradient does not exist!");
-	assert((int)this->KineticGrads.size() == natoms && "Kinetic matrix gradient does not exist!");
-	assert((int)this->NuclearGrads.size() == natoms && "Nuclear matrix gradient does not exist!");
-	assert((int)this->GGrads.size() == natoms && "Two-electron matrix gradient does not exist!");
-	std::vector<std::vector<EigenMatrix>> Hgrads = {};
-	for ( int iatom = 0; iatom < natoms; iatom++ )
-		Hgrads.push_back({
-			this->KineticGrads[iatom][0] + this->NuclearGrads[iatom][0],
-			this->KineticGrads[iatom][1] + this->NuclearGrads[iatom][1],
-			this->KineticGrads[iatom][2] + this->NuclearGrads[iatom][2]
-		});
-	this->Gradient += HFGradient(this->getDensity(), Hgrads, this->getEnergyDensity(), this->OverlapGrads, this->GGrads);
+	const EigenMatrix D = mwfn.getDensity() / 2;
+	const EigenMatrix W = mwfn.getEnergyDensity() / 2;
+
+	auto [SWgrads, KDgrads, VDgrads] = int2c1e.ContractGrads(D, W); // std::vector<double>
+	const std::vector<double> DGDgrads = int4c2e.ContractGrads(D, D);
+	__VectorIncrement__(Gradient, KDgrads, 2)
+	__VectorIncrement__(Gradient, VDgrads, 2)
+	__VectorIncrement__(Gradient, SWgrads, -2)
+	__VectorIncrement__(Gradient, DGDgrads, 1)
 
 	// Nuclear gradient of density in batches
 	// They are also necessary for nuclear hessian of DFT energy, so we store them temporarily in std::vector.
@@ -366,7 +364,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 	std::vector<std::vector<double*>> batch_gd1ys(natoms, {nullptr, nullptr, nullptr});
 	std::vector<std::vector<double*>> batch_gd1zs(natoms, {nullptr, nullptr, nullptr});
 
-	if (this->XC.XCcode){
+	if (mwfn.XC.XCcode){
 
 		EigenMatrix xcg = EigenZero(natoms, 3);
 
@@ -415,11 +413,11 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 			auto start = __now__;
 			int order = 0;
 			std::vector<int> orders = {};
-			if ( this->XC.XCfamily.compare("LDA") == 0 ){
+			if ( mwfn.XC.XCfamily.compare("LDA") == 0 ){
 				order = 0;
 				orders = {0};
 				__Allocate_and_Zero_2__(batch_gds);
-			}else if ( this->XC.XCfamily.compare("GGA") == 0 ){
+			}else if ( mwfn.XC.XCfamily.compare("GGA") == 0 ){
 				order = 1;
 				orders = {0, 1};
 				__Allocate_and_Zero_2__(batch_gds);
@@ -428,12 +426,12 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 				__Allocate_and_Zero_2__(batch_gd1zs);
 			}
 			if ( derivative < 2 ){
-				if ( this->XC.XCfamily.compare("LDA") == 0 ){
+				if ( mwfn.XC.XCfamily.compare("LDA") == 0 ){
 					__Allocate_and_Zero__(batch_aos);
 					__Allocate_and_Zero__(batch_ao1xs);
 					__Allocate_and_Zero__(batch_ao1ys);
 					__Allocate_and_Zero__(batch_ao1zs);
-				}else if ( this->XC.XCfamily.compare("GGA") == 0 ){
+				}else if ( mwfn.XC.XCfamily.compare("GGA") == 0 ){
 					__Allocate_and_Zero__(batch_aos);
 					__Allocate_and_Zero__(batch_ao1xs);
 					__Allocate_and_Zero__(batch_ao1ys);
@@ -446,10 +444,10 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					__Allocate_and_Zero__(batch_ao2yzs);
 				}
 				GetAoValues(
-						this->Centers,
-						this->Xs + grid_head,
-						this->Ys + grid_head,
-						this->Zs + grid_head,
+						mwfn.Centers,
+						mwfn.Xs + grid_head,
+						mwfn.Ys + grid_head,
+						mwfn.Zs + grid_head,
 						ngrids_this_batch,
 						batch_aos,
 						batch_ao1xs, batch_ao1ys, batch_ao1zs,
@@ -461,33 +459,33 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 						batch_ao3yyys, batch_ao3yyzs, batch_ao3yzzs, batch_ao3zzzs
 				);
 			}else{
-				if ( this->XC.XCfamily.compare("LDA") == 0 ){
-					assert(this->AOs && "AOs on grids do not exist!");
-					assert(this->AO1Xs && "First-order x-derivatives of AOs on grids do not exist!");
-					assert(this->AO1Ys && "First-order y-derivatives of AOs on grids do not exist!");
-					assert(this->AO1Zs && "First-order z-derivatives of AOs on grids do not exist!");
-				}else if ( this->XC.XCfamily.compare("GGA") == 0 ){
-					assert(this->AOs && "AOs on grids do not exist!");
-					assert(this->AO1Xs && "First-order x-derivatives of AOs on grids do not exist!");
-					assert(this->AO1Ys && "First-order y-derivatives of AOs on grids do not exist!");
-					assert(this->AO1Zs && "First-order z-derivatives of AOs on grids do not exist!");
-					assert(this->AO2XXs && "Second-order xx-derivatives of AOs on grids do not exist!");
-					assert(this->AO2YYs && "Second-order yy-derivatives of AOs on grids do not exist!");
-					assert(this->AO2ZZs && "Second-order zz-derivatives of AOs on grids do not exist!");
-					assert(this->AO2XYs && "Second-order xy-derivatives of AOs on grids do not exist!");
-					assert(this->AO2XZs && "Second-order xz-derivatives of AOs on grids do not exist!");
-					assert(this->AO2YZs && "Second-order yz-derivatives of AOs on grids do not exist!");
+				if ( mwfn.XC.XCfamily.compare("LDA") == 0 ){
+					assert(mwfn.AOs && "AOs on grids do not exist!");
+					assert(mwfn.AO1Xs && "First-order x-derivatives of AOs on grids do not exist!");
+					assert(mwfn.AO1Ys && "First-order y-derivatives of AOs on grids do not exist!");
+					assert(mwfn.AO1Zs && "First-order z-derivatives of AOs on grids do not exist!");
+				}else if ( mwfn.XC.XCfamily.compare("GGA") == 0 ){
+					assert(mwfn.AOs && "AOs on grids do not exist!");
+					assert(mwfn.AO1Xs && "First-order x-derivatives of AOs on grids do not exist!");
+					assert(mwfn.AO1Ys && "First-order y-derivatives of AOs on grids do not exist!");
+					assert(mwfn.AO1Zs && "First-order z-derivatives of AOs on grids do not exist!");
+					assert(mwfn.AO2XXs && "Second-order xx-derivatives of AOs on grids do not exist!");
+					assert(mwfn.AO2YYs && "Second-order yy-derivatives of AOs on grids do not exist!");
+					assert(mwfn.AO2ZZs && "Second-order zz-derivatives of AOs on grids do not exist!");
+					assert(mwfn.AO2XYs && "Second-order xy-derivatives of AOs on grids do not exist!");
+					assert(mwfn.AO2XZs && "Second-order xz-derivatives of AOs on grids do not exist!");
+					assert(mwfn.AO2YZs && "Second-order yz-derivatives of AOs on grids do not exist!");
 				}
-				batch_aos = this->AOs;
-				batch_ao1xs = this->AO1Xs;
-				batch_ao1ys = this->AO1Ys;
-				batch_ao1zs = this->AO1Zs;
-				batch_ao2xxs = this->AO2XXs;
-				batch_ao2yys = this->AO2YYs;
-				batch_ao2zzs = this->AO2ZZs;
-				batch_ao2xys = this->AO2XYs;
-				batch_ao2xzs = this->AO2XZs;
-				batch_ao2yzs = this->AO2YZs;
+				batch_aos = mwfn.AOs;
+				batch_ao1xs = mwfn.AO1Xs;
+				batch_ao1ys = mwfn.AO1Ys;
+				batch_ao1zs = mwfn.AO1Zs;
+				batch_ao2xxs = mwfn.AO2XXs;
+				batch_ao2yys = mwfn.AO2YYs;
+				batch_ao2zzs = mwfn.AO2ZZs;
+				batch_ao2xys = mwfn.AO2XYs;
+				batch_ao2xzs = mwfn.AO2XZs;
+				batch_ao2yzs = mwfn.AO2YZs;
 			}
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 			if (output) std::printf("| | Calculating skeleton gradient of density on these grids ...");
@@ -498,7 +496,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					batch_ao1xs, batch_ao1ys, batch_ao1zs,
 					batch_ao2xxs, batch_ao2yys, batch_ao2zzs,
 					batch_ao2xys, batch_ao2xzs, batch_ao2yzs,
-					ngrids_this_batch, this->getDensity(),
+					ngrids_this_batch, 2 * D,
 					bf2atom,
 					batch_gds, batch_gd1xs, batch_gd1ys, batch_gd1zs
 			);
@@ -507,18 +505,18 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 			start = __now__;
 			xcg += XCGradient(
 					order,
-					this->Ws + grid_head, ngrids_this_batch,
-					this->Rho1Xs + grid_head,
-					this->Rho1Ys + grid_head,
-					this->Rho1Zs + grid_head,
-					this->E1Rhos + grid_head,
-					this->E1Sigmas + grid_head,
+					mwfn.Ws + grid_head, ngrids_this_batch,
+					mwfn.Rho1Xs + grid_head,
+					mwfn.Rho1Ys + grid_head,
+					mwfn.Rho1Zs + grid_head,
+					mwfn.E1Rhos + grid_head,
+					mwfn.E1Sigmas + grid_head,
 					batch_gds, batch_gd1xs, batch_gd1ys, batch_gd1zs
 			);
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 		}
 		if (output) std::printf("| | Done in %f s\n", __duration__(start_all, __now__));
-		this->Gradient += xcg;
+		__GradAdd__(xcg);
 	}
 
 	if ( derivative >= 2){
@@ -526,90 +524,107 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 		auto start = __now__;
 		std::vector<EigenMatrix> Ss(3 * natoms, EigenZero(nbasis, nbasis));
 		std::vector<EigenMatrix> Fskeletons(3 * natoms, EigenZero(nbasis, nbasis));
-		std::vector<std::vector<EigenMatrix>> fxcskeleton1s(natoms, {EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis)});
-		std::vector<std::vector<EigenMatrix>> fxcskeleton2s(natoms, {EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis)});
+		std::vector<EigenMatrix> fxcskeleton1s(3 * natoms, EigenZero(nbasis, nbasis));
+		std::vector<EigenMatrix> fxcskeleton2s(3 * natoms, EigenZero(nbasis, nbasis));
 		std::vector<int> orders = {};
-		if (this->XC.XCcode){
-			if (this->XC.XCfamily.compare("LDA") == 0)
+		if (mwfn.XC.XCcode){
+			if (mwfn.XC.XCfamily.compare("LDA") == 0)
 				orders = {0};
-			else if (this->XC.XCfamily.compare("GGA") == 0)
+			else if (mwfn.XC.XCfamily.compare("GGA") == 0)
 				orders = {0, 1};
-			this->XC.Evaluate(
+			mwfn.XC.Evaluate(
 					"f", ngrids,
-					this->Rhos,
-					this->Sigmas,
+					mwfn.Rhos,
+					mwfn.Sigmas,
 					nullptr, nullptr,
 					nullptr,
 					nullptr, nullptr, nullptr, nullptr,
-					this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
+					mwfn.E2Rho2s, mwfn.E2RhoSigmas, mwfn.E2Sigma2s,
 					nullptr, nullptr, nullptr, nullptr,
 					nullptr, nullptr, nullptr, nullptr, nullptr
 			);
-			fxcskeleton1s = GxcSkeleton(
+			const std::vector<std::vector<EigenMatrix>> gxcskeleton = GxcSkeleton( // 3 * Natoms matrices
 					orders,
-					this->Ws, ngrids,
-					this->AOs,
-					this->AO1Xs, this->AO1Ys, this->AO1Zs,
-					this->AO2XXs, this->AO2YYs, this->AO2ZZs,
-					this->AO2XYs, this->AO2XZs, this->AO2YZs,
-					this->Rho1Xs, this->Rho1Ys, this->Rho1Zs,
-					this->E1Rhos, this->E1Sigmas,
+					mwfn.Ws, ngrids,
+					mwfn.AOs,
+					mwfn.AO1Xs, mwfn.AO1Ys, mwfn.AO1Zs,
+					mwfn.AO2XXs, mwfn.AO2YYs, mwfn.AO2ZZs,
+					mwfn.AO2XYs, mwfn.AO2XZs, mwfn.AO2YZs,
+					mwfn.Rho1Xs, mwfn.Rho1Ys, mwfn.Rho1Zs,
+					mwfn.E1Rhos, mwfn.E1Sigmas,
 					bf2atom
 			);
-			for ( int iatom = 0; iatom < natoms; iatom++ ) for ( int xyz = 0; xyz < 3; xyz++ )
-				fxcskeleton2s[iatom][xyz] = PotentialSkeleton(
+			for ( int iatom = 0, tot = 0; iatom < natoms; iatom++ ) for ( int xyz = 0; xyz < 3; xyz++, tot++ ){
+				fxcskeleton1s[tot] = gxcskeleton[iatom][xyz];
+				fxcskeleton2s[tot] = PotentialSkeleton(
 						orders,
-						this->Ws, ngrids, nbasis,
-						this->AOs,
-						this->AO1Xs, this->AO1Ys, this->AO1Zs,
-						this->AO2XXs, this->AO2YYs, this->AO2ZZs,
-						this->AO2XYs, this->AO2XZs, this->AO2YZs,
-						this->Rho1Xs, this->Rho1Ys, this->Rho1Zs,
-						this->E1Rhos, this->E1Sigmas,
-						this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
+						mwfn.Ws, ngrids, nbasis,
+						mwfn.AOs,
+						mwfn.AO1Xs, mwfn.AO1Ys, mwfn.AO1Zs,
+						mwfn.AO2XXs, mwfn.AO2YYs, mwfn.AO2ZZs,
+						mwfn.AO2XYs, mwfn.AO2XZs, mwfn.AO2YZs,
+						mwfn.Rho1Xs, mwfn.Rho1Ys, mwfn.Rho1Zs,
+						mwfn.E1Rhos, mwfn.E1Sigmas,
+						mwfn.E2Rho2s, mwfn.E2RhoSigmas, mwfn.E2Sigma2s,
 						batch_gds[iatom][xyz],
 						batch_gd1xs[iatom][xyz],
 						batch_gd1ys[iatom][xyz],
 						batch_gd1zs[iatom][xyz]
 				);
+			}
 		}
 
-		for ( int icenter = 0; icenter < natoms; icenter++ ) for ( int xyz = 0; xyz < 3; xyz++ ){
-			Ss[3 * icenter + xyz] = this->OverlapGrads[icenter][xyz];
-			Fskeletons[3 * icenter + xyz] = Hgrads[icenter][xyz] + this->GGrads[icenter][xyz] + fxcskeleton1s[icenter][xyz] + fxcskeleton2s[icenter][xyz];
-		}
+		const std::vector<EigenMatrix> DGgrads = int4c2e.ContractGrads(D);
+		__VectorIncrement__(Fskeletons, int2c1e.KineticGrads, 1)
+		__VectorIncrement__(Fskeletons, int2c1e.NuclearGrads, 1)
+		__VectorIncrement__(Fskeletons, DGgrads, 1)
+		__VectorIncrement__(Fskeletons, fxcskeleton1s, 1)
+		__VectorIncrement__(Fskeletons, fxcskeleton2s, 1)
 		if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
 		if (output) std::printf("Coupled-perturbed self-consistent-field ...\n");
 		start = __now__;
 		auto [Us, dDs, dEs, dWs, dFs] = NonIdempotent( // std::vector<EigenMatrix>
-				this->getCoefficientMatrix(),
-				this->getEnergy(),
-				this->getOccupation() / 2.,
-				Ss, Fskeletons,
-				this->BasisIs.data(), this->BasisJs.data(),
-				this->BasisKs.data(), this->BasisLs.data(),
-				this->RepulsionInts.data(),
-				this->RepulsionInts.size(), this->XC.EXX,
+				mwfn.getCoefficientMatrix(),
+				mwfn.getEnergy(),
+				mwfn.getOccupation() / 2.,
+				int2c1e.OverlapGrads, Fskeletons,
+				int4c2e,
 				orders,
-				this->Ws,
-				this->AOs,
-				this->AO1Xs, this->AO1Ys, this->AO1Zs,
-				this->AO2XXs, this->AO2YYs, this->AO2ZZs,
-				this->AO2XYs, this->AO2XZs, this->AO2YZs,
-				this->Rho1Xs, this->Rho1Ys, this->Rho1Zs,
-				this->E1Rhos, this->E1Sigmas,
-				this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
-				this->NumGrids,
+				mwfn.Ws,
+				mwfn.AOs,
+				mwfn.AO1Xs, mwfn.AO1Ys, mwfn.AO1Zs,
+				mwfn.AO2XXs, mwfn.AO2YYs, mwfn.AO2ZZs,
+				mwfn.AO2XYs, mwfn.AO2XZs, mwfn.AO2YZs,
+				mwfn.Rho1Xs, mwfn.Rho1Ys, mwfn.Rho1Zs,
+				mwfn.E1Rhos, mwfn.E1Sigmas,
+				mwfn.E2Rho2s, mwfn.E2RhoSigmas, mwfn.E2Sigma2s,
+				mwfn.NumGrids,
 				output - 1, nthreads
 		);
 		if (output) std::printf("Coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));
-		this->Hessian += HFHessian(this->KineticHess + this->NuclearHess - this->OverlapHess + 0.5 * this->GHess, dDs, Fskeletons, dWs, Ss);
 
-		if ( this->Temperature > 0 ){
+		auto [SgradsWgrads, KgradsDgrads, VgradsDgrads] = int2c1e.ContractGrads(dDs, dWs); // std::vector<std::vector<double>>
+		const std::vector<std::vector<double>> DGgradsDgrads = int4c2e.ContractGrads(dDs, D);
+		__VectorVectorIncrement__(Hessian, SgradsWgrads, -2)
+		__VectorVectorIncrement__(Hessian, KgradsDgrads, 2)
+		__VectorVectorIncrement__(Hessian, VgradsDgrads, 2)
+		__VectorVectorIncrement__(Hessian, DGgradsDgrads, 2)
+		auto [SWhesss, KDhesss, VDhesss] = int2c1e.ContractHesss(D, W); // std::vector<std::vector<double>>
+		const std::vector<std::vector<double>> DGDhesss = int4c2e.ContractHesss(D, D);
+		__VectorVectorIncrement__(Hessian, SWhesss, -2)
+		__VectorVectorIncrement__(Hessian, KDhesss, 2)
+		__VectorVectorIncrement__(Hessian, VDhesss, 2)
+		__VectorVectorIncrement__(Hessian, DGDhesss, 1)
+		for ( int i = 0; i < 3 * natoms; i++ ) for ( int j = 0; j <= i; j++ ){
+			Hessian[i][j] += 2 * dDs[i].cwiseProduct( fxcskeleton1s[j] + fxcskeleton2s[j] ).sum();
+			if ( i != j ) Hessian[j][i] += 2 * dDs[i].cwiseProduct( fxcskeleton1s[j] + fxcskeleton2s[j] ).sum();
+		}
+
+		if ( mwfn.Temperature > 0 ){
 			std::vector<int> frac_indeces;
-			for ( int i = 0; i < this->getNumIndBasis(); i++ ){
-				if ( this->Orbitals[i].Occ > 2 * __Occupation_Cutoff__ && this->Orbitals[i].Occ < 2. - 2 * __Occupation_Cutoff__)
+			for ( int i = 0; i < mwfn.getNumIndBasis(); i++ ){
+				if ( mwfn.Orbitals[i].Occ > 2 * __Occupation_Cutoff__ && mwfn.Orbitals[i].Occ < 2. - 2 * __Occupation_Cutoff__)
 					frac_indeces.push_back(i);
 			}
 			std::map<int, EigenMatrix> Dns;
@@ -617,24 +632,21 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 				if (output) std::printf("Occupation-fluctuation coupled-perturbed self-consistent-field ...\n");
 				start = __now__;
 				Dns = OccupationFluctuation(
-						this->getCoefficientMatrix(),
-						this->getEnergy(),
-						this->getOccupation() / 2.,
+						mwfn.getCoefficientMatrix(),
+						mwfn.getEnergy(),
+						mwfn.getOccupation() / 2.,
 						frac_indeces,
-						this->BasisIs.data(), this->BasisJs.data(),
-						this->BasisKs.data(), this->BasisLs.data(),
-						this->RepulsionInts.data(),
-						this->RepulsionInts.size(), this->XC.EXX,
+						int4c2e,
 						orders,
-						this->Ws,
-						this->AOs,
-						this->AO1Xs, this->AO1Ys, this->AO1Zs,
-						this->AO2XXs, this->AO2YYs, this->AO2ZZs,
-						this->AO2XYs, this->AO2XZs, this->AO2YZs,
-						this->Rho1Xs, this->Rho1Ys, this->Rho1Zs,
-						this->E1Rhos, this->E1Sigmas,
-						this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
-						this->NumGrids,
+						mwfn.Ws,
+						mwfn.AOs,
+						mwfn.AO1Xs, mwfn.AO1Ys, mwfn.AO1Zs,
+						mwfn.AO2XXs, mwfn.AO2YYs, mwfn.AO2ZZs,
+						mwfn.AO2XYs, mwfn.AO2XZs, mwfn.AO2YZs,
+						mwfn.Rho1Xs, mwfn.Rho1Ys, mwfn.Rho1Zs,
+						mwfn.E1Rhos, mwfn.E1Sigmas,
+						mwfn.E2Rho2s, mwfn.E2RhoSigmas, mwfn.E2Sigma2s,
+						mwfn.NumGrids,
 						output - 1, nthreads
 				);
 				if (output) std::printf("Occupation-fluctuation coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));
@@ -642,27 +654,24 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 
 			if (output) std::printf("Occupation-gradient coupled-perturbed self-consistent-field ...\n");
 			start = __now__;
-			const EigenArray ns = this->getOccupation().array() / 2;
-			const EigenVector Nes = (ns * ( ns - 1. )) / this->Temperature;
+			const EigenArray ns = mwfn.getOccupation().array() / 2;
+			const EigenVector Nes = (ns * ( ns - 1. )) / mwfn.Temperature;
 			const std::vector<EigenVector> dNs = OccupationGradient(
-					this->getCoefficientMatrix(),
-					this->getEnergy(),
+					mwfn.getCoefficientMatrix(),
+					mwfn.getEnergy(),
 					Dns, Nes,
-					Ss, dFs,
-					this->BasisIs.data(), this->BasisJs.data(),
-					this->BasisKs.data(), this->BasisLs.data(),
-					this->RepulsionInts.data(),
-					this->RepulsionInts.size(), this->XC.EXX,
+					int2c1e.OverlapGrads, dFs,
+					int4c2e,
 					orders,
-					this->Ws,
-					this->AOs,
-					this->AO1Xs, this->AO1Ys, this->AO1Zs,
-					this->AO2XXs, this->AO2YYs, this->AO2ZZs,
-					this->AO2XYs, this->AO2XZs, this->AO2YZs,
-					this->Rho1Xs, this->Rho1Ys, this->Rho1Zs,
-					this->E1Rhos, this->E1Sigmas,
-					this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
-					this->NumGrids,
+					mwfn.Ws,
+					mwfn.AOs,
+					mwfn.AO1Xs, mwfn.AO1Ys, mwfn.AO1Zs,
+					mwfn.AO2XXs, mwfn.AO2YYs, mwfn.AO2ZZs,
+					mwfn.AO2XYs, mwfn.AO2XZs, mwfn.AO2YZs,
+					mwfn.Rho1Xs, mwfn.Rho1Ys, mwfn.Rho1Zs,
+					mwfn.E1Rhos, mwfn.E1Sigmas,
+					mwfn.E2Rho2s, mwfn.E2RhoSigmas, mwfn.E2Sigma2s,
+					mwfn.NumGrids,
 					output - 1, nthreads
 			);
 			if (output) std::printf("Occupation-gradient coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));
@@ -670,10 +679,11 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 			for ( int ipert = 0; ipert < 3 * natoms; ipert++ )
 				for ( int jpert = 0; jpert < 3 * natoms; jpert++ )
 					hessog(ipert, jpert) = dEs[jpert].dot(dNs[ipert]);
-			this->Hessian += hessog + hessog.transpose();
+			const EigenMatrix hessog_ = hessog + hessog.transpose();
+			__HessAdd__(hessog_)
 		}
 
-		if (this->XC.XCcode){
+		if (mwfn.XC.XCcode){
 			// Distributing grids to batches
 			const long int ngrids_per_batch = __max_num_grids__;
 			std::vector<long int> batch_tails = {};
@@ -700,19 +710,20 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 
 			if (output) std::printf("Calculating XC nuclear hessian Part 1 (involving skeleton gradient of density on grids) ...");
 			auto start = __now__;
-			this->Hessian += HxcSkeleton(
+			const EigenMatrix hxcskeleton1 = HxcSkeleton(
 					orders,
-					ngrids, this->Ws,
+					ngrids, mwfn.Ws,
 					1,
-					this->Rho1Xs, this->Rho1Ys, this->Rho1Zs,
-					this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
+					mwfn.Rho1Xs, mwfn.Rho1Ys, mwfn.Rho1Zs,
+					mwfn.E2Rho2s, mwfn.E2RhoSigmas, mwfn.E2Sigma2s,
 					batch_gds,
 					batch_gd1xs, batch_gd1ys, batch_gd1zs,
 					0,
-					this->E1Rhos, this->E1Sigmas,
+					mwfn.E1Rhos, mwfn.E1Sigmas,
 					batch_hds, // Dummy std::vector
 					batch_hd1xs, batch_hd1ys, batch_hd1zs
 			);
+			__HessAdd__(hxcskeleton1)
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
 			// AO values in batches
@@ -747,7 +758,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 				if (output) std::printf("| | Evaluating AOs on %ld grids ...", ngrids_this_batch);
 				start = __now__;
 				std::vector<int> orders = {};
-				if ( this->XC.XCfamily.compare("LDA") == 0 ){
+				if ( mwfn.XC.XCfamily.compare("LDA") == 0 ){
 					orders = {0};
 					__Allocate_and_Zero__(batch_aos); 
 					__Allocate_and_Zero__(batch_ao1xs);
@@ -760,7 +771,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					__Allocate_and_Zero__(batch_ao2xzs);
 					__Allocate_and_Zero__(batch_ao2yzs);
 					__Allocate_and_Zero_3__(batch_hds);
-				}else if ( this->XC.XCfamily.compare("GGA") == 0 ){
+				}else if ( mwfn.XC.XCfamily.compare("GGA") == 0 ){
 					orders = {0, 1};
 					__Allocate_and_Zero__(batch_aos); 
 					__Allocate_and_Zero__(batch_ao1xs);
@@ -788,10 +799,10 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 					__Allocate_and_Zero_3__(batch_hd1zs);
 				}
 				GetAoValues(
-						this->Centers,
-						this->Xs + grid_head,
-						this->Ys + grid_head,
-						this->Zs + grid_head,
+						mwfn.Centers,
+						mwfn.Xs + grid_head,
+						mwfn.Ys + grid_head,
+						mwfn.Zs + grid_head,
 						ngrids_this_batch,
 						batch_aos,
 						batch_ao1xs, batch_ao1ys, batch_ao1zs,
@@ -814,7 +825,7 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 						batch_ao3xxxs, batch_ao3xxys, batch_ao3xxzs,
 						batch_ao3xyys, batch_ao3xyzs, batch_ao3xzzs,
 						batch_ao3yyys, batch_ao3yyzs, batch_ao3yzzs, batch_ao3zzzs,
-						ngrids_this_batch, this->getDensity(),
+						ngrids_this_batch, 2 * D,
 						bf2atom,
 						batch_hds,
 						batch_hd1xs, batch_hd1ys, batch_hd1zs
@@ -823,27 +834,38 @@ void Multiwfn::HFKSDerivative(int derivative, int output, int nthreads){
 				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 				if (output) std::printf("| | Calculating XC skeleton hessian contributed by these grids ...");
 				start = __now__;
-				this->Hessian += HxcSkeleton(
+				const EigenMatrix hxcskeleton2 = HxcSkeleton(
 						orders,
-						ngrids_this_batch, this->Ws + grid_head,
+						ngrids_this_batch, mwfn.Ws + grid_head,
 						0,
-						this->Rho1Xs + grid_head,
-						this->Rho1Ys + grid_head,
-						this->Rho1Zs + grid_head,
-						this->E2Rho2s, this->E2RhoSigmas, this->E2Sigma2s,
+						mwfn.Rho1Xs + grid_head,
+						mwfn.Rho1Ys + grid_head,
+						mwfn.Rho1Zs + grid_head,
+						mwfn.E2Rho2s, mwfn.E2RhoSigmas, mwfn.E2Sigma2s,
 						batch_gds, // Dummy
 						batch_gd1xs, batch_gd1ys, batch_gd1zs,
 						1,
-						this->E1Rhos + grid_head,
-						this->E1Sigmas + grid_head,
+						mwfn.E1Rhos + grid_head,
+						mwfn.E1Sigmas + grid_head,
 						batch_hds,
 						batch_hd1xs, batch_hd1ys, batch_hd1zs
 				);
+				__HessAdd__(hxcskeleton2)
 				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 			}
 			if (output) std::printf("| | Done in %f s\n", __duration__(start_all, __now__));
 		}
 	}
+
+	EigenMatrix gradient = EigenZero(natoms, 3);
+	for ( int iatom = 0, tot = 0; iatom < natoms; iatom++ ) for ( int xyz = 0; xyz < 3; xyz++, tot++ ){
+		gradient(iatom, xyz) = Gradient[tot];
+	}
+	EigenMatrix hessian = EigenZero(3 * natoms, 3 * natoms);
+	for ( int i = 0; i < 3 * natoms; i++ ) for ( int j = 0; j < 3 * natoms; j++ ){
+		hessian(i, j) = Hessian[i][j];
+	}
+	return std::make_tuple(gradient, hessian);
 }
 
 

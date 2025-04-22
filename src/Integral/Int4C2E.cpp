@@ -10,7 +10,10 @@
 #include <omp.h>
 
 #include "../Macro.h"
-#include "../Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
+#include "../Multiwfn/Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
+
+#include "Int4C2E.h"
+#include "Parallel.h"
 #include "Macro.h"
 
 #include <iostream>
@@ -491,115 +494,353 @@ EigenMatrix getRepulsion2(
 	return rawhessian + rawhessian.transpose() - (EigenMatrix)rawhessian.diagonal().asDiagonal();
 }
 
+Int4C2E::Int4C2E(Multiwfn& mwfn, double exx, double threshold, bool verbose){
+	this->Mwfn = &mwfn;
+	this->EXX = exx;
+	this->Threshold = threshold;
+	this->Verbose = verbose;
+}
 
-void Multiwfn::getRepulsion(std::vector<int> orders, double threshold, int nthreads, const bool output){
-	__Make_Basis_Set__
-	const long int nbasis = libint2::nbf(obs);
-	const long int nshells = obs.size();
-	long int ShellQuartetLength = 0;
-	long int RepulsionLength = 0;
-	auto start = __now__;
+void Int4C2E::getRepulsionDiag(){
+	if (this->Verbose) std::printf("Calculating diagonal elements of repulsion integrals ... ");
+	const auto start = __now__;
+	__Make_Basis_Set__(this->Mwfn)
+	this->RepulsionDiags = ::getRepulsionDiag(obs);
+	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+}
 
-	if (std::get<0>(this->RepulsionDiags).cols() == 0){
-		if (output) std::printf("Calculating diagonal elements of repulsion integrals ... ");
-		start = __now__;
-		this->RepulsionDiags = getRepulsionDiag(obs);
-		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
-	}
-
-	if ( this->RepulsionInts.empty() || this->ShellIs.empty() ){
-		if (output) std::printf("Calculating numbers of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
-		start = __now__;
-		std::tie(RepulsionLength, ShellQuartetLength) = getRepulsionLength(obs, std::get<0>(this->RepulsionDiags), threshold);
-		if (output){
-			std::printf("Done in %f s\n", __duration__(start, __now__));
-			std::printf(
-					"Before screening: %ld integrals and %ld shell quartets\n",
-					nbasis * ( nbasis + 1 ) * ( nbasis * ( nbasis + 1 ) / 2 + 1 ) / 4,
-					nshells * ( nshells + 1 ) * ( nshells * ( nshells + 1 ) / 2 + 1 ) / 4
-			);
-			std::printf(
-					"After screening: %ld integrals and %ld shell quartets\n",
-					RepulsionLength, ShellQuartetLength
-			);
-			std::printf(
-					"Memory needed for 4c-2e repulsion integrals and their indices: %f GB\n",
-					(double)RepulsionLength * ( 2. * 4. + 8. ) / 1024. / 1024. / 1024.
-			);
-		}
-	}else{
-		RepulsionLength = this->BasisIs.size();
-		ShellQuartetLength = this->ShellIs.size();
-	}
-
-	if ( this->ShellIs.empty() ){
-		if (output) std::printf("Generating indices of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
-		start = __now__;
-		this->ShellIs.resize(ShellQuartetLength);
-		this->ShellJs.resize(ShellQuartetLength);
-		this->ShellKs.resize(ShellQuartetLength);
-		this->ShellLs.resize(ShellQuartetLength);
-		getRepulsionIndices(
-				obs, std::get<0>(this->RepulsionDiags), threshold,
-				this->ShellIs.data(), this->ShellJs.data(),
-				this->ShellKs.data(), this->ShellLs.data()
+void Int4C2E::getRepulsionLength(){
+	if (this->Verbose) std::printf("Calculating numbers of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
+	const auto start = __now__;
+	const long int nbasis = this->Mwfn->getNumBasis();
+	const long int nshells = this->Mwfn->getNumShells();
+	__Make_Basis_Set__(this->Mwfn)
+	assert(std::get<0>(this->RepulsionDiags).size() > 0 && "Diagonal elements of repulsion integrals are missing!");
+	std::tie(this->RepulsionLength, this->ShellQuartetLength) = ::getRepulsionLength(obs, std::get<0>(this->RepulsionDiags), this->Threshold);
+	if (this->Verbose){
+		std::printf("Done in %f s\n", __duration__(start, __now__));
+		std::printf(
+				"Before screening: %ld integrals and %ld shell quartets\n",
+				nbasis * ( nbasis + 1 ) * ( nbasis * ( nbasis + 1 ) / 2 + 1 ) / 4,
+				nshells * ( nshells + 1 ) * ( nshells * ( nshells + 1 ) / 2 + 1 ) / 4
 		);
-		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+		std::printf(
+				"After screening: %ld integrals and %ld shell quartets\n",
+				this->RepulsionLength, this->ShellQuartetLength
+		);
+		std::printf(
+				"Memory needed for 4c-2e repulsion integrals and their indices: %f GB\n",
+				this->RepulsionLength * ( 2. * 4. + 8. ) / 1024. / 1024. / 1024.
+		);
 	}
+}
 
-	if (output) std::printf("Arranging for %d threads to calculate 4c-2e repulsion integrals ... ", nthreads);
-	start = __now__;
-	auto [sqheads, bqheads] = getThreadPointers( // std::vector<long int>
+void Int4C2E::getRepulsionIndices(){
+	if (this->Verbose) std::printf("Generating indices of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
+	const auto start = __now__;
+	__Make_Basis_Set__(this->Mwfn)
+	assert(this->ShellIs.empty() && "Shell indices have already been obtained!");
+	this->ShellIs.resize(this->ShellQuartetLength);
+	this->ShellJs.resize(this->ShellQuartetLength);
+	this->ShellKs.resize(this->ShellQuartetLength);
+	this->ShellLs.resize(this->ShellQuartetLength);
+	::getRepulsionIndices(
+			obs, std::get<0>(this->RepulsionDiags), this->Threshold,
+			this->ShellIs.data(), this->ShellJs.data(),
+			this->ShellKs.data(), this->ShellLs.data()
+	);
+	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+}
+
+void Int4C2E::getThreadPointers(int nthreads){
+	if (this->Verbose) std::printf("Arranging for %d threads to calculate 4c-2e repulsion integrals ... ", nthreads);
+	const auto start = __now__;
+	__Make_Basis_Set__(this->Mwfn)
+	assert(!this->ShellIs.empty() && "Shell indices are missing!");
+	auto [sqheads, bqheads] = ::getThreadPointers( // std::vector<long int>
 		obs, ShellQuartetLength, nthreads,
 		this->ShellIs.data(), this->ShellJs.data(),
 		this->ShellKs.data(), this->ShellLs.data()
 	);
-	sqheads.push_back(ShellQuartetLength);
-	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	sqheads.push_back(this->ShellQuartetLength);
+	this->ShellQuartetHeads = sqheads;
+	this->BasisQuartetHeads = bqheads;
+	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+}
 
-	if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
-		if (output) std::printf("Calculating 4c-2e repulsion integrals ... ");
-		start = __now__;
-		this->BasisIs.resize(RepulsionLength);
-		this->BasisJs.resize(RepulsionLength);
-		this->BasisKs.resize(RepulsionLength);
-		this->BasisLs.resize(RepulsionLength);
-		this->RepulsionInts.resize(RepulsionLength);
+void Int4C2E::CalculateIntegrals(int order){
+	if (this->Verbose) std::printf("Calculating 4c-2e repulsion integrals of Order %d ... ", order);
+	const auto start = __now__;
+	__Make_Basis_Set__(this->Mwfn)
+	if ( order == 0 ){
+		this->BasisIs.resize(this->RepulsionLength);
+		this->BasisJs.resize(this->RepulsionLength);
+		this->BasisKs.resize(this->RepulsionLength);
+		this->BasisLs.resize(this->RepulsionLength);
+		this->RepulsionInts.resize(this->RepulsionLength);
 		getRepulsion0(
-			obs, sqheads, bqheads,
+			obs, this->ShellQuartetHeads, this->BasisQuartetHeads,
 			this->ShellIs.data(), this->ShellJs.data(),
 			this->ShellKs.data(), this->ShellLs.data(),
 			this->BasisIs.data(), this->BasisJs.data(),
 			this->BasisKs.data(), this->BasisLs.data(),
-			this->RepulsionInts.data());
-		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+			this->RepulsionInts.data()
+		);
 	}
+	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+}
 
-	if (std::find(orders.begin(), orders.end(), 1) != orders.end()){
-		if (output) std::printf("Calculating 4c-2e repulsion integral nuclear gradient ... ");
-		start = __now__;
-		this->GGrads = getRepulsion1(
+std::vector<long int> getThreadPointers(long int nitems, int nthreads){
+	const long int nitem_fewer = nitems / nthreads;
+	const int nfewers = nthreads - nitems + nitem_fewer * nthreads;
+	std::vector<long int> heads(nthreads, 0);
+	long int n = 0;
+	for ( int ithread = 0; ithread < nthreads; ithread++ ){
+		heads[ithread] = n;
+		n += (ithread < nfewers) ? nitem_fewer : nitem_fewer + 1;
+	}
+	return heads;
+}
+
+EigenMatrix Grhf(
+		short int* is, short int* js, short int* ks, short int* ls,
+		double* ints, long int length,
+		EigenMatrix D, double kscale, int nthreads){
+	Eigen::setNbThreads(1);
+	std::vector<long int> heads = getThreadPointers(length, nthreads);
+	EigenMatrix rawJ = EigenZero(D.rows(), D.cols());
+	EigenMatrix rawK = EigenZero(D.rows(), D.cols());
+	#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
+	#pragma omp parallel for reduction(EigenMatrixSum: rawJ, rawK) num_threads(nthreads)
+	for ( int ithread = 0; ithread < nthreads; ithread++ ){
+		const long int head = heads[ithread];
+		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
+		short int* iranger = is + head;
+		short int* jranger = js + head;
+		short int* kranger = ks + head;
+		short int* lranger = ls + head;
+		double* repulsionranger = ints + head;
+		for ( long int iint = 0; iint < nints; iint++ ){
+			const short int i = *(iranger++);
+			const short int j = *(jranger++);
+			const short int k = *(kranger++);
+			const short int l = *(lranger++);
+			const double repulsion = *(repulsionranger++);
+			rawJ(i, j) += D(k, l) * repulsion;
+			rawJ(k, l) += D(i, j) * repulsion;
+			if ( kscale > 0. ){
+				rawK(i, k) += D(j, l) * repulsion;
+				rawK(j, l) += D(i, k) * repulsion;
+				rawK(i, l) += D(j, k) * repulsion;
+				rawK(j, k) += D(i, l) * repulsion;
+			}
+		}
+	}
+	Eigen::setNbThreads(nthreads);
+	const EigenMatrix J = 0.5 * ( rawJ + rawJ.transpose() );
+	const EigenMatrix K = 0.25 * ( rawK + rawK.transpose() );
+	return J - 0.5 * kscale * K;
+}
+
+EigenMatrix Int4C2E::ContractInts(EigenMatrix D, int nthreads){ // RHF
+	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integrals with 1 matrix ... ");
+	const auto start = __now__;
+	const EigenMatrix G = Grhf(
+		this->BasisIs.data(), this->BasisJs.data(),
+		this->BasisKs.data(), this->BasisLs.data(),
+		this->RepulsionInts.data(), this->RepulsionLength,
+		D, this->EXX, nthreads);
+	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+	return G;
+}
+
+std::vector<EigenMatrix> GhfMultiple(
+		short int* is, short int* js, short int* ks, short int* ls,
+		double* ints, long int length,
+		std::vector<EigenMatrix>& Ds, double kscale, int nthreads){
+	std::vector<long int> heads = getThreadPointers(length, nthreads);
+	const int nbasis = Ds[0].rows();
+	const int nmatrices = Ds.size();
+	const int nmatrices_redun = std::ceil((double)nmatrices / 8.) * 8;
+	std::vector<std::vector<EigenArray>> Darrays = Matrices2Arrays(Ds, nmatrices_redun);
+	std::vector<std::vector<EigenArray>> rawJarrays = MultipleMatrixInitialization(nmatrices_redun, nbasis, nbasis);
+	std::vector<std::vector<EigenArray>> rawKarrays = MultipleMatrixInitialization(nmatrices_redun, nbasis, nbasis);
+	#pragma omp declare reduction(Sum: std::vector<std::vector<EigenArray>>: MultipleMatrixReduction(omp_out, omp_in)) initializer(omp_priv = omp_orig)
+	#pragma omp parallel for reduction(Sum: rawJarrays, rawKarrays) firstprivate(Darrays) num_threads(nthreads)
+	for ( int ithread = 0; ithread < nthreads; ithread++ ){
+		const long int head = heads[ithread];
+		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
+		short int* iranger = is + head;
+		short int* jranger = js + head;
+		short int* kranger = ks + head;
+		short int* lranger = ls + head;
+		double* repulsionranger = ints + head;
+		for ( long int iint = 0; iint < nints; iint++ ){
+			const short int i = *(iranger++);
+			const short int j = *(jranger++);
+			const short int k = *(kranger++);
+			const short int l = *(lranger++);
+			const double repulsion = *(repulsionranger++);
+			rawJarrays[i][j] += Darrays[k][l] * repulsion;
+			rawJarrays[k][l] += Darrays[i][j] * repulsion;
+			if ( kscale > 0. ){
+				rawKarrays[i][k] += Darrays[j][l] * repulsion;
+				rawKarrays[j][l] += Darrays[i][k] * repulsion;
+				rawKarrays[i][l] += Darrays[j][k] * repulsion;
+				rawKarrays[j][k] += Darrays[i][l] * repulsion;
+			}
+		}
+	}
+	std::vector<EigenMatrix> rawJs = Arrays2Matrices(rawJarrays, nmatrices);
+	std::vector<EigenMatrix> rawKs = Arrays2Matrices(rawKarrays, nmatrices);
+	std::vector<EigenMatrix> rawGs(nmatrices, EigenZero(nbasis, nbasis));
+	for ( int k = 0; k < nmatrices; k++ ){
+		const EigenMatrix J = 0.5 *  ( rawJs[k] + rawJs[k].transpose() );
+		const EigenMatrix K = 0.25 * ( rawKs[k] + rawKs[k].transpose() );
+		rawGs[k] = J - 0.5 * kscale * K;
+	}
+	return rawGs;
+}
+
+std::vector<EigenMatrix> Int4C2E::ContractInts(std::vector<EigenMatrix>& Ds, int nthreads){ // Multiple contraction
+	const int nmatrices = (int)Ds.size();
+	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integrals with %d matrices ... ", nmatrices);
+	const auto start = __now__;
+	__Make_Basis_Set__(this->Mwfn)
+	const std::vector<EigenMatrix> Gs = GhfMultiple(
+		this->BasisIs.data(), this->BasisJs.data(),
+		this->BasisKs.data(), this->BasisLs.data(),
+		this->RepulsionInts.data(), this->RepulsionLength,
+		Ds, this->EXX, nthreads);
+	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+	return Gs;
+}
+
+std::tuple<EigenMatrix, EigenMatrix, EigenMatrix, EigenMatrix> Guhf(
+		short int* is, short int* js, short int* ks, short int* ls,
+		double* ints, long int length,
+		EigenMatrix Da, EigenMatrix Db, double kscale, int nthreads){
+	Eigen::setNbThreads(1);
+	std::vector<long int> heads = getThreadPointers(length, nthreads);
+	EigenMatrix rawJa = EigenZero(Da.rows(), Da.cols());
+	EigenMatrix rawJb = EigenZero(Da.rows(), Da.cols());
+	EigenMatrix rawKa = EigenZero(Da.rows(), Da.cols());
+	EigenMatrix rawKb = EigenZero(Da.rows(), Da.cols());
+	#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
+	#pragma omp parallel for reduction(EigenMatrixSum: rawJa, rawJb, rawKa, rawKb) num_threads(nthreads)
+	for ( int ithread = 0; ithread < nthreads; ithread++ ){
+		const long int head = heads[ithread];
+		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
+		short int* iranger = is + head;
+		short int* jranger = js + head;
+		short int* kranger = ks + head;
+		short int* lranger = ls + head;
+		double* repulsionranger = ints + head;
+		for ( long int iint = 0; iint < nints; iint++ ){
+			const short int i = *(iranger++);
+			const short int j = *(jranger++);
+			const short int k = *(kranger++);
+			const short int l = *(lranger++);
+			const double repulsion = *(repulsionranger++);
+			rawJa(i, j) += Da(k, l) * repulsion;
+			rawJa(k, l) += Da(i, j) * repulsion;
+			rawJb(i, j) += Db(k, l) * repulsion;
+			rawJb(k, l) += Db(i, j) * repulsion;
+			if ( kscale > 0. ){
+				rawKa(i, k) += Da(j, l) * repulsion;
+				rawKa(j, l) += Da(i, k) * repulsion;
+				rawKa(i, l) += Da(j, k) * repulsion;
+				rawKa(j, k) += Da(i, l) * repulsion;
+				rawKb(i, k) += Db(j, l) * repulsion;
+				rawKb(j, l) += Db(i, k) * repulsion;
+				rawKb(i, l) += Db(j, k) * repulsion;
+				rawKb(j, k) += Db(i, l) * repulsion;
+			}
+		}
+	}
+	Eigen::setNbThreads(nthreads);
+	const EigenMatrix Ja = 0.25 * ( rawJa + rawJa.transpose() );
+	const EigenMatrix Jb = 0.25 * ( rawJb + rawJb.transpose() );
+	const EigenMatrix Ka = 0.125 * ( rawKa + rawKa.transpose() );
+	const EigenMatrix Kb = 0.125 * ( rawKb + rawKb.transpose() );
+	return std::make_tuple(Ja, Jb, Ka, Kb);
+}
+
+std::tuple<EigenMatrix, EigenMatrix> Int4C2E::ContractInts(EigenMatrix Da, EigenMatrix Db, int nthreads){ // UHF
+	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integrals with 1 matrix ... ");
+	const auto start = __now__;
+	__Make_Basis_Set__(this->Mwfn)
+	auto [Ja, Jb, Ka, Kb] = Guhf(
+		this->BasisIs.data(), this->BasisJs.data(),
+		this->BasisKs.data(), this->BasisLs.data(),
+		this->RepulsionInts.data(), this->RepulsionLength,
+		Da, Db, this->EXX, nthreads);
+	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+	return std::make_tuple(Ja + Jb - Ka, Ja + Jb - Kb);
+}
+
+std::vector<double> Int4C2E::ContractGrads(EigenMatrix D1, EigenMatrix D2){
+	std::vector<EigenMatrix> D1s = {D1};
+	return this->ContractGrads(D1s, D2)[0];
+}
+
+std::vector<std::vector<double>> Int4C2E::ContractGrads(std::vector<EigenMatrix>& D1s, EigenMatrix D2){
+	const int natoms = this->Mwfn->getNumCenters();
+	const std::vector<EigenMatrix> GD2 = this->ContractGrads(D2);
+	const int nmatrices = (int)D1s.size();
+	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integral nuclear gradient with %d matrix from the left and 1 matrix from the right ... ", nmatrices);
+	const auto start = __now__;
+	std::vector<std::vector<double>> D1GD2(nmatrices, std::vector<double>(3 * natoms));
+	for ( int imat = 0; imat < nmatrices; imat++ ) for ( int j = 0; j < 3 * natoms; j++ ){
+		D1GD2[imat][j] = D1s[imat].cwiseProduct(GD2[j]).sum();
+	}
+	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+	return D1GD2;
+}
+
+std::vector<EigenMatrix> Int4C2E::ContractGrads(EigenMatrix D){
+	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integral nuclear gradient with 1 matrix ... ");
+	const auto start = __now__;
+	const int natoms = this->Mwfn->getNumCenters();
+	for ( auto& [key, value] : this->GradCache ) if ( key.isApprox(D) ){
+		if (this->Verbose) std::printf("Found in cache -> Done in %f s\n", __duration__(start, __now__));
+		return value;
+	}
+	__Make_Basis_Set__(this->Mwfn)
+	const std::vector<std::vector<EigenMatrix>> GDs_ = getRepulsion1(
 			obs,
 			shell2atom,
-			sqheads,
+			this->ShellQuartetHeads,
 			this->ShellIs.data(), this->ShellJs.data(),
 			this->ShellKs.data(), this->ShellLs.data(),
-			this->getDensity() / 2, this->XC.EXX
-		);
-		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+			D, this->EXX
+	);
+	std::vector<EigenMatrix> GDs; GDs.reserve(3 * natoms);
+	for ( int iatom = 0; iatom < natoms; iatom++ ) for ( int xyz = 0; xyz < 3; xyz++ ){
+		GDs.push_back(GDs_[iatom][xyz]);
 	}
+	this->GradCache.push_back(std::make_tuple(D, GDs));
+	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+	return GDs;
+}
 
-	if (std::find(orders.begin(), orders.end(), 2) != orders.end()){
-		if (output) std::printf("Calculating 4c-2e repulsion integral nuclear hessian ... ");
-		start = __now__;
-		this->GHess = getRepulsion2(
-			obs,
-			shell2atom,
-			sqheads,
-			this->ShellIs.data(), this->ShellJs.data(),
-			this->ShellKs.data(), this->ShellLs.data(),
-			this->getDensity() / 2, this->XC.EXX
-		);
-		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
-	}
+std::vector<std::vector<double>> Int4C2E::ContractHesss(EigenMatrix D1, EigenMatrix D2){
+	EigenMatrix D = D1; D = D2;
+	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integral nuclear hessian with 1 matrix ... ");
+	const auto start = __now__;
+	const int natoms = this->Mwfn->getNumCenters();
+	__Make_Basis_Set__(this->Mwfn)
+	const EigenMatrix GDs_ = getRepulsion2(
+		obs,
+		shell2atom,
+		this->ShellQuartetHeads,
+		this->ShellIs.data(), this->ShellJs.data(),
+		this->ShellKs.data(), this->ShellLs.data(),
+		D, this->EXX
+	);
+	std::vector<std::vector<double>> GDs(3 * natoms, std::vector<double>(3 * natoms));
+	for ( int i = 0; i < 3 * natoms; i++ ) for ( int j = 0; j < 3 * natoms; j++ )
+		GDs[i][j] = GDs_(i, j);
+	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+	return GDs;
 }

@@ -10,9 +10,9 @@
 #include <regex>
 
 #include "../Macro.h"
-#include "../Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 
-#include <iostream>
+#include "Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
+#include "../Integral/Normalization.h"
 
 
 #define __Construct_Orbitals__\
@@ -326,7 +326,7 @@ Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 		const EigenMatrix tmp_mat = mwfntransform.transpose() * this->getCoefficientMatrix(spin);
 		this->setCoefficientMatrix(tmp_mat, spin);
 	}
-	this->Normalize();
+	Normalize(this);
 }
 
 void PrintMatrix(std::FILE * file, EigenMatrix matrix, bool lower){
@@ -679,7 +679,7 @@ void Multiwfn::setBasis(std::string basis_filename, const bool output){
 		}
 		assert(found && "Basis set file does not include this element!");
 	}
-	this->Normalize();
+	Normalize(this);
 }
 
 void Multiwfn::setCenters(std::vector<std::vector<double>> atoms, const bool output){

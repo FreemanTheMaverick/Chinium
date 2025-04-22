@@ -11,7 +11,7 @@
 #include <cassert>
 
 #include "../Macro.h"
-#include "../Multiwfn.h"
+#include "../Multiwfn/Multiwfn.h"
 #include "sphere_lebedev_rule.hpp"
 
 #include <iostream>

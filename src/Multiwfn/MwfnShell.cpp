@@ -1,12 +1,8 @@
-#include <Eigen/Dense>
 #include <vector>
 #include <string>
 #include <cstdio>
 
-#include "../Macro.h"
-#include "../Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "../Macro.h".
-
-#include <iostream>
+#include "MwfnShell.h"
 
 
 int MwfnShell::getSize(){

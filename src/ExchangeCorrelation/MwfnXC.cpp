@@ -4,7 +4,7 @@
 #include <cstdio>
 
 #include "../Macro.h"
-#include "../Multiwfn.h"
+#include "../Multiwfn/Multiwfn.h"
 
 #include <iostream>
 

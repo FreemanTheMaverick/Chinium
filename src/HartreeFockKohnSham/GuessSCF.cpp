@@ -5,12 +5,12 @@
 #include <chrono>
 #include <cmath>
 #include <string>
-#include <map>
 #include <cassert>
 #include <vector>
 
 #include "../Macro.h"
-#include "../Multiwfn.h"
+#include "../Multiwfn/Multiwfn.h"
+#include "../Integral/Int2C1E.h"
 #include "../Grid/GridPotential.h"
 
 #include <iostream>
@@ -63,10 +63,10 @@ EigenMatrix SuperpositionAtomicPotential(
 			nullptr, nullptr);
 }
 
-void Multiwfn::GuessSCF(std::string guess, const bool output){
+void GuessSCF(Multiwfn& mwfn, Int2C1E& int2c1e, std::string guess, const bool output){
 	std::string path = std::getenv("CHINIUM_PATH");
 	path += "/SAP/";
-	EigenMatrix V = EigenZero(this->getNumBasis(), this->getNumBasis());
+	EigenMatrix V = EigenZero(mwfn.getNumBasis(), mwfn.getNumBasis());
 	bool potential = 0;
 	if ( guess.compare("SAP") == 0 ){
 		if (output) std::printf("SCF initial guess type ... SAP\n");
@@ -74,24 +74,24 @@ void Multiwfn::GuessSCF(std::string guess, const bool output){
 		const auto start = __now__;
 		potential = 1;
 		V = SuperpositionAtomicPotential(
-			path, this->Centers, this->getNumBasis(),
-			this->Xs, this->Ys, this->Zs,
-			this->Ws, this->NumGrids, this->AOs);
+			path, mwfn.Centers, mwfn.getNumBasis(),
+			mwfn.Xs, mwfn.Ys, mwfn.Zs,
+			mwfn.Ws, mwfn.NumGrids, mwfn.AOs);
 		if (output) std::printf("%f s\n", __duration__(start, __now__));
 	}else assert("Unrecognized initial guess type!" && 0);
 
 	if (potential){
 		Eigen::GeneralizedSelfAdjointEigenSolver<EigenMatrix> solver;
-		solver.compute(this->Kinetic + this->Nuclear + V, this->Overlap);
-		for ( int spin : ( this->Wfntype == 0 ? std::vector<int>{0} : std::vector<int>{1, 2} ) ){
+		solver.compute(int2c1e.Kinetic + int2c1e.Nuclear + V, int2c1e.Overlap);
+		for ( int spin : ( mwfn.Wfntype == 0 ? std::vector<int>{0} : std::vector<int>{1, 2} ) ){
 			const EigenMatrix C = solver.eigenvectors();
 			const EigenMatrix eps = solver.eigenvalues();
-			this->setCoefficientMatrix(C, spin);
-			this->setEnergy(eps, spin);
-			if ( this->Temperature > 0 ){
-				const EigenArray n = 1. / ( 1. + ( ( eps.array() - this->ChemicalPotential ) / this->Temperature ).exp() );
-				if ( spin == 0 ) this->setOccupation(2 * n, 0);
-				else this->setOccupation(n, spin);
+			mwfn.setCoefficientMatrix(C, spin);
+			mwfn.setEnergy(eps, spin);
+			if ( mwfn.Temperature > 0 ){
+				const EigenArray n = 1. / ( 1. + ( ( eps.array() - mwfn.ChemicalPotential ) / mwfn.Temperature ).exp() );
+				if ( spin == 0 ) mwfn.setOccupation(2 * n, 0);
+				else mwfn.setOccupation(n, spin);
 			}
 		}
 	}

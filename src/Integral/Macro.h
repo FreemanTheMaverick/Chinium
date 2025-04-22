@@ -1,8 +1,8 @@
-#define __Make_Basis_Set__\
+#define __Make_Basis_Set__(mwfn)\
 	std::vector<libint2::Shell> libint2shells = {};\
 	std::vector<int> shell2atom = {};\
 	int iatom = 0;\
-	for ( MwfnCenter& center : this->Centers ){\
+	for ( MwfnCenter& center : mwfn->Centers ){\
 	   	for ( MwfnShell& shell : center.Shells ){\
 			const int l = std::abs(shell.Type);\
 			const bool pure = ( shell.Type < 0 );\

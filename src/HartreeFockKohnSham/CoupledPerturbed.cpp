@@ -12,14 +12,15 @@
 #include <omp.h>
 
 #include "../Macro.h"
-#include "../Multiwfn.h"
+#include "../Multiwfn/Multiwfn.h"
+#include "../Integral/Int4C2E.h"
+#include "../Integral/Parallel.h"
 #include "../Grid/GridAO.h"
 #include "../Grid/GridDensity.h"
 #include "../ExchangeCorrelation/MwfnXC1.h"
 #include "../Grid/GridPotential.h"
 #include "../DIIS/CDIIS.h"
 #include "FockFormation.h"
-#include "Parallel.h"
 
 #define __Occupation_Cutoff__ 1.e-8
 #define __Convervence_Threshold__ 1.e-8
@@ -157,9 +158,7 @@ std::tuple<
 		EigenMatrix C, EigenVector es, EigenVector ns,
 		std::vector<EigenMatrix>& Ss,
 		std::vector<EigenMatrix>& Fskeletons,
-		short int* is, short int* js, short int* ks, short int* ls,
-		double* ints, long int length,
-		double kscale,
+		Int4C2E& int4c2e,
 		std::vector<int> orders,
 		double* ws,
 		double* aos,
@@ -266,11 +265,7 @@ std::tuple<
 
 		if (output) std::printf("Constructing gradients of Fock matrix ...");
 		auto fock_start = __now__;
-		std::vector<EigenMatrix> undoneFU1s = GhfMultiple(
-				is, js, ks, ls,
-				ints, length,
-				undoneDs, kscale, nthreads
-		);
+		std::vector<EigenMatrix> undoneFU1s = int4c2e.ContractInts(undoneDs, nthreads);
 		/*
 		std::vector<EigenMatrix> undoneFU2s = GxcU(
 				undoneDs,
@@ -369,9 +364,7 @@ std::vector<EigenVector> OccupationGradient(
 		EigenVector Nes,
 		std::vector<EigenMatrix>& Ss,
 		std::vector<EigenMatrix>& Fskeletons,
-		short int* is, short int* js, short int* ks, short int* ls,
-		double* ints, long int length,
-		double kscale,
+		Int4C2E& int4c2e,
 		std::vector<int> orders,
 		double* ws,
 		double* aos,
@@ -428,11 +421,7 @@ std::vector<EigenVector> OccupationGradient(
 				Ds[imatrix] += Des[p] * Exs[imatrix](p);
 			undoneDs[jundone++] = Ds[imatrix];
 		}
-		std::vector<EigenMatrix> undoneFUs = GhfMultiple(
-				is, js, ks, ls,
-				ints, length,
-				undoneDs, kscale, nthreads
-		);
+		std::vector<EigenMatrix> undoneFUs = int4c2e.ContractInts(undoneDs, nthreads);
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
 				assert(aos && "AOs on grids do not exist!");
@@ -501,9 +490,7 @@ std::vector<EigenVector> OccupationGradient(
 std::map<int, EigenMatrix> OccupationFluctuation(
 		EigenMatrix C, EigenVector es, EigenVector ns,
 		std::vector<int> frac_indeces,
-		short int* is, short int* js, short int* ks, short int* ls,
-		double* ints, long int length,
-		double kscale,
+		Int4C2E& int4c2e,
 		std::vector<int> orders,
 		double* ws,
 		double* aos,
@@ -554,11 +541,7 @@ std::map<int, EigenMatrix> OccupationFluctuation(
 
 		if (output) std::printf("Constructing gradients of Fock matrix ...");
 		auto fock_start = __now__;
-		std::vector<EigenMatrix> undoneGs = GhfMultiple(
-				is, js, ks, ls,
-				ints, length,
-				undoneDs, kscale, nthreads
-		);
+		std::vector<EigenMatrix> undoneGs = int4c2e.ContractInts(undoneDs, nthreads);
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
 				assert(aos && "AOs on grids do not exist!");

@@ -5,14 +5,14 @@
 #include <iostream>
 
 #include "../Macro.h"
-#include "../Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
+#include "../Multiwfn/Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 
 #include "Macro.h"
 
-void Multiwfn::Normalize(){
-	__Make_Basis_Set__
+void Normalize(Multiwfn* mwfn){
+	__Make_Basis_Set__(mwfn)
 	int ishell = 0;
-	for ( MwfnCenter& center : this->Centers ) for ( MwfnShell& shell : center.Shells ){
+	for ( MwfnCenter& center : mwfn->Centers ) for ( MwfnShell& shell : center.Shells ){
 		std::copy(obs[ishell].contr[0].coeff.begin(), obs[ishell].contr[0].coeff.end(), shell.NormalizedCoefficients.begin());
 		ishell++;
 	}

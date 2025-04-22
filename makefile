@@ -1,15 +1,15 @@
-export MAKE = make
-export CXX = g++
+export MAKE = __MAKE__
+export CXX = __CXX__
 
-export EIGEN3 = /home/yzhangnn/eigen3/include/eigen3/
+export EIGEN3 = __EIGEN3__
 # The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
-export LIBINT2 = /home/yzhangnn/scratch/libint_2.8.0/
+export LIBINT2 = __LIBINT2__
 # The path where you can find "include/", "lib/" and "share/".
-export LIBXC = /home/yzhangnn/libxc_6.2.2/
+export LIBXC = __LIBXC__
 # The path where you can find "bin/", "include/" and "lib/".
-export MANIVERSE = /home/yzhangnn/Maniverse/
+export MANIVERSE = __MANIVERSE__
 
-export GeneralFlags = -Wall -Wextra -Wpedantic -fopenmp -O3 -std=c++20
+export GeneralFlags = -Wall -Wextra -Wpedantic -fopenmp -O3 -std=c++2a
 export EIGEN3Flags = -isystem $(EIGEN3) -march=native -DEIGEN_INITIALIZE_MATRICES_BY_ZERO
 export LIBINT2Flags = -isystem $(LIBINT2)/include/ -L$(LIBINT2)/lib/ -lint2
 export LIBXCFlags = -isystem $(LIBXC)/include/ -L$(LIBXC)/lib/ -lxc

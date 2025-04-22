@@ -7,9 +7,7 @@
 #include <string>
 
 #include "../Macro.h"
-#include "../Multiwfn.h"
-
-#include <iostream>
+#include "../Multiwfn/Multiwfn.h"
 
 
 void GetAoValues(

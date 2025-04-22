@@ -29,3 +29,4 @@
 	void PrintOrbitals();
 	void setBasis(std::string basis_filename, const bool output);
 	void setCenters(std::vector<std::vector<double>> atoms, const bool output);
+	void NuclearRepulsion(std::vector<double> orders, int output);

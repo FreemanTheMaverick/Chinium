@@ -10,7 +10,8 @@
 #include <chrono>
 
 #include "../Macro.h"
-#include "../Multiwfn.h"
+
+#include "Multiwfn.h"
 
 
 #define __Loop_Over_Atom_Pairs__\

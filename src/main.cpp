@@ -1,13 +1,18 @@
 #include <Eigen/Dense>
 #include <vector>
+#include <map>
 #include <string>
 #include <iostream>
 #include <cstdio>
 #include <cstddef>
 
 #include "Macro.h"
-#include "Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 #include "Gateway.h"
+#include "Multiwfn/Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
+#include "Integral/Int2C1E.h"
+#include "Integral/Int4C2E.h"
+#include "HartreeFockKohnSham/HartreeFockKohnSham.h"
+#include "Localization/Localize.h"
 
 int main(int argc, char* argv[]){ (void)argc;
 	std::printf("*** Chinium started ***\n");
@@ -82,16 +87,20 @@ int main(int argc, char* argv[]){ (void)argc;
 	mwfn.NuclearRepulsion({0, 1, 2}, 1);
 
 	// Electron integrals
+	Int2C1E int2c1e = Int2C1E(mwfn, 1);
+	Int4C2E int4c2e = Int4C2E(mwfn, 1, -1, 1); // EXX is unknown by now.
 	if ( jobtype.compare("SCF") == 0 ){
-		switch(derivative){
-			case 0: mwfn.getTwoCenter({0}, 1); break;
-			case 1: case 2: mwfn.getTwoCenter({0, 1}, 1); break;
-		}
-		mwfn.getRepulsion({0}, -1., nthreads, 1);
+		int2c1e.CalculateIntegrals(0);
+		int4c2e.getRepulsionDiag();
+		int4c2e.getRepulsionLength();
+		int4c2e.getRepulsionIndices();
+		int4c2e.getThreadPointers(nthreads);
+		int4c2e.CalculateIntegrals(0);
 
 		if ( method.compare("HF") != 0 || guess.compare("SAP") == 0 ){
 			if ( method.compare("HF") != 0 ){
 				mwfn.XC.Read(method, 1);
+				int4c2e.EXX = mwfn.XC.EXX;
 				mwfn.PrepareXC("ev",1);
 				if ( derivative > 1 ) mwfn.PrepareXC("f",1);
 				if ( mwfn.XC.XCfamily.compare("LDA") == 0 ) switch(derivative){ // Prepared for SCF and CPSCF only, which use the AO values more than once. Higher-order derivatives that will be used only once will be computed in batches in HartreeFockKohnSham/HFKSDerivative.cpp to save memory.
@@ -111,7 +120,7 @@ int main(int argc, char* argv[]){ (void)argc;
 		} // if ( method.compare("HF") != 0 || guess.compare("SAP") == 0 )
 		if ( guess.compare("READ") == 0 ){ // Orthogonalizing the orbitals read from mwfn.
 			Eigen::SelfAdjointEigenSolver<EigenMatrix> solver;
-			const EigenMatrix S = mwfn.Overlap;
+			const EigenMatrix S = int2c1e.Overlap;
 			if ( mwfn.Wfntype == 0 ){
 				const EigenMatrix C = mwfn.getCoefficientMatrix(0);
 				solver.compute(C.transpose() * S * C);
@@ -136,20 +145,18 @@ int main(int argc, char* argv[]){ (void)argc;
 				mwfn.setOccupation((EigenVector)(EigenZero(na, 1).array() + 1).matrix(), 1);
 				mwfn.setOccupation((EigenVector)(EigenZero(nb, 1).array() + 1).matrix(), 2);
 			}
-			mwfn.GuessSCF(guess, 1);
+			GuessSCF(mwfn, int2c1e, guess, 1);
 		}
-		mwfn.HartreeFockKohnSham(scf, 4, nthreads);
+		HartreeFockKohnSham(mwfn, int2c1e, int4c2e, scf, 4, nthreads);
 		std::printf("Total energy: %17.10f\n", mwfn.E_tot);
 		mwfn.PrintOrbitals();
 		mwfn.Export(mwfn_name, 1);
 
 		if ( derivative > 0 ){
-			if ( derivative > 1 ) mwfn.getTwoCenter({2}, 1);
-			switch(derivative){
-				case 1: mwfn.getRepulsion({1}, -1., nthreads, 1); break;
-				case 2: mwfn.getRepulsion({1, 2}, -1., nthreads, 1); break;
-			}
-			mwfn.HFKSDerivative(derivative, 2, nthreads);
+			int2c1e.CalculateIntegrals(1);
+			auto [grad, hess] = HFKSDerivative(mwfn, int2c1e, int4c2e, derivative, 2, nthreads);
+			mwfn.Gradient += grad;
+			mwfn.Hessian += hess;
 			if ( derivative > 0 ){
 				std::printf("Total nuclear gradient:\n");
 				for ( int iatom = 0; iatom < mwfn.getNumCenters(); iatom++ )
@@ -166,9 +173,9 @@ int main(int argc, char* argv[]){ (void)argc;
 			}
 		}
 	} // if ( jobtype.compare("SCF") == 0 )
-
 	else if ( jobtype.compare("LOCALIZATION") == 0 ){
-		mwfn.Localize(method, "both", 2);
+		Localize(mwfn, int2c1e, method, "occ", 2);
+		Localize(mwfn, int2c1e, method, "vir", 2);
 		mwfn.Export(mwfn_name, 1);
 	}
 

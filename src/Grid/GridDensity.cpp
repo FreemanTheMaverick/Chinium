@@ -9,9 +9,7 @@
 #include <omp.h>
 
 #include "../Macro.h"
-#include "../Multiwfn.h"
 
-#include <iostream>
 
 void GetDensity(
 		std::vector<int> orders,

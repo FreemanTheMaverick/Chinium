@@ -2,7 +2,7 @@ Flags = $(GeneralFlags) $(EIGEN3Flags)
 
 .PHONY: all
 
-all: MwfnCenter MwfnShell MwfnIO
+all: MwfnCenter MwfnShell MwfnIO NuclearRepulsion
 
 MwfnBasis: MwfnBasis.cpp
 	$(CXX) -o ../../obj/MwfnBasis.o MwfnBasis.cpp -c $(Flags)
@@ -16,3 +16,5 @@ MwfnIO: MwfnIO.cpp
 MwfnShell: MwfnShell.cpp
 	$(CXX) -o ../../obj/MwfnShell.o MwfnShell.cpp -c $(Flags)
 
+NuclearRepulsion: NuclearRepulsion.cpp
+	$(CXX) -o ../../obj/NuclearRepulsion.o NuclearRepulsion.cpp -c $(Flags)
