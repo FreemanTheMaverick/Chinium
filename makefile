@@ -3,9 +3,13 @@ CXX = clang++
 # Note: MAKE is implicitly defined, no need to export unless overriding
 
 # --- Paths to Dependencies ---
+
 EIGEN3_PATH    = __EIGEN3_PATH__
+# Eigen3: The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
 LIBINT2_PATH   = __LIBINT2_PATH__
+# LIBINT2: path where you can find "include/", "lib/" and "share/".
 LIBXC_PATH     = __LIBXC_PATH__
+# LIBXC: path where you can find "bin/", "include/" and "lib/".
 MANIVERSE_PATH = __MANIVERSE_PATH__
 
 # --- Project Structure ---
