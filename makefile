@@ -1,14 +1,14 @@
 # --- Compiler ---
-CXX = clang++
+CXX = __CXX__
 # Note: MAKE is implicitly defined, no need to export unless overriding
 
 # --- Paths to Dependencies ---
 EIGEN3_PATH    = __EIGEN3_PATH__
 # Eigen3: The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
 LIBINT2_PATH   = __LIBINT2_PATH__
-# LIBINT2: path where you can find "include/", "lib/" and "share/".
+# LIBINT2: The path where you can find "include/", "lib/" and "share/".
 LIBXC_PATH     = __LIBXC_PATH__
-# LIBXC: path where you can find "bin/", "include/" and "lib/".
+# LIBXC: The path where you can find "bin/", "include/" and "lib/".
 MANIVERSE_PATH = __MANIVERSE_PATH__
 
 # --- Project Structure ---
@@ -38,9 +38,11 @@ CXXFLAGS    = -Wall -Wextra -Wpedantic -fopenmp -O3 -std=c++2a -march=native
 # -L flags specify paths for the *linker* to search during the build
 # -Wl,-rpath, flags embed paths into the executable for the *runtime dynamic linker*
 LDFLAGS     = -L$(LIBINT2_PATH)/lib \
+              -L$(LIBXC_PATH)/lib \
               -L$(LIBXC_PATH)/lib64 \
               -L$(MANIVERSE_PATH)/lib \
               -Wl,-rpath,$(LIBINT2_PATH)/lib \
+              -Wl,-rpath,$(LIBXC_PATH)/lib \
               -Wl,-rpath,$(LIBXC_PATH)/lib64 \
               -Wl,-rpath,$(MANIVERSE_PATH)/lib \
               -fopenmp # Often needed for linking OpenMP code too
@@ -60,18 +62,17 @@ all: $(TARGET)
 $(TARGET): $(OBJECTS)
 	@echo "Linking $@..."
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS) $(LDLIBS)
-	# $^ expands to all prerequisites (the object files)
-	# CXXFLAGS are included in the link step (good practice for LTO, -fopenmp etc.)
+# $^ expands to all prerequisites (the object files)
+# CXXFLAGS are included in the link step (good practice for LTO, -fopenmp etc.)
 
 # --- Compilation Rule ---
 
 # Pattern rule to compile .cpp files from SRCDIR into .o files in OBJDIR
 # This handles source files in subdirectories of SRCDIR as well.
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp | $(OBJDIR) # Use order-only prerequisite for OBJDIR
-	@echo "Compiling $< -> $@..."
+	@echo "Compiling $< -> $@ ..."
 	@mkdir -p $(@D) # Create subdirectory in obj/ if it doesn't exist
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
-
 # $< expands to the first prerequisite (the .cpp file)
 # $@ expands to the target (the .o file)
 # $(@D) expands to the directory part of the target
