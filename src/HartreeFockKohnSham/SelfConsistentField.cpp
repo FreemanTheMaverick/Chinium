@@ -1,4 +1,5 @@
 #include <Eigen/Dense>
+#include <unsupported/Eigen/CXX11/Tensor>
 #include <vector>
 #include <string>
 #include <cmath>
@@ -16,9 +17,10 @@
 #include "../Multiwfn/Multiwfn.h"
 #include "../Integral/Int2C1E.h"
 #include "../Integral/Int4C2E.h"
+#include "../Grid/Grid.h"
+#include "../ExchangeCorrelation.h"
 #include "../DIIS/CDIIS.h"
 #include "../DIIS/ADIIS.h"
-#include "FockFormation.h"
 
 #define S (int2c1e.Overlap)
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
@@ -65,20 +67,11 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedNewton(
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedQuasiNewton(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc,
-		double* ws, long int ngrids, int nbasis,
-		double* aos,
-		double* ao1xs, double* ao1ys, double* ao1zs,
-		double* ao2ls,
-		double* rhos,
-		double* rho1xs, double* rho1ys, double* rho1zs, double* sigmas,
-		double* lapls, double* taus,
-		double* es,
-		double* erhos, double* esigmas,
-		double* elapls, double* etaus,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
 		int output, int nthreads){
 	double E = 0;
+	const int nbasis = Dprime.cols();
 	EigenVector epsilons = EigenZero(Z.cols(), 1);
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
@@ -92,21 +85,14 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedQuasiNewton(
 	> dfunc_quasi = [&](EigenMatrix Dprime_, int order){
 		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
 		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads);
-		auto [Exc_, Gxc_] = xc.XCcode ? Gxc( // double, EigenMatrix
-				xc,
-				ws, ngrids, nbasis,
-				aos,
-				ao1xs, ao1ys, ao1zs,
-				ao2ls,
-				{2 * D_},
-				rhos,
-				rho1xs, rho1ys, rho1zs, sigmas,
-				lapls, taus,
-				es,
-				erhos, esigmas,
-				elapls, etaus,
-				nthreads
-		) : std::make_tuple(0, EigenZero(nbasis, nbasis));
+		double Exc_ = 0;
+		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
+		if (xc){
+			grid.getGridDensity(2 * D_);
+			xc.Evaluate("ev", grid);
+			Exc_ = grid.getEnergy();
+			Gxc_ = grid.getFock();
+		}
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix F_ = Fhf_+ Gxc_;
 		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
@@ -121,7 +107,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedQuasiNewton(
 		return std::make_tuple(E_, Fprime_, He);
 	};
 	TrustRegionSetting tr_setting;
-	if ( xc.XCcode ) tr_setting.R0 = 0.5;
+	if (xc) tr_setting.R0 = 0.5;
 	assert(
 			TrustRegion(
 				dfunc_quasi, tr_setting, {1.e-8, 1.e-5, 1.e-5},
@@ -230,21 +216,12 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		double T, double Mu,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc,
-		double* ws, long int ngrids, int nbasis,
-		double* aos,
-		double* ao1xs, double* ao1ys, double* ao1zs,
-		double* ao2ls,
-		double* rhos,
-		double* rho1xs, double* rho1ys, double* rho1zs, double* sigmas,
-		double* lapls, double* taus,
-		double* es,
-		double* erhos, double* esigmas,
-		double* elapls, double* etaus,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix F, EigenVector Occ, EigenMatrix Z,
 		int output, int nthreads){
 	double oldE = 0;
 	double E = 0;
+	const int nbasis = F.cols();
 	EigenVector epsilons = EigenZero(Z.cols(), 1);
 	EigenVector occupations = Occ;
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
@@ -276,21 +253,14 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		}
 		const EigenMatrix D_ = C * occupations.asDiagonal() * C.transpose();
 		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads);
-		auto [Exc_, Gxc_] = xc.XCcode ? Gxc( // double, EigenMatrix
-				xc,
-				ws, ngrids, nbasis,
-				aos,
-				ao1xs, ao1ys, ao1zs,
-				ao2ls,
-				{2 * D_},
-				rhos,
-				rho1xs, rho1ys, rho1zs, sigmas,
-				lapls, taus,
-				es,
-				erhos, esigmas,
-				elapls, etaus,
-				nthreads
-		) : std::make_tuple(0, EigenZero(nbasis, nbasis));
+		double Exc_ = 0;
+		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
+		if (xc){
+			grid.getGridDensity(2 * D_);
+			xc.Evaluate("ev", grid);
+			Exc_ = grid.getEnergy();
+			Gxc_ = grid.getFock();
+		}
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix Fnew_ = Fhf_ + Gxc_;
 		E += (D_ * ( Hcore + Fhf_ )).trace() + Exc_;
@@ -316,7 +286,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 	return std::make_tuple(E, epsilons, occupations, C);
 }
 
-void HartreeFockKohnSham(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, std::string scf, int output, int nthreads){
+void HartreeFockKohnSham(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, ExchangeCorrelation& xc, Grid& grid, std::string scf, int output, int nthreads){
 	Eigen::setNbThreads(nthreads);
 
 	const double T = mwfn.Temperature;
@@ -325,28 +295,6 @@ void HartreeFockKohnSham(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, std
 	if ( T > 0 && scf.compare("DIIS") != 0 ) throw std::runtime_error("Only DIIS optimization is supported for finite-temperature DFT!");
 
 	const EigenMatrix Z = mwfn.getCoefficientMatrix(mwfn.Wfntype);
-
-	ExchangeCorrelation& xc = mwfn.XC;
-	double* ws = mwfn.Ws;
-	long int ngrids = mwfn.NumGrids;
-	int nbasis = mwfn.getNumBasis();
-	double* aos = mwfn.AOs;
-	double* ao1xs = mwfn.AO1Xs;
-	double* ao1ys = mwfn.AO1Ys;
-	double* ao1zs = mwfn.AO1Zs;
-	double* ao2ls = mwfn.AO2Ls;
-	double* rhos = mwfn.Rhos;
-	double* rho1xs = mwfn.Rho1Xs;
-	double* rho1ys = mwfn.Rho1Ys;
-	double* rho1zs = mwfn.Rho1Zs;
-	double* sigmas = mwfn.Sigmas;
-	double* lapls = mwfn.Lapls;
-	double* taus = mwfn.Taus;
-	double* es = mwfn.Es;
-	double* e1rhos = mwfn.E1Rhos;
-	double* e1sigmas = mwfn.E1Sigmas;
-	double* e1lapls = mwfn.E1Lapls;
-	double* e1taus = mwfn.E1Taus;
 
 	if ( scf.compare("NEWTON") == 0 ){
 		EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
@@ -358,17 +306,7 @@ void HartreeFockKohnSham(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, std
 		EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
 		auto [E, epsilons, C] = RestrictedQuasiNewton(
 				int2c1e, int4c2e,
-				xc,
-				ws, ngrids, nbasis,
-				aos,
-				ao1xs, ao1ys, ao1zs,
-				ao2ls,
-				rhos,
-				rho1xs, rho1ys, rho1zs, sigmas,
-				lapls, taus,
-				es,
-				e1rhos, e1sigmas,
-				e1lapls, e1taus,
+				xc, grid,
 				Dprime, Z,
 				output-1, nthreads
 		);
@@ -382,17 +320,7 @@ void HartreeFockKohnSham(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, std
 			auto [E, epsilons, occupations, C] = RestrictedDIIS(
 					T, Mu,
 					int2c1e, int4c2e,
-					xc,
-					ws, ngrids, nbasis,
-					aos,
-					ao1xs, ao1ys, ao1zs,
-					ao2ls,
-					rhos,
-					rho1xs, rho1ys, rho1zs, sigmas,
-					lapls, taus,
-					es,
-					e1rhos, e1sigmas,
-					e1lapls, e1taus,
+					xc, grid,
 					F, Occ, Z,
 					output-1, nthreads
 			);

@@ -21,6 +21,8 @@
 	EigenMatrix getFock(int spin = 0);
 	EigenMatrix getDensity(int spin = 0);
 	EigenMatrix getEnergyDensity(int spin = 0);
+	std::vector<int> Basis2Atom();
+	std::vector<int> Atom2Basis();
 
 	Multiwfn() = default;
 	Multiwfn(std::string mwfn_filename, const bool output);

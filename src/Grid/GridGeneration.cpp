@@ -1,4 +1,5 @@
 #include <Eigen/Core>
+#include <unsupported/Eigen/CXX11/Tensor>
 #include <cmath>
 #include <vector>
 #include <chrono>
@@ -12,10 +13,9 @@
 
 #include "../Macro.h"
 #include "../Multiwfn/Multiwfn.h"
+#include "Grid.h"
 #include "sphere_lebedev_rule.hpp"
-
 #include <iostream>
-
 int SphericalGridNumber(std::string path, std::vector<MwfnCenter>& centers){
 	int ngrids = 0;
 	__Z_2_Name__
@@ -83,7 +83,7 @@ void SphericalGrid(
 		std::string radialformula; ss__ >> radialformula;
 		std::function<double(double)> ri_func;
 		std::function<double(double)> radial_weight_func;
-		if ( radialformula.compare("de2") == 0){
+		if ( radialformula == "de2" ){
 			double token1, token2, token3;
 			ss__ >> token1; ss__ >> token2; ss__ >> token3;
 			const double a = token1;
@@ -96,7 +96,7 @@ void SphericalGrid(
 				const double xi = h * i + token2;
 				return std::exp( 3 * a * xi - 3 * std::exp( - xi ) ) * ( a +std:: exp( - xi ) ) * h;
 			};
-		}else if ( radialformula.compare("em") == 0 ){
+		}else if ( radialformula == "em" ){
 			double token1; ss__ >> token1;
 			const double R = token1;
 			ri_func = [=](double i){
@@ -217,25 +217,89 @@ void UniformBoxGrid(const int natoms,double * atoms,const char * basisset,double
 }
 */
 
-void Multiwfn::GenerateGrid(std::string grid, int output){
+Grid::Grid(Multiwfn* mwfn, std::string grid, int output){
+	this->Mwfn = mwfn;
+	if ( grid.size() == 0 ) return;
 	std::string path = std::getenv("CHINIUM_PATH");
 	path += "/Grids/" + grid + "/";
 	if (output) std::printf("Reading grid files in %s\n", path.c_str());
 
-	this->NumGrids = SphericalGridNumber(path, this->Centers);
-	if (output) std::printf("Number of grid points ... %ld\n", this->NumGrids);
+	this->NumGrids = SphericalGridNumber(path, mwfn->Centers);
+	if (output) std::printf("Number of grid points ... %d\n", this->NumGrids);
 
 	if (output) std::printf("Generating grid points and weights ... ");
 	auto start = __now__;
-	assert(!this->Xs && "Grid is already generated!");
-	assert(!this->Ys && "Grid is already generated!");
-	assert(!this->Zs && "Grid is already generated!");
-	assert(!this->Ws && "Grid is already generated!");
-	this->Xs = new double[this->NumGrids];
-	this->Ys = new double[this->NumGrids];
-	this->Zs = new double[this->NumGrids];
-	this->Ws = new double[this->NumGrids];
-	SphericalGrid(path, this->Centers, this->Xs, this->Ys, this->Zs, this->Ws);
+	assert(this->Xs.size() == 0 && "Grid is already generated!");
+	assert(this->Ys.size() == 0 && "Grid is already generated!");
+	assert(this->Zs.size() == 0 && "Grid is already generated!");
+	assert(this->Weights.size() == 0 && "Grid is already generated!");
+	this->Xs.resize(this->NumGrids);
+	this->Ys.resize(this->NumGrids);
+	this->Zs.resize(this->NumGrids);
+	this->Weights = Eigen::Tensor<double, 1>(this->NumGrids);
+	SphericalGrid(
+			path, mwfn->Centers,
+			this->Xs.data(), this->Ys.data(),
+			this->Zs.data(), this->Weights.data()
+	);
 	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 }
 
+template<int ndim> inline Eigen::Tensor<double, ndim> SliceGrid(
+		const Eigen::Tensor<double, ndim>& tensor,
+		int from, int length){
+	Eigen::array<Eigen::Index, ndim> offsets; offsets[0] = from;
+	Eigen::array<Eigen::Index, ndim> extents; extents[0] = length;
+	for ( int i = 1; i < ndim; i++ ){
+		offsets[i] = 0;
+		extents[i] = tensor.dimension(i);
+	}
+	return tensor.slice(offsets, extents);
+}
+
+#define __Copy_Sliced_Grid__(tensor)\
+	if ( grid.tensor.size() > 0 )\
+		this->tensor = SliceGrid(grid.tensor, from, length);
+
+Grid::Grid(Grid& grid, int from, int length, int output){
+	if (output > 0) std::printf("Copying sub-grids %d - %d from grids ...\n", from, from + length - 1);
+	assert(from + length - 1 < grid.NumGrids && "Invalid range!");
+
+	this->Mwfn = grid.Mwfn;
+	this->Type = grid.Type;
+
+	this->NumGrids = length;
+	this->Xs = std::vector<double>(&grid.Xs[from], &grid.Xs[from + length]);
+	this->Ys = std::vector<double>(&grid.Ys[from], &grid.Ys[from + length]);
+	this->Zs = std::vector<double>(&grid.Zs[from], &grid.Zs[from + length]);
+
+	__Copy_Sliced_Grid__(Weights);
+	__Copy_Sliced_Grid__(AOs);
+	__Copy_Sliced_Grid__(AO1s);
+	__Copy_Sliced_Grid__(AO2Ls);
+	__Copy_Sliced_Grid__(AO2s);
+	__Copy_Sliced_Grid__(AO3s);
+
+	__Copy_Sliced_Grid__(Rhos);
+	__Copy_Sliced_Grid__(Rho1s);
+	__Copy_Sliced_Grid__(Sigmas);
+	__Copy_Sliced_Grid__(Lapls);
+	__Copy_Sliced_Grid__(Taus);
+
+	__Copy_Sliced_Grid__(RhoGrads);
+	__Copy_Sliced_Grid__(Rho1Grads);
+	__Copy_Sliced_Grid__(SigmaGrads);
+
+	__Copy_Sliced_Grid__(RhoHesss);
+	__Copy_Sliced_Grid__(Rho1Hesss);
+	__Copy_Sliced_Grid__(SigmaHesss);
+
+	__Copy_Sliced_Grid__(Es);
+	__Copy_Sliced_Grid__(E1Rhos);
+	__Copy_Sliced_Grid__(E1Sigmas);
+	__Copy_Sliced_Grid__(E1Lapls);
+	__Copy_Sliced_Grid__(E1Taus);
+	__Copy_Sliced_Grid__(E2Rho2s);
+	__Copy_Sliced_Grid__(E2RhoSigmas);
+	__Copy_Sliced_Grid__(E2Sigma2s);
+}

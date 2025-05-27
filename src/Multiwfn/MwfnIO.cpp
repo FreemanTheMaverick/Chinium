@@ -463,6 +463,25 @@ EigenMatrix Multiwfn::getEnergyDensity(int spin){
 	return C * N * E * C.transpose();
 }
 
+std::vector<int> Multiwfn::Basis2Atom(){
+	std::vector<int> bf2atom = {}; bf2atom.reserve(this->getNumBasis());
+	for ( int icenter = 0; icenter < this->getNumCenters(); icenter++ ){
+		for ( int jbasis = 0; jbasis < this->Centers[icenter].getNumBasis(); jbasis++ ){
+			bf2atom.push_back(icenter);
+		}
+	}
+	return bf2atom;
+}
+
+std::vector<int> Multiwfn::Atom2Basis(){
+	std::vector<int> atom2bf = {}; atom2bf.reserve(this->getNumCenters());
+	int ibasis = 0;
+	for ( MwfnCenter& center : this->Centers ){
+		atom2bf.push_back(ibasis);
+		ibasis += center.getNumBasis();
+	}
+	return atom2bf;
+}
 void Multiwfn::Export(std::string mwfn_filename, const bool output){
 	std::FILE* file = std::fopen(mwfn_filename.c_str(), "w");
 	if (output) std::printf("Exporting wavefunction information to %s ...\n", mwfn_filename.c_str());

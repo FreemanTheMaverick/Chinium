@@ -1,4 +1,5 @@
 #include <Eigen/Core>
+#include <unsupported/Eigen/CXX11/Tensor>
 #include <cmath>
 #include <vector>
 #include <array>
@@ -8,11 +9,12 @@
 
 #include "../Macro.h"
 #include "../Multiwfn/Multiwfn.h"
+#include "Grid.h"
 
 
 void GetAoValues(
 		std::vector<MwfnCenter>& centers,
-		double* xs, double* ys, double* zs, long int ngrids,
+		double* xs, double* ys, double* zs, int ngrids,
 		double* aos,
 		double* ao1xs, double* ao1ys, double* ao1zs,
 		double* ao2ls,
@@ -151,28 +153,28 @@ void GetAoValues(
 			}
 			switch(shell.Type){ // Basis function values are the products of the radial parts and the spherical harmonic parts. The following spherical harmonics are rescaled as suggested @ https://github.com/evaleev/libint/wiki/using-modern-CPlusPlus-API. The normalization constants here differ from those in "Symmetries of Spherical Harmonics: applications to ambisonics" @ https://iaem.at/ambisonics/symposium2009/proceedings/ambisym09-chapman-shsymmetries.pdf/@@download/file/AmbiSym09_Chapman_SHSymmetries.pdf by a factor of sqrt(2l+1).
 				case 0:
-					#include "S"
+					#include "AO/S.hpp"
 					break;
 				case 1:
-					#include "CartP"
+					#include "AO/CartP.hpp"
 					break;
 				case -1:
-					#include "PureP"
+					#include "AO/PureP.hpp"
 					break;
 				case -2:
-					#include "PureD"
+					#include "AO/PureD.hpp"
 					break;
 				case -3:
-					#include "PureF"
+					#include "AO/PureF.hpp"
 					break;
 				case -4:
-					#include "PureG"
+					#include "AO/PureG.hpp"
 					break;
 				case -5:
-					#include "PureH"
+					#include "AO/PureH.hpp"
 					break;
 				case -6:
-					#include "PureI"
+					#include "AO/PureI.hpp"
 					break;
 			}
 			for ( int i = 0; i < shell.getSize(); i++ ){
@@ -213,51 +215,67 @@ void GetAoValues(
 	}
 }
 
-void Multiwfn::getGridAO(int order, int output){
+void Grid::getGridAO(int derivative, int output){
+	const int order = derivative + this->Type;
 	if (output) std::printf("Generating grids to order %d of basis functions ... ", order);
 	auto start = __now__;
-	assert(this->Xs && "Grid is not generated yet!");
-	assert(this->Ys && "Grid is not generated yet!");
-	assert(this->Zs && "Grid is not generated yet!");
-	if ( order >= 0 )
-		this->AOs = new double[this->NumGrids * this->getNumBasis()];
+	const int ngrids = this->NumGrids;
+	const int nbasis = this->Mwfn->getNumBasis();
+	double *aos{}, *ao1s{}, *ao2ls{}, *ao2s{}, *ao3s{};
+
+	if ( order >= 0 ){
+		this->AOs = Eigen::Tensor<double, 2>(ngrids, nbasis);
+		this->AOs.setZero();
+		aos = this->AOs.data();
+	}
 	if ( order >= 1 ){
-		this->AO1Xs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO1Ys = new double[this->NumGrids * this->getNumBasis()];
-		this->AO1Zs = new double[this->NumGrids * this->getNumBasis()];
+		this->AO1s = Eigen::Tensor<double, 3>(ngrids, nbasis, 3);
+		this->AO1s.setZero();
+		ao1s = this->AO1s.data();
 	}
 	if ( order >= 2 ){
-		this->AO2Ls = new double[this->NumGrids * this->getNumBasis()];
-		this->AO2XXs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO2YYs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO2ZZs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO2XYs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO2XZs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO2YZs = new double[this->NumGrids * this->getNumBasis()];
+		this->AO2Ls = Eigen::Tensor<double, 2>(ngrids, nbasis);
+		this->AO2Ls.setZero();
+		ao2ls = this->AO2Ls.data();
+		this->AO2s = Eigen::Tensor<double, 3>(ngrids, nbasis, 6);
+		this->AO2s.setZero();
+		ao2s = this->AO2s.data();
 	}
 	if ( order >= 3 ){
-		this->AO3XXXs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO3XXYs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO3XXZs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO3XYYs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO3XYZs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO3XZZs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO3YYYs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO3YYZs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO3YZZs = new double[this->NumGrids * this->getNumBasis()];
-		this->AO3ZZZs = new double[this->NumGrids * this->getNumBasis()];
+		this->AO3s = Eigen::Tensor<double, 3>(ngrids, nbasis, 10);
+		this->AO3s.setZero();
+		ao3s = this->AO3s.data();
 	}
+
 	GetAoValues(
-			this->Centers,
-			this->Xs, this->Ys, this->Zs, this->NumGrids,
-			this->AOs,
-			this->AO1Xs, this->AO1Ys, this->AO1Zs,
-			this->AO2Ls,
-			this->AO2XXs, this->AO2YYs, this->AO2ZZs,
-			this->AO2XYs, this->AO2XZs, this->AO2YZs,
-			this->AO3XXXs, this->AO3XXYs, this->AO3XXZs,
-			this->AO3XYYs, this->AO3XYZs, this->AO3XZZs,
-			this->AO3YYYs, this->AO3YYZs, this->AO3YZZs, this->AO3ZZZs
+			this->Mwfn->Centers,
+			this->Xs.data(), this->Ys.data(), this->Zs.data(),
+			this->NumGrids,
+
+			aos,
+
+			ao1s + ngrids * nbasis * 0, // x
+			ao1s + ngrids * nbasis * 1, // y
+			ao1s + ngrids * nbasis * 2, // z
+
+			ao2ls,
+			ao2s + ngrids * nbasis * 0, // xx
+		   	ao2s + ngrids * nbasis * 2, // yy
+		   	ao2s + ngrids * nbasis * 5, // zz
+		   	ao2s + ngrids * nbasis * 1, // xy
+		   	ao2s + ngrids * nbasis * 3, // xz
+		   	ao2s + ngrids * nbasis * 4, // yz
+
+		   	ao3s + ngrids * nbasis * 0, // xxx
+		   	ao3s + ngrids * nbasis * 1, // xxy
+		   	ao3s + ngrids * nbasis * 4, // xxz
+		   	ao3s + ngrids * nbasis * 2, // xyy
+		   	ao3s + ngrids * nbasis * 5, // xyz
+		   	ao3s + ngrids * nbasis * 7, // xzz
+		   	ao3s + ngrids * nbasis * 3, // yyy
+		   	ao3s + ngrids * nbasis * 6, // yyz
+		   	ao3s + ngrids * nbasis * 8, // yzz
+		   	ao3s + ngrids * nbasis * 9  // zzz
 	);
 	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 }

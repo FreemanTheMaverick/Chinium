@@ -2,7 +2,6 @@
 #include "MwfnShell.h"
 #include "MwfnCenter.h"
 #include "MwfnOrbital.h"
-#include "../ExchangeCorrelation/MwfnXC1.h"
 
 class Multiwfn{ public:
 	// Field 1
@@ -29,6 +28,4 @@ class Multiwfn{ public:
 	double ChemicalPotential = 0;
 
 	#include "MwfnIO.h"
-	#include "../Grid/MwfnGrid.h"
-	#include "../ExchangeCorrelation/MwfnXC2.h"
 };

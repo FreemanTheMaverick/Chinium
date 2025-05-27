@@ -1,1 +1,1 @@
-Exchange and correlation functional IDs in [libXC functional list](https://www.tddft.org/programs/libxc/functionals/). Some functionals have no correlation part. Their second indeces are zero.
+Each file contains one or two IDs corresponding to the exchange and/or correlation functionals, according to the [libXC functional list](https://libxc.gitlab.io/functionals/previous/libxc-6.2.2/).

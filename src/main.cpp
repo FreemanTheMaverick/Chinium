@@ -1,4 +1,5 @@
 #include <Eigen/Dense>
+#include <unsupported/Eigen/CXX11/Tensor>
 #include <vector>
 #include <map>
 #include <string>
@@ -11,6 +12,8 @@
 #include "Multiwfn/Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 #include "Integral/Int2C1E.h"
 #include "Integral/Int4C2E.h"
+#include "Grid/Grid.h"
+#include "ExchangeCorrelation.h"
 #include "HartreeFockKohnSham/HartreeFockKohnSham.h"
 #include "Localization/Localize.h"
 
@@ -33,7 +36,7 @@ int main(int argc, char* argv[]){ (void)argc;
 	const std::string jobtype = ReadJobType(inp);
 	const std::string scf = ReadSCF(inp);
 	const std::string guess = ReadGuess(inp);
-	const std::string grid = ReadGrid(inp);
+	const std::string grid_str = ReadGrid(inp);
 	const std::string method = ReadMethod(inp);
 	const int derivative = ReadDerivative(inp);
 	const double temperature = ReadTemperature(inp);
@@ -41,7 +44,7 @@ int main(int argc, char* argv[]){ (void)argc;
 	
 	// Deciding whether to read existing mwfn file.
 	Multiwfn mwfn;
-	if ( atoms.empty() || basis.empty() || guess.compare("READ") == 0 )
+	if ( atoms.empty() || basis.empty() || guess == "READ" )
 		mwfn = Multiwfn(mwfn_name, 1);
 
 	// Atoms and basis
@@ -65,14 +68,12 @@ int main(int argc, char* argv[]){ (void)argc;
 	}
 	mwfn.PrintCenters();
 
-	if ( !grid.empty() ) mwfn.GenerateGrid(grid, 1);
-
 	// FT-DFT related
 	mwfn.Temperature = temperature;
 	mwfn.ChemicalPotential = chemicalpotential;
 
 	// Initializing E and its derivatives
-	if ( guess.compare("READ") != 0 ){
+	if ( guess != "READ" ){
 		mwfn.Wfntype = wfntype;
 		if ( wfntype == -1 ){
 			if ( na == nb ) mwfn.Wfntype = 0;
@@ -86,39 +87,27 @@ int main(int argc, char* argv[]){ (void)argc;
 	// Nuclear repulsion
 	mwfn.NuclearRepulsion({0, 1, 2}, 1);
 
-	// Electron integrals
+	// Electron integrals, density functional and grid
 	Int2C1E int2c1e = Int2C1E(mwfn, 1);
 	Int4C2E int4c2e = Int4C2E(mwfn, 1, -1, 1); // EXX is unknown by now.
-	if ( jobtype.compare("SCF") == 0 ){
+	ExchangeCorrelation xc;
+	Grid grid(&mwfn, grid_str, 1);
+	if ( jobtype == "SCF" ){
 		int2c1e.CalculateIntegrals(0);
 		int4c2e.getRepulsionDiag();
 		int4c2e.getRepulsionLength();
 		int4c2e.getRepulsionIndices();
 		int4c2e.getThreadPointers(nthreads);
 		int4c2e.CalculateIntegrals(0);
-
-		if ( method.compare("HF") != 0 || guess.compare("SAP") == 0 ){
-			if ( method.compare("HF") != 0 ){
-				mwfn.XC.Read(method, 1);
-				int4c2e.EXX = mwfn.XC.EXX;
-				mwfn.PrepareXC("ev",1);
-				if ( derivative > 1 ) mwfn.PrepareXC("f",1);
-				if ( mwfn.XC.XCfamily.compare("LDA") == 0 ) switch(derivative){ // Prepared for SCF and CPSCF only, which use the AO values more than once. Higher-order derivatives that will be used only once will be computed in batches in HartreeFockKohnSham/HFKSDerivative.cpp to save memory.
-					case 0:
-						mwfn.getGridAO(0, 1); break;
-					case 1:
-					case 2:
-						mwfn.getGridAO(1, 1); break;
-				}else if ( mwfn.XC.XCfamily.compare("GGA") == 0 ) switch(derivative){
-					case 0:
-						mwfn.getGridAO(1, 1); break;
-					case 1:
-					case 2:
-						mwfn.getGridAO(2, 1); break;
-				}
-			}else mwfn.getGridAO(0, 1); // For SAP initial guess.
-		} // if ( method.compare("HF") != 0 || guess.compare("SAP") == 0 )
-		if ( guess.compare("READ") == 0 ){ // Orthogonalizing the orbitals read from mwfn.
+		if ( method != "HF" || guess == "SAP" ){
+			if ( method != "HF" ){
+				xc.Read(method, 1);
+				grid.Type = xc.Family == "LDA" ? 0 : xc.Family == "GGA" ? 1 : 2;
+				grid.getGridAO(0, 1); // Prepared for SCF and CPSCF only, which use the AO values more than once. Higher-order derivatives that will be used only once will be computed in batches in HartreeFockKohnSham/HFKSDerivative.cpp to save memory.
+				int4c2e.EXX = xc.EXX;
+			}else grid.getGridAO(0, 1); // For SAP initial guess.
+		}
+		if ( guess == "READ" ){ // Orthogonalizing the orbitals read from mwfn.
 			Eigen::SelfAdjointEigenSolver<EigenMatrix> solver;
 			const EigenMatrix S = int2c1e.Overlap;
 			if ( mwfn.Wfntype == 0 ){
@@ -145,35 +134,37 @@ int main(int argc, char* argv[]){ (void)argc;
 				mwfn.setOccupation((EigenVector)(EigenZero(na, 1).array() + 1).matrix(), 1);
 				mwfn.setOccupation((EigenVector)(EigenZero(nb, 1).array() + 1).matrix(), 2);
 			}
-			GuessSCF(mwfn, int2c1e, guess, 1);
+			GuessSCF(mwfn, int2c1e, grid, guess, 1);
 		}
-		HartreeFockKohnSham(mwfn, int2c1e, int4c2e, scf, 4, nthreads);
+		HartreeFockKohnSham(mwfn, int2c1e, int4c2e, xc, grid, scf, 4, nthreads);
+		if (xc) grid.SaveGridDensity();
 		std::printf("Total energy: %17.10f\n", mwfn.E_tot);
 		mwfn.PrintOrbitals();
 		mwfn.Export(mwfn_name, 1);
 
 		if ( derivative > 0 ){
 			int2c1e.CalculateIntegrals(1);
-			auto [grad, hess] = HFKSDerivative(mwfn, int2c1e, int4c2e, derivative, 2, nthreads);
+			auto [grad, hess] = HFKSDerivative(mwfn, int2c1e, int4c2e, xc, grid, derivative, 2, nthreads);
 			mwfn.Gradient += grad;
 			mwfn.Hessian += hess;
-			if ( derivative > 0 ){
-				std::printf("Total nuclear gradient:\n");
-				for ( int iatom = 0; iatom < mwfn.getNumCenters(); iatom++ )
-					std::printf("| %3d  %2s  % 10.17f  % 10.17f  % 10.17f\n", iatom, mwfn.Centers[iatom].getSymbol().c_str(), mwfn.Gradient(iatom, 0), mwfn.Gradient(iatom, 1), mwfn.Gradient(iatom, 2));
-			}
-			if ( derivative > 1 ){
-				std::printf("Total nuclear hessian:\n");
-				for ( int xpert = 0; xpert < mwfn.getNumCenters() * 3; xpert++ ){
-					std::printf("|");
-					for (int ypert = 0; ypert <= xpert; ypert++ )
-						std::printf(" % f", mwfn.Hessian(xpert, ypert));
-					std::printf("\n");
-				}
+		}
+
+		if ( derivative > 0 ){
+			std::printf("Total nuclear gradient:\n");
+			for ( int iatom = 0; iatom < mwfn.getNumCenters(); iatom++ )
+				std::printf("| %3d  %2s  % 10.17f  % 10.17f  % 10.17f\n", iatom, mwfn.Centers[iatom].getSymbol().c_str(), mwfn.Gradient(iatom, 0), mwfn.Gradient(iatom, 1), mwfn.Gradient(iatom, 2));
+		}
+		if ( derivative > 1 ){
+			std::printf("Total nuclear hessian:\n");
+			for ( int xpert = 0; xpert < mwfn.getNumCenters() * 3; xpert++ ){
+				std::printf("|");
+				for (int ypert = 0; ypert <= xpert; ypert++ )
+					std::printf(" % f", mwfn.Hessian(xpert, ypert));
+				std::printf("\n");
 			}
 		}
-	} // if ( jobtype.compare("SCF") == 0 )
-	else if ( jobtype.compare("LOCALIZATION") == 0 ){
+	} // if ( jobtype == "SCF" )
+	else if ( jobtype == "LOCALIZATION" ){
 		Localize(mwfn, int2c1e, method, "occ", 2);
 		Localize(mwfn, int2c1e, method, "vir", 2);
 		mwfn.Export(mwfn_name, 1);
