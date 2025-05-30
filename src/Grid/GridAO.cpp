@@ -224,25 +224,25 @@ void Grid::getGridAO(int derivative, int output){
 	double *aos{}, *ao1s{}, *ao2ls{}, *ao2s{}, *ao3s{};
 
 	if ( order >= 0 ){
-		this->AOs = Eigen::Tensor<double, 2>(ngrids, nbasis);
+		this->AOs.resize(ngrids, nbasis);
 		this->AOs.setZero();
 		aos = this->AOs.data();
 	}
 	if ( order >= 1 ){
-		this->AO1s = Eigen::Tensor<double, 3>(ngrids, nbasis, 3);
+		this->AO1s.resize(ngrids, nbasis, 3);
 		this->AO1s.setZero();
 		ao1s = this->AO1s.data();
 	}
 	if ( order >= 2 ){
-		this->AO2Ls = Eigen::Tensor<double, 2>(ngrids, nbasis);
+		this->AO2Ls.resize(ngrids, nbasis);
 		this->AO2Ls.setZero();
 		ao2ls = this->AO2Ls.data();
-		this->AO2s = Eigen::Tensor<double, 3>(ngrids, nbasis, 6);
+		this->AO2s.resize(ngrids, nbasis, 6);
 		this->AO2s.setZero();
 		ao2s = this->AO2s.data();
 	}
 	if ( order >= 3 ){
-		this->AO3s = Eigen::Tensor<double, 3>(ngrids, nbasis, 10);
+		this->AO3s.resize(ngrids, nbasis, 10);
 		this->AO3s.setZero();
 		ao3s = this->AO3s.data();
 	}

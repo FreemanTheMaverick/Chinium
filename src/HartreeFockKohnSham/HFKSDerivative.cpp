@@ -120,12 +120,12 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int
 			batch_grid.getGridAO(derivative, output);
 
 			auto start = __now__;
-			if (output) std::printf("| | Calculating skeleton hessian of density on these grids ...");
+			if (output) std::printf("| | Calculating skeleton gradient of density ...");
 			batch_grid.getGridDensitySkeleton(2 * D);
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
 			start = __now__;
-			if (output) std::printf("| | Calculating XC gradient contributed by these grids ...");
+			if (output) std::printf("| | Calculating XC gradient ...");
 			const std::vector<double> gxc = batch_grid.getEnergyGrad();
 			__VectorIncrement__(Gradient, gxc, 1)
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
@@ -135,18 +135,18 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int
 				xc.Evaluate("f", batch_grid);
 
 				start = __now__;
-				if (output) std::printf("| | Calculating skeleton hessian of density on these grids ...");
+				if (output) std::printf("| | Calculating skeleton hessian of density ...");
 				batch_grid.getGridDensitySkeleton2(2 * D);
 				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
 				start = __now__;
-				if (output) std::printf("| | Calculating XC skeleton hessian contributed by these grids ...");
+				if (output) std::printf("| | Calculating XC skeleton hessian ...");
 				const std::vector<std::vector<double>> hxc = batch_grid.getEnergyHess();
 				__VectorVectorIncrement__(Hessian, hxc, 1)
 				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
 				start = __now__;
-				if (output) std::printf("| | Calculating skeleton gradient of XC Fock matrices contributed by these grids ...");
+				if (output) std::printf("| | Calculating skeleton gradient of XC Fock matrices ...");
 				std::vector<EigenMatrix> fxcskeletons = batch_grid.getFockSkeleton();
 				__VectorIncrement__(Fskeletons, fxcskeletons, 1)
 				fxcskeletons = batch_grid.getFockDensity();

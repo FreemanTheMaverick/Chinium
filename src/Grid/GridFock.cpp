@@ -8,7 +8,7 @@
 #include "../Macro.h"
 #include "../Multiwfn/Multiwfn.h"
 #include "Grid.h"
-#include <iostream>
+
 EigenMatrix Grid::getFock(int type){ // Default type = -1
 	if ( type == -1 ) type = this->Type;
 	const Eigen::Tensor<double, 1>& Ws = Weights;
@@ -51,21 +51,21 @@ std::vector<EigenMatrix> Grid::getFockSkeleton(){
 			const int ihead = atom2bf[iatom];
 			const int ilength = this->Mwfn->Centers[iatom].getNumBasis();
 			const Eigen::Tensor<double, 3> AO1sa = SliceTensor(AO1s, {0, ihead, 0}, {ngrids, ilength, 3});
-			Eigen::Tensor<double, 3> F0a(nbasis, nbasis, 3); F0a.setZero();
+			Eigen::Tensor<double, 3> F0a(ilength, nbasis, 3); F0a.setZero();
 			#include "FockEinSum/Ws_g...E1Rhos_g...AO1sa_g,mu,t...AOs_g,nu---F0a_mu,nu,t.hpp"
-			F.chip(iatom, 3) -= F0a;
+			F.chip(iatom, 3) -= PadTensor(F0a, {{ihead, nbasis - ihead - ilength}, {0, 0}, {0, 0}});
 		}
 	}
 	if ( this->Type >= 1 ){
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
 			const int ihead = atom2bf[iatom];
 			const int ilength = this->Mwfn->Centers[iatom].getNumBasis();
-			Eigen::Tensor<double, 3> Fa1(nbasis, nbasis, 3); Fa1.setZero();
+			Eigen::Tensor<double, 3> Fa1(ilength, nbasis, 3); Fa1.setZero();
 			const Eigen::Tensor<double, 3> AO2sa = SliceTensor(AO2s, {0, ihead, 0}, {ngrids, ilength, 6});
 			#include "FockEinSum/Ws_g...E1Sigmas_g...Rho1s_g,r...AO2sa_g,mu,r,t...AOs_g,nu---Fa1_mu,nu,t.hpp"
 			const Eigen::Tensor<double, 3> AO1sa = SliceTensor(AO1s, {0, ihead, 0}, {ngrids, ilength, 3});
 			#include "FockEinSum/Ws_g...E1Sigmas_g...Rho1s_g,r...AO1sa_g,mu,t...AO1s_g,nu,r---Fa1_mu,nu,t.hpp"
-			F.chip(iatom, 3) -= 2. * Fa1;
+			F.chip(iatom, 3) -= 2. * PadTensor(Fa1, {{ihead, nbasis - ihead - ilength}, {0, 0}, {0, 0}});
 		}
 	}
 	F += F.shuffle(Eigen::array<int, 4>{1, 0, 2, 3}).eval();
@@ -79,6 +79,7 @@ std::vector<EigenMatrix> Grid::getFockSkeleton(){
 
 std::vector<EigenMatrix> Grid::getFockDensity(){
 	const Eigen::Tensor<double, 1>& Ws = Weights;
+	const int ngrids = this->NumGrids;
 	const int nbasis = this->Mwfn->getNumBasis();
 	const int natoms = this->Mwfn->getNumCenters();
 	const int nxyz = 3;
@@ -93,13 +94,15 @@ std::vector<EigenMatrix> Grid::getFockDensity(){
 		#include "FockEinSum/Ws_g...E2RhoSigmas_g...SigmaGrads_g,t,a...AOs_g,mu...AOs_g,nu---F1_mu,nu,t,a.hpp"
 		F += 0.5 * F1;
 		F1.setZero();
-		#include "FockEinSum/Ws_g...E2RhoSigmas_g...RhoGrads_g,t,a...Rho1s_g,r...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu,t,a.hpp"
-		F += 2. * F1;
-		F1.setZero();
-		#include "FockEinSum/Ws_g...E2Sigma2s_g...SigmaGrads_g,t,a...Rho1s_g,r...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu,t,a.hpp"
-		F += 2. * F1;
-		F1.setZero();
-		#include "FockEinSum/Ws_g...E1Sigmas_g...Rho1Grads_g,r,t,a...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu,t,a.hpp"
+		Eigen::Tensor<double, 3> TMP(ngrids, nxyz, natoms); TMP.setZero();
+		#include "FockEinSum/E2RhoSigmas_g...RhoGrads_g,t,a---TMP_g,t,a.hpp"
+		#include "FockEinSum/E2Sigma2s_g...SigmaGrads_g,t,a---TMP_g,t,a.hpp"
+		Eigen::Tensor<double, 4> TMP2(ngrids, 3, nxyz, natoms); TMP2.setZero();
+		#include "FockEinSum/TMP_g,t,a...Rho1s_g,r---TMP2_g,r,t,a.hpp"
+		Eigen::Tensor<double, 4> TMP3(ngrids, 3, nxyz, natoms); TMP3.setZero();
+		#include "FockEinSum/E1Sigmas_g...Rho1Grads_g,r,t,a---TMP3_g,r,t,a.hpp"
+		Eigen::Tensor<double, 4> TMP4 = TMP2 + TMP3;
+		#include "FockEinSum/Ws_g...TMP4_g,r,t,a...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu,t,a.hpp"
 		F += 2. * F1;
 	}
 	F += F.shuffle(Eigen::array<int, 4>{1, 0, 2, 3}).eval();

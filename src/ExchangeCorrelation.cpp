@@ -93,29 +93,29 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 
 #define __XC_LDA__\
 	assert( rhos.size() == ngrids );\
-	if ( order.compare("e") == 0 ){\
+	if ( order == "e" ){\
 		__Allocate_Temporary__(es)\
 		xc_lda_exc(&func, ngrids, rhos.data(), es.data());\
 		__Append_XC__(Es, es)\
-	}else if ( order.compare("v") == 0 ){\
+	}else if ( order == "v" ){\
 		__Allocate_Temporary__(e1rhos)\
 		xc_lda_vxc(&func, ngrids, rhos.data(), e1rhos.data());\
 		__Append_XC__(E1Rhos, e1rhos)\
-	}else if ( order.compare("ev") == 0 ){\
+	}else if ( order == "ev" ){\
 		__Allocate_Temporary__(es)\
 		__Allocate_Temporary__(e1rhos)\
 		xc_lda_exc_vxc(&func, ngrids, rhos.data(), es.data(), e1rhos.data());\
 		__Append_XC__(Es, es)\
 		__Append_XC__(E1Rhos, e1rhos)\
-	}else if ( order.compare("f") == 0 ){\
+	}else if ( order == "f" ){\
 		__Allocate_Temporary__(e2rho2s)\
 		xc_lda_fxc(&func, ngrids, rhos.data(), e2rho2s.data());\
 		__Append_XC__(E2Rho2s, e2rho2s)\
-	}/*else if ( order.compare("k") == 0 ){\
+	}/*else if ( order == "k" ){\
 		__Allocate_Temporary__(e3rho3s)\
 		xc_lda_kxc(&func, ngrids, rhos.data(), e3rho3s.data());\
 		__Append_XC__(E3Rho3s, e3rho3s)\
-	}else if ( order.compare("l") == 0 ){\
+	}else if ( order == "l" ){\
 		__Allocate_Temporary__(e4rho4s)\
 		xc_lda_lxc(&func, ngrids, rhos.data(), e4rho4s.data());\
 		__Append_XC__(E4Rho4s, e4rho4s)\
@@ -124,17 +124,17 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 #define __XC_GGA__\
 	assert( rhos.size() == (int)ngrids );\
 	assert( sigmas.size() == (int)ngrids );\
-	if ( order.compare("e") == 0 ){\
+	if ( order == "e" ){\
 		__Allocate_Temporary__(es)\
 		xc_gga_exc(&func, ngrids, rhos.data(), sigmas.data(), es.data());\
 		__Append_XC__(Es, es)\
-	}else if ( order.compare("v") == 0 ){\
+	}else if ( order == "v" ){\
 		__Allocate_Temporary__(e1rhos)\
 		__Allocate_Temporary__(e1sigmas)\
 		xc_gga_vxc(&func, ngrids, rhos.data(), sigmas.data(), e1rhos.data(), e1sigmas.data());\
 		__Append_XC__(E1Rhos, e1rhos)\
 		__Append_XC__(E1Sigmas, e1sigmas)\
-	}else if ( order.compare("ev") == 0 ){\
+	}else if ( order == "ev" ){\
 		__Allocate_Temporary__(es)\
 		__Allocate_Temporary__(e1rhos)\
 		__Allocate_Temporary__(e1sigmas)\
@@ -142,7 +142,7 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 		__Append_XC__(Es, es)\
 		__Append_XC__(E1Rhos, e1rhos)\
 		__Append_XC__(E1Sigmas, e1sigmas)\
-	}else if ( order.compare("f") == 0 ){\
+	}else if ( order == "f" ){\
 		__Allocate_Temporary__(e2rho2s)\
 		__Allocate_Temporary__(e2rhosigmas)\
 		__Allocate_Temporary__(e2sigma2s)\
@@ -150,7 +150,7 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 		__Append_XC__(E2Rho2s, e2rho2s)\
 		__Append_XC__(E2RhoSigmas, e2rhosigmas)\
 		__Append_XC__(E2Sigma2s, e2sigma2s)\
-	}/*else if ( order.compare("k") == 0 ){\
+	}/*else if ( order == "k" ){\
 		__Allocate_Temporary__(e3rho3s)\
 		__Allocate_Temporary__(e3rho2sigmas)\
 		__Allocate_Temporary__(e3rhosigma2s)\
@@ -160,7 +160,7 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 		__Append_XC__(E3Rho2Sigmas, e3rho2sigmas)\
 		__Append_XC__(E3RhoSigma2s, e3rhosigma2s)\
 		__Append_XC__(E3Sigma3s, e3sigma3s)\
-	}else if ( order.compare("l") == 0 ){\
+	}else if ( order == "l" ){\
 		__Allocate_Temporary__(e4rho4s)\
 		__Allocate_Temporary__(e4rho3sigmas)\
 		__Allocate_Temporary__(e4rho2sigma2s)\
@@ -179,11 +179,11 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 	assert( sigmas.size() == (int)ngrids );\
 	assert( lapls.size() == (int)ngrids );\
 	assert( taus.size() == (int)ngrids );\
-	if ( order.compare("e") == 0 ){\
+	if ( order == "e" ){\
 		__Allocate_Temporary__(es)\
 		xc_mgga_exc(&func, ngrids, rhos.data(), sigmas.data(), lapls.data(), taus.data(), es.data());\
 		__Append_XC__(Es, es)\
-	}else if ( order.compare("v") == 0 ){\
+	}else if ( order == "v" ){\
 		__Allocate_Temporary__(e1rhos)\
 		__Allocate_Temporary__(e1sigmas)\
 		__Allocate_Temporary__(e1lapls)\
@@ -193,7 +193,7 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 		__Append_XC__(E1Sigmas, e1sigmas)\
 		__Append_XC__(E1Lapls, e1lapls)\
 		__Append_XC__(E1Taus, e1taus)\
-	}else if ( order.compare("ev") == 0 ){\
+	}else if ( order == "ev" ){\
 		__Allocate_Temporary__(es)\
 		__Allocate_Temporary__(e1rhos)\
 		__Allocate_Temporary__(e1sigmas)\
@@ -216,11 +216,20 @@ void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 	__Alias_Density__(sigmas, Sigmas, Sigmas_Cache)
 	__Alias_Density__(lapls, Lapls, Lapls_Cache)
 	__Alias_Density__(taus, Taus, Taus_Cache)
-	grid.Es.setZero();
-	grid.E1Rhos.setZero(); grid.E1Sigmas.setZero(); grid.E1Lapls.setZero(); grid.E1Taus.setZero();
-	grid.E2Rho2s.setZero(); grid.E2RhoSigmas.setZero(); grid.E2Sigma2s.setZero();
-	/*grid.E3Rho3s.setZero(); grid.E3Rho2Sigmas.setZero(); grid.E3RhoSigma2s.setZero(); E3Sigma3s.setZero();
-	grid.E4Rho4s.setZero(); grid.E4Rho3Sigmas.setZero(); grid.E4Rho2Sigma2s.setZero(); grid.E4RhoSigma3s.setZero(); grid.E4Sigma4s.setZero();*/
+	if ( order == "e" ){
+		grid.Es.setZero();
+	}else if ( order == "v" ){
+		grid.E1Rhos.setZero(); grid.E1Sigmas.setZero(); grid.E1Lapls.setZero(); grid.E1Taus.setZero();
+	}else if ( order == "ev" ){
+		grid.Es.setZero();
+		grid.E1Rhos.setZero(); grid.E1Sigmas.setZero(); grid.E1Lapls.setZero(); grid.E1Taus.setZero();
+	}else if ( order == "f" ){
+		grid.E2Rho2s.setZero(); grid.E2RhoSigmas.setZero(); grid.E2Sigma2s.setZero();
+	}/*else if ( order == "k" ){
+		grid.E3Rho3s.setZero(); grid.E3Rho2Sigmas.setZero(); grid.E3RhoSigma2s.setZero(); E3Sigma3s.setZero();
+	}else if ( order == "l" ){
+		grid.E4Rho4s.setZero(); grid.E4Rho3Sigmas.setZero(); grid.E4Rho2Sigma2s.setZero(); grid.E4RhoSigma3s.setZero(); grid.E4Sigma4s.setZero();
+	}*/
 	for ( int code : this->Codes ){
 		xc_func_type func;
 		xc_func_init(&func, code, this->Spin);

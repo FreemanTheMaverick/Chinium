@@ -7,7 +7,7 @@
 #include "../Macro.h"
 #include "../Multiwfn/Multiwfn.h"
 #include "Grid.h"
-#include <iostream>
+
 double Grid::getEnergy(){
 	assert( this->NumGrids == Weights.dimension(0) );
 	assert( this->Rhos.size() ? this->NumGrids == Rhos.dimension(0) : this->NumGrids == Rhos_Cache.dimension(0) );

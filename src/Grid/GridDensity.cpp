@@ -12,7 +12,7 @@
 #include "../Macro.h"
 #include "../Multiwfn/Multiwfn.h"
 #include "Grid.h"
-#include <iostream>
+
 void Grid::getGridDensity(EigenMatrix D_){
 	const int ngrids = this->NumGrids;
 	const int nbasis = (int)D_.cols();
@@ -137,6 +137,7 @@ void Grid::getGridDensitySkeleton2(EigenMatrix D_){
 				const Eigen::Tensor<double, 2> Dab = SliceTensor(D, {ihead, jhead}, {ilength, jlength});
 				const Eigen::Tensor<double, 3> AO1sb = SliceTensor(AO1s, {0, jhead, 0}, {ngrids, jlength, 3});
 				Eigen::Tensor<double, 3> RhoHesssab(ngrids, 3, 3);
+				RhoHesssab.setZero();
 				#include "DensityEinSum/Dab_mu,nu...AO1sa_g,mu,t...AO1sb_g,nu,s---RhoHesssab_g,t,s.hpp"
 				RhoHesss.chip(jatom, 4).chip(iatom, 2) = RhoHesssab;
 				RhoHesss.chip(iatom, 4).chip(jatom, 2) = RhoHesssab.shuffle(Eigen::array<int, 3>{0, 2, 1});
@@ -162,6 +163,7 @@ void Grid::getGridDensitySkeleton2(EigenMatrix D_){
 			#include "DensityEinSum/Da_mu,nu...AO3sa_g,mu,r,t,s...AOs_g,nu---Rho1Hesssaa_g,r,t,s.hpp" // 1
 			#include "DensityEinSum/Da_mu,nu...AO2sa_g,mu,t,s...AO1s_g,nu,r---Rho1Hesssaa_g,r,t,s.hpp" // 3
 			Rho1Hesss.chip(iatom, 5).chip(iatom, 3) += Rho1Hesssaa;
+			Rho1Hesssaa.resize(0, 0, 0, 0);
 			for ( int jatom = 0; jatom < iatom; jatom++ ){
 				const int jhead = atom2bf[jatom];
 				const int jlength = this->Mwfn->Centers[jatom].getNumBasis();
@@ -176,10 +178,10 @@ void Grid::getGridDensitySkeleton2(EigenMatrix D_){
 				Rho1Hesss.chip(iatom, 5).chip(jatom, 3) = Rho1Hesssab.shuffle(Eigen::array<int, 4>{0, 1, 3, 2});
 			}
 		}
+		ScaleTensor(Rho1Hesss, 2);
+		SigmaHesss.resize(ngrids, 3, natoms, 3, natoms); SigmaHesss.setZero();
+		#include "DensityEinSum/Rho1Hesss_g,r,t,a,s,b...Rho1s_g,r---SigmaHesss_g,t,a,s,b.hpp"
+		#include "DensityEinSum/Rho1Grads_g,r,t,a...Rho1Grads_g,r,s,b---SigmaHesss_g,t,a,s,b.hpp"
+		ScaleTensor(SigmaHesss, 2);
 	}
-	ScaleTensor(Rho1Hesss, 2);
-	SigmaHesss.resize(ngrids, 3, natoms, 3, natoms); SigmaHesss.setZero();
-	#include "DensityEinSum/Rho1Hesss_g,r,t,a,s,b...Rho1s_g,r---SigmaHesss_g,t,a,s,b.hpp"
-	#include "DensityEinSum/Rho1Grads_g,r,t,a...Rho1Grads_g,r,s,b---SigmaHesss_g,t,a,s,b.hpp"
-	ScaleTensor(SigmaHesss, 2);
 }

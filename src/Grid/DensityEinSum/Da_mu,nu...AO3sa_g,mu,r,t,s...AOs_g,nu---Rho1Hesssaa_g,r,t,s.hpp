@@ -44,7 +44,7 @@ TOP
 				for ( int t = 0; t < t_len; t++ ){
 					for ( int r = 0; r < r_len; r++ ){
 						int index_array_r_t_s[] = {r, t, s}; std::sort(index_array_r_t_s, index_array_r_t_s + 3); const int r_t_s = ( index_array_r_t_s[0] + 0 ) / 1 + ( index_array_r_t_s[1] + 0 ) * ( index_array_r_t_s[1] + 1 ) / 2 + ( index_array_r_t_s[2] + 0 ) * ( index_array_r_t_s[2] + 1 ) * ( index_array_r_t_s[2] + 2 ) / 6;
-						if ( r > t && t > s ) continue;
+						if ( !(r <= t && t <= s) ) continue;
 						for ( int g = 0; g < g_len; g++ ){
 							DaAO3sanu(g, r_t_s) += Da(mu, nu) * AO3sa(g, mu, r_t_s);
 						}

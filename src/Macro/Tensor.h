@@ -16,4 +16,14 @@ template<int ndim> inline Eigen::Tensor<double, ndim> SliceTensor(
 		tensor.data()[_kgrid_] *= (scalar);\
 }
 
+template<int ndim> inline Eigen::Tensor<double, ndim> PadTensor(
+		const Eigen::Tensor<double, ndim>& tensor,
+		const int (&pairs)[ndim][2]){
+	Eigen::array<std::pair<int, int>, ndim> paddings;
+	for ( int i = 0; i < ndim; i++ ){
+		paddings[i] = std::make_pair(pairs[i][0], pairs[i][1]);
+	}
+	return tensor.pad(paddings);
+}
+
 #endif
