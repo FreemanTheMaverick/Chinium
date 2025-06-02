@@ -3,7 +3,6 @@
 #include <vector>
 #include <map>
 #include <string>
-#include <iostream>
 #include <cstdio>
 #include <cstddef>
 
@@ -103,9 +102,9 @@ int main(int argc, char* argv[]){ (void)argc;
 			if ( method != "HF" ){
 				xc.Read(method, 1);
 				grid.Type = xc.Family == "LDA" ? 0 : xc.Family == "GGA" ? 1 : 2;
-				grid.getGridAO(0, 1); // Prepared for SCF and CPSCF only, which use the AO values more than once. Higher-order derivatives that will be used only once will be computed in batches in HartreeFockKohnSham/HFKSDerivative.cpp to save memory.
+				grid.getAO(0, 1); // Prepared for SCF and CPSCF only, which use the AO values more than once. Higher-order derivatives that will be used only once will be computed in batches in HartreeFockKohnSham/HFKSDerivative.cpp to save memory.
 				int4c2e.EXX = xc.EXX;
-			}else grid.getGridAO(0, 1); // For SAP initial guess.
+			}else grid.getAO(0, 1); // For SAP initial guess.
 		}
 		if ( guess == "READ" ){ // Orthogonalizing the orbitals read from mwfn.
 			Eigen::SelfAdjointEigenSolver<EigenMatrix> solver;
@@ -137,7 +136,7 @@ int main(int argc, char* argv[]){ (void)argc;
 			GuessSCF(mwfn, int2c1e, grid, guess, 1);
 		}
 		HartreeFockKohnSham(mwfn, int2c1e, int4c2e, xc, grid, scf, 4, nthreads);
-		if (xc) grid.SaveGridDensity();
+		if (xc) grid.SaveDensity();
 		std::printf("Total energy: %17.10f\n", mwfn.E_tot);
 		mwfn.PrintOrbitals();
 		mwfn.Export(mwfn_name, 1);

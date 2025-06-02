@@ -88,7 +88,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedQuasiNewton(
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
 		if (xc){
-			grid.getGridDensity(2 * D_);
+			grid.getDensity(2 * D_);
 			xc.Evaluate("ev", grid);
 			Exc_ = grid.getEnergy();
 			Gxc_ = grid.getFock();
@@ -256,7 +256,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
 		if (xc){
-			grid.getGridDensity(2 * D_);
+			grid.getDensity(2 * D_);
 			xc.Evaluate("ev", grid);
 			Exc_ = grid.getEnergy();
 			Gxc_ = grid.getFock();

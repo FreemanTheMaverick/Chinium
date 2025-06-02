@@ -215,7 +215,7 @@ void GetAoValues(
 	}
 }
 
-void Grid::getGridAO(int derivative, int output){
+void Grid::getAO(int derivative, int output){
 	const int order = derivative + this->Type;
 	if (output) std::printf("Generating grids to order %d of basis functions ... ", order);
 	auto start = __now__;

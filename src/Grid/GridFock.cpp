@@ -77,77 +77,100 @@ std::vector<EigenMatrix> Grid::getFockSkeleton(){
 	return Fmats;
 }
 
-std::vector<EigenMatrix> Grid::getFockDensity(){
-	const Eigen::Tensor<double, 1>& Ws = Weights;
-	const int ngrids = this->NumGrids;
-	const int nbasis = this->Mwfn->getNumBasis();
-	const int natoms = this->Mwfn->getNumCenters();
-	const int nxyz = 3;
-	Eigen::Tensor<double, 4> F(nbasis, nbasis, nxyz, natoms); F.setZero();
-	if ( this->Type >= 0 ){
-		Eigen::Tensor<double, 4> F0(nbasis, nbasis, nxyz, natoms); F0.setZero();
-		#include "FockEinSum/Ws_g...E2Rho2s_g...RhoGrads_g,t,a...AOs_g,mu...AOs_g,nu---F0_mu,nu,t,a.hpp"
+void getFockU(
+		Eigen::Tensor<double, 1>& Ws,
+		Eigen::Tensor<double, 2>& AOs,
+		Eigen::Tensor<double, 3>& AO1s,
+		Eigen::Tensor<double, 2>& Rho1s,
+		Eigen::Tensor<double, 1>& E1Sigmas,
+		Eigen::Tensor<double, 1>& E2Rho2s,
+		Eigen::Tensor<double, 1>& E2RhoSigmas,
+		Eigen::Tensor<double, 1>& E2Sigma2s,
+		Eigen::Tensor<double, 1>& RhoGrad,
+		Eigen::Tensor<double, 2>& Rho1Grad,
+		Eigen::Tensor<double, 1>& SigmaGrad,
+		EigenMatrix& Fmat){
+	const int ngrids = Ws.dimension(0);
+	const int nbasis = Fmat.cols();
+	Eigen::Tensor<double, 2> F(nbasis, nbasis); F.setZero();
+	if (
+			( E2Rho2s.size() && RhoGrad.size() ) ||
+			( E2RhoSigmas.size() && SigmaGrad.size() )
+	){
+		Eigen::Tensor<double, 1> TMP0(ngrids); TMP0.setZero();
+		if ( E2Rho2s.size() && RhoGrad.size() && AOs.size() ){
+			TMP0 += E2Rho2s * RhoGrad;
+		}
+		if ( E2RhoSigmas.size() && SigmaGrad.size() && AOs.size() ){
+			TMP0 += E2RhoSigmas * SigmaGrad;
+		}
+		TMP0 *= Ws;
+		Eigen::Tensor<double, 2> F0(nbasis, nbasis); F0.setZero();
+		#include "FockEinSum/TMP0_g...AOs_g,mu...AOs_g,nu---F0_mu,nu.hpp"
 		F += 0.5 * F0;
 	}
-	if ( this->Type >= 1 ){
-		Eigen::Tensor<double, 4> F1(nbasis, nbasis, nxyz, natoms); F1.setZero();
-		#include "FockEinSum/Ws_g...E2RhoSigmas_g...SigmaGrads_g,t,a...AOs_g,mu...AOs_g,nu---F1_mu,nu,t,a.hpp"
-		F += 0.5 * F1;
-		F1.setZero();
-		Eigen::Tensor<double, 3> TMP(ngrids, nxyz, natoms); TMP.setZero();
-		#include "FockEinSum/E2RhoSigmas_g...RhoGrads_g,t,a---TMP_g,t,a.hpp"
-		#include "FockEinSum/E2Sigma2s_g...SigmaGrads_g,t,a---TMP_g,t,a.hpp"
-		Eigen::Tensor<double, 4> TMP2(ngrids, 3, nxyz, natoms); TMP2.setZero();
-		#include "FockEinSum/TMP_g,t,a...Rho1s_g,r---TMP2_g,r,t,a.hpp"
-		Eigen::Tensor<double, 4> TMP3(ngrids, 3, nxyz, natoms); TMP3.setZero();
-		#include "FockEinSum/E1Sigmas_g...Rho1Grads_g,r,t,a---TMP3_g,r,t,a.hpp"
-		Eigen::Tensor<double, 4> TMP4 = TMP2 + TMP3;
-		#include "FockEinSum/Ws_g...TMP4_g,r,t,a...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu,t,a.hpp"
+	if ( E2RhoSigmas.size() && RhoGrad.size() && E2Sigma2s.size() && SigmaGrad.size() && Rho1s.size() && Rho1Grad.size() && AO1s.size() && AOs.size() ){
+		Eigen::Tensor<double, 1> TMP1 = E2RhoSigmas * RhoGrad + E2Sigma2s * SigmaGrad;
+		Eigen::Tensor<double, 2> TMP2(ngrids, 3); TMP2.setZero();
+		#include "FockEinSum/TMP1_g...Rho1s_g,r---TMP2_g,r.hpp"
+		Eigen::Tensor<double, 2> TMP3(ngrids, 3); TMP3.setZero();
+		#include "FockEinSum/E1Sigmas_g...Rho1Grad_g,r---TMP3_g,r.hpp"
+		Eigen::Tensor<double, 2> TMP4 = TMP2 + TMP3;
+		Eigen::Tensor<double, 2> F1(nbasis, nbasis); F1.setZero();
+		#include "FockEinSum/Ws_g...TMP4_g,r...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu.hpp"
 		F += 2. * F1;
 	}
-	F += F.shuffle(Eigen::array<int, 4>{1, 0, 2, 3}).eval();
-	std::vector<EigenMatrix> Fmats(nxyz * natoms, EigenZero(nbasis, nbasis));
-	for ( int iatom = 0, kpert = 0; iatom < natoms; iatom++ ) for ( int t = 0; t < nxyz; t++, kpert++ ){
-		Eigen::Tensor<double, 2> Fmat = F.chip(iatom, 3).chip(t, 2);
-		Fmats[kpert] = Eigen::Map<EigenMatrix>(Fmat.data(), nbasis, nbasis);
+	F += F.shuffle(Eigen::array<int, 2>{1, 0}).eval();
+	Fmat = Eigen::Map<EigenMatrix>(F.data(), nbasis, nbasis);
+}
+
+std::vector<EigenMatrix> Grid::getFockU(){
+	const int nbasis = this->Mwfn->getNumBasis();
+	const int natoms = this->Mwfn->getNumCenters();
+	Eigen::Tensor<double, 1>& Ws = Weights;
+	std::vector<EigenMatrix> Fmats(3 * natoms, EigenZero(nbasis, nbasis));
+	Eigen::Tensor<double, 1> dummy1;
+	Eigen::Tensor<double, 2> dummy2;
+	for ( int a = 0; a < this->Mwfn->getNumCenters(); a++ ) for ( int t = 0; t < 3; t++ ){
+		Eigen::Tensor<double, 1> RhoGrad = dummy1;
+		Eigen::Tensor<double, 2> Rho1Grad = dummy2;
+		Eigen::Tensor<double, 1> SigmaGrad = dummy1;
+		if ( this->Type >= 0 ){
+			RhoGrad = RhoGrads.chip(a, 2).chip(t, 1);
+		}
+		if ( this->Type >= 1 ){
+			Rho1Grad = Rho1Grads.chip(a, 3).chip(t, 2);
+			SigmaGrad = SigmaGrads.chip(a, 2).chip(t, 1);
+		}
+		::getFockU(
+			Ws, AOs, AO1s, Rho1s,
+			E1Sigmas, E2Rho2s, E2RhoSigmas, E2Sigma2s,
+			RhoGrad, Rho1Grad, SigmaGrad,
+			Fmats[3 * a + t]
+		);
 	}
 	return Fmats;
 }
 
-EigenMatrix Grid::getFockDensitySelf(){
-	const Eigen::Tensor<double, 1>& Ws = Weights;
-	const int nbasis = this->Mwfn->getNumBasis();
-	const int natoms = 1;
-	const int nxyz = 1;
-	const int ngrids = this->NumGrids;
-	Eigen::Tensor<double, 3> RhoGrads(ngrids, 1, 1); RhoGrads.chip(0, 2).chip(0, 1) = this->Rhos_Cache;
-	Eigen::Tensor<double, 4> Rho1Grads(ngrids, 3, 1, 1); Rho1Grads.chip(0, 3).chip(0, 2) = this->Rho1s_Cache;
-	Eigen::Tensor<double, 3> SigmaGrads(ngrids, 1, 1); SigmaGrads.chip(0, 2).chip(0, 1) = this->Sigmas_Cache;
-	Eigen::Tensor<double, 4> F(nbasis, nbasis, nxyz, natoms); F.setZero();
-	if ( this->Type >= 0 ){
-		Eigen::Tensor<double, 4> F0(nbasis, nbasis, nxyz, natoms); F0.setZero();
-		#include "FockEinSum/Ws_g...E2Rho2s_g...RhoGrads_g,t,a...AOs_g,mu...AOs_g,nu---F0_mu,nu,t,a.hpp"
-		F += 0.5 * F0;
-	}
+std::vector<EigenMatrix> Grid::getFockU(
+		std::vector<Eigen::Tensor<double, 1>>& Rhoss,
+		std::vector<Eigen::Tensor<double, 2>>& Rho1ss,
+		std::vector<Eigen::Tensor<double, 1>>& Sigmass){
+	const int nmats = (int)Rhoss.size();
 	if ( this->Type >= 1 ){
-		Eigen::Tensor<double, 4> F1(nbasis, nbasis, nxyz, natoms); F1.setZero();
-		#include "FockEinSum/Ws_g...E2RhoSigmas_g...SigmaGrads_g,t,a...AOs_g,mu...AOs_g,nu---F1_mu,nu,t,a.hpp"
-		F += 0.5 * F1;
-		F1.setZero();
-		#include "FockEinSum/Ws_g...E2RhoSigmas_g...RhoGrads_g,t,a...Rho1s_g,r...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu,t,a.hpp"
-		F += 2. * F1;
-		F1.setZero();
-		#include "FockEinSum/Ws_g...E2Sigma2s_g...SigmaGrads_g,t,a...Rho1s_g,r...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu,t,a.hpp"
-		F += 2. * F1;
-		F1.setZero();
-		#include "FockEinSum/Ws_g...E1Sigmas_g...Rho1Grads_g,r,t,a...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu,t,a.hpp"
-		F += 2. * F1;
+		assert( nmats == (int)Rho1ss.size() );
+		assert( nmats == (int)Sigmass.size() );
 	}
-	F += F.shuffle(Eigen::array<int, 4>{1, 0, 2, 3}).eval();
-	std::vector<EigenMatrix> Fmats(nxyz * natoms, EigenZero(nbasis, nbasis));
-	for ( int iatom = 0, kpert = 0; iatom < natoms; iatom++ ) for ( int t = 0; t < nxyz; t++, kpert++ ){
-		Eigen::Tensor<double, 2> Fmat = F.chip(iatom, 3).chip(t, 2);
-		Fmats[kpert] = Eigen::Map<EigenMatrix>(Fmat.data(), nbasis, nbasis);
+	const int nbasis = this->Mwfn->getNumBasis();
+	Eigen::Tensor<double, 1>& Ws = Weights;
+	std::vector<EigenMatrix> Fmats(nmats, EigenZero(nbasis, nbasis));
+	for ( int imat = 0; imat < nmats; imat++ ){
+		::getFockU(
+			Ws, AOs, AO1s, Rho1s,
+			E1Sigmas, E2Rho2s, E2RhoSigmas, E2Sigma2s,
+			Rhoss[imat], Rho1ss[imat], Sigmass[imat],
+			Fmats[imat]
+		);
 	}
-	return Fmats[0];
+	return Fmats;
 }

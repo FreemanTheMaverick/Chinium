@@ -19,9 +19,6 @@
 
 #include "CoupledPerturbed.h"
 
-#include <iostream>
-
-
 #define __Check_Vector_Array__(vec)\
 	vec.size() && vec[0].size() && vec[0][0]
 
@@ -93,6 +90,7 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int
 
 	// XC
 	if (xc){
+		if ( derivative > 1 ) xc.Evaluate("f", grid);
 		// Creating batches for grids
 		const long int ngrids_per_batch = __max_num_grids__ > ngrids ? __max_num_grids__ : ngrids; // If only gradient is required, the grids will be done in batches. Otherwise, they will be done simultaneously, because the intermediate variable, nuclear gradient of density on grids, is required in CPSCF.
 		std::vector<long int> batch_tails = {};
@@ -117,11 +115,11 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int
 
 			// XC gradient
 			if (output) std::printf("| | ");
-			batch_grid.getGridAO(derivative, output);
+			batch_grid.getAO(derivative, output);
 
 			auto start = __now__;
 			if (output) std::printf("| | Calculating skeleton gradient of density ...");
-			batch_grid.getGridDensitySkeleton(2 * D);
+			batch_grid.getDensitySkeleton(2 * D);
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
 			start = __now__;
@@ -132,11 +130,9 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int
 
 			// XC skeleton hessian and skeleton Fock
 			if ( derivative > 1 ){
-				xc.Evaluate("f", batch_grid);
-
 				start = __now__;
 				if (output) std::printf("| | Calculating skeleton hessian of density ...");
-				batch_grid.getGridDensitySkeleton2(2 * D);
+				batch_grid.getDensitySkeleton2(2 * D);
 				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
 				start = __now__;
@@ -149,7 +145,7 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int
 				if (output) std::printf("| | Calculating skeleton gradient of XC Fock matrices ...");
 				std::vector<EigenMatrix> fxcskeletons = batch_grid.getFockSkeleton();
 				__VectorIncrement__(Fskeletons, fxcskeletons, 1)
-				fxcskeletons = batch_grid.getFockDensity();
+				fxcskeletons = batch_grid.getFockU();
 				__VectorIncrement__(Fskeletons, fxcskeletons, 1)
 				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 			}
@@ -169,14 +165,13 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int
 				int4c2e, grid,
 				output - 1, nthreads
 		);
-		Fskeletons = dFs;
 		if (output) std::printf("Coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));
 
 		for ( int i = 0; i < 3 * natoms; i++ ) for ( int j = 0; j <= i; j++ ){
 			Hessian[i][j] += 2 * dDs[i].cwiseProduct(Fskeletons[j]).sum();
 			if ( i != j ) Hessian[j][i] += 2 * dDs[i].cwiseProduct(Fskeletons[j]).sum();
-			Hessian[i][j] += 2 * dWs[i].cwiseProduct(int2c1e.OverlapGrads[j]).sum();
-			if ( i != j ) Hessian[j][i] += 2 * dWs[i].cwiseProduct(int2c1e.OverlapGrads[j]).sum();
+			Hessian[i][j] -= 2 * dWs[i].cwiseProduct(int2c1e.OverlapGrads[j]).sum();
+			if ( i != j ) Hessian[j][i] -= 2 * dWs[i].cwiseProduct(int2c1e.OverlapGrads[j]).sum();
 		}
 
 		if ( mwfn.Temperature > 0 ){

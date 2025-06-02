@@ -13,7 +13,7 @@
 #include "../Multiwfn/Multiwfn.h"
 #include "Grid.h"
 
-void Grid::getGridDensity(EigenMatrix D_){
+void Grid::getDensity(EigenMatrix D_){
 	const int ngrids = this->NumGrids;
 	const int nbasis = (int)D_.cols();
 	Eigen::Tensor<double, 1>& Rhos = this->Rhos_Cache;
@@ -43,7 +43,44 @@ void Grid::getGridDensity(EigenMatrix D_){
 	}
 }
 
-void Grid::SaveGridDensity(){
+void Grid::getDensityU(
+		std::vector<EigenMatrix> DUs_,
+		std::vector<Eigen::Tensor<double, 1>>& RhoUss,
+		std::vector<Eigen::Tensor<double, 2>>& Rho1Uss,
+		std::vector<Eigen::Tensor<double, 1>>& SigmaUss){
+	const int ngrids = this->NumGrids;
+	const int nbasis = (int)DUs_[0].cols();
+	const int nmats = (int)DUs_.size();
+	Eigen::Tensor<double, 1> dummy1;
+	Eigen::Tensor<double, 2> dummy2;
+	if ( this->Type >= 0 ){
+		RhoUss.resize(nmats);
+	}
+	if ( this->Type >= 1 ){
+		Rho1Uss.resize(nmats);
+		SigmaUss.resize(nmats);
+	}
+	for ( int imat = 0; imat < nmats; imat++ ){
+		Eigen::Tensor<double, 1>& RhoUs = Type >= 0 ? RhoUss[imat] : dummy1;
+		Eigen::Tensor<double, 2>& Rho1Us = Type >= 1 ? Rho1Uss[imat] : dummy2;
+		Eigen::Tensor<double, 1>& SigmaUs = Type >= 1 ? SigmaUss[imat] : dummy1;
+		Eigen::Tensor<double, 2> DU = Eigen::TensorMap<Eigen::Tensor<double, 2>>(DUs_[imat].data(), nbasis, nbasis);
+		if ( this->Type >= 0 ){
+			RhoUs.resize(ngrids); RhoUs.setZero();
+			#include "DensityEinSum/DU_mu,nu...AOs_g,mu...AOs_g,nu---RhoUs_g.hpp"
+		}
+		if ( this->Type >= 1 ){
+			Rho1Us.resize(ngrids, 3); Rho1Us.setZero();
+			#include "DensityEinSum/DU_mu,nu...AO1s_g,mu,r...AOs_g,nu---Rho1Us_g,r.hpp"
+			ScaleTensor(Rho1Us, 2);
+			SigmaUs.resize(ngrids); SigmaUs.setZero();
+			#include "DensityEinSum/Rho1Us_g,r...Rho1s_g,r---SigmaUs_g.hpp"
+			ScaleTensor(SigmaUs, 2);
+		}
+	}
+}
+
+void Grid::SaveDensity(){
 	this->Rhos = this->Rhos_Cache;
 	this->Rho1s = this->Rho1s_Cache;
 	this->Sigmas = this->Sigmas_Cache;
@@ -51,7 +88,7 @@ void Grid::SaveGridDensity(){
 	this->Taus = this->Taus_Cache;
 }
 
-void Grid::RetrieveGridDensity(){
+void Grid::RetrieveDensity(){
 	this->Rhos_Cache = this->Rhos;
 	this->Rho1s_Cache = this->Rho1s;
 	this->Sigmas_Cache = this->Sigmas;
@@ -67,7 +104,7 @@ double Grid::getNumElectrons(){
 	return n();
 }
 
-void Grid::getGridDensitySkeleton(EigenMatrix D_){
+void Grid::getDensitySkeleton(EigenMatrix D_){
 	const int ngrids = this->NumGrids;
 	const int nbasis = this->Mwfn->getNumBasis();
 	const int natoms = this->Mwfn->getNumCenters();
@@ -110,7 +147,7 @@ void Grid::getGridDensitySkeleton(EigenMatrix D_){
 	}
 }
 
-void Grid::getGridDensitySkeleton2(EigenMatrix D_){
+void Grid::getDensitySkeleton2(EigenMatrix D_){
 	const int ngrids = this->NumGrids;
 	const int nbasis = (int)D_.cols();
 	const int natoms = this->Mwfn->getNumCenters();

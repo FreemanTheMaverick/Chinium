@@ -14,7 +14,7 @@ class Grid{ public:
 	Eigen::Tensor<double, 2> AO2Ls;
 	Eigen::Tensor<double, 3> AO2s; // ..., (xx, xy, yy, xz, yz, zz)
 	Eigen::Tensor<double, 3> AO3s; // ..., (xxx, xxy, xyy, yyy, xxz, xyz, yyz, xzz, yzz, zzz)
-	void getGridAO(int derivative, int output);
+	void getAO(int derivative, int output);
 
 	// Temporary values (before (CP-)SCF converges)
 	Eigen::Tensor<double, 1> Rhos_Cache;
@@ -22,7 +22,13 @@ class Grid{ public:
 	Eigen::Tensor<double, 1> Sigmas_Cache;
 	Eigen::Tensor<double, 1> Lapls_Cache;
 	Eigen::Tensor<double, 1> Taus_Cache;
-	void getGridDensity(EigenMatrix D);
+	void getDensity(EigenMatrix D);
+	void getDensityU(
+			std::vector<EigenMatrix> Ds_,
+			std::vector<Eigen::Tensor<double, 1>>& Rhoss,
+			std::vector<Eigen::Tensor<double, 2>>& Rho1ss,
+			std::vector<Eigen::Tensor<double, 1>>& Sigmass
+	);
 
 	// True values
 	Eigen::Tensor<double, 1> Rhos;
@@ -30,19 +36,19 @@ class Grid{ public:
 	Eigen::Tensor<double, 1> Sigmas;
 	Eigen::Tensor<double, 1> Lapls;
 	Eigen::Tensor<double, 1> Taus;
-	void SaveGridDensity();
-	void RetrieveGridDensity();
+	void SaveDensity();
+	void RetrieveDensity();
 	double getNumElectrons();
 
 	Eigen::Tensor<double, 3> RhoGrads;
 	Eigen::Tensor<double, 4> Rho1Grads;
 	Eigen::Tensor<double, 3> SigmaGrads;
-	void getGridDensitySkeleton(EigenMatrix D);
+	void getDensitySkeleton(EigenMatrix D);
 
 	Eigen::Tensor<double, 5> RhoHesss;
 	Eigen::Tensor<double, 6> Rho1Hesss;
 	Eigen::Tensor<double, 5> SigmaHesss;
-	void getGridDensitySkeleton2(EigenMatrix D);
+	void getDensitySkeleton2(EigenMatrix D);
 
 	Eigen::Tensor<double, 1> Es;
 	Eigen::Tensor<double, 1> E1Rhos;
@@ -68,6 +74,10 @@ class Grid{ public:
 
 	EigenMatrix getFock(int type = -1);
 	std::vector<EigenMatrix> getFockSkeleton();
-	std::vector<EigenMatrix> getFockDensity();
-	EigenMatrix getFockDensitySelf();
+	std::vector<EigenMatrix> getFockU();
+	std::vector<EigenMatrix> getFockU(
+			std::vector<Eigen::Tensor<double, 1>>& Rhoss,
+			std::vector<Eigen::Tensor<double, 2>>& Rho1ss,
+			std::vector<Eigen::Tensor<double, 1>>& Sigmass
+	);
 };
