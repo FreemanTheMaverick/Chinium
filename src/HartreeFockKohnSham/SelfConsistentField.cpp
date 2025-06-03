@@ -14,7 +14,7 @@
 #include <Maniverse/Optimizer/TrustRegion.h>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h"
+#include "../MwfnIO/MwfnIO.h"
 #include "../Integral/Int2C1E.h"
 #include "../Integral/Int4C2E.h"
 #include "../Grid/Grid.h"
@@ -286,20 +286,21 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 	return std::make_tuple(E, epsilons, occupations, C);
 }
 
-void HartreeFockKohnSham(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, ExchangeCorrelation& xc, Grid& grid, std::string scf, int output, int nthreads){
+double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C2E& int4c2e, ExchangeCorrelation& xc, Grid& grid, std::string scf, int output, int nthreads){
 	Eigen::setNbThreads(nthreads);
 
-	const double T = mwfn.Temperature;
-	const double Mu = mwfn.ChemicalPotential;
+	const double T = env.Temperature;
+	const double Mu = env.ChemicalPotential;
 	if (output > 0) std::printf("Self-consistent field in %s-canonical ensemble\n", T > 0 ? "grand" : "micro");
 	if ( T > 0 && scf.compare("DIIS") != 0 ) throw std::runtime_error("Only DIIS optimization is supported for finite-temperature DFT!");
 
 	const EigenMatrix Z = mwfn.getCoefficientMatrix(mwfn.Wfntype);
 
+	double E_scf = 0;
 	if ( scf.compare("NEWTON") == 0 ){
 		EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
 		auto [E, epsilons, C] = RestrictedNewton(int2c1e, int4c2e, Dprime, Z, output-1, nthreads);
-		mwfn.E_tot += 2 * E;
+		E_scf = 2 * E;
 		mwfn.setEnergy(epsilons);
 		mwfn.setCoefficientMatrix(C);
 	}else if ( scf.compare("QUASI") == 0 ){
@@ -310,7 +311,7 @@ void HartreeFockKohnSham(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, Exc
 				Dprime, Z,
 				output-1, nthreads
 		);
-		mwfn.E_tot += 2 * E;
+		E_scf = 2 * E;
 		mwfn.setEnergy(epsilons);
 		mwfn.setCoefficientMatrix(C);
 	}else if ( scf.compare("DIIS") == 0 ){
@@ -324,7 +325,7 @@ void HartreeFockKohnSham(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, Exc
 					F, Occ, Z,
 					output-1, nthreads
 			);
-			mwfn.E_tot += E;
+			E_scf = E;
 			mwfn.setEnergy(epsilons);
 			mwfn.setOccupation(occupations * 2);
 			mwfn.setCoefficientMatrix(C);
@@ -341,7 +342,7 @@ void HartreeFockKohnSham(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, Exc
 					Z, Z,
 					output-1, nthreads
 			);
-			mwfn.E_tot += E;
+			E_scf = E;
 			mwfn.setEnergy(epsa, 1);
 			mwfn.setEnergy(epsb, 2);
 			mwfn.setOccupation(occa, 1);
@@ -350,4 +351,5 @@ void HartreeFockKohnSham(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, Exc
 			mwfn.setCoefficientMatrix(Cb, 2);
 		}
 	}
+	return E_scf;
 }

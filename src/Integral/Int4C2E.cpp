@@ -10,7 +10,7 @@
 #include <omp.h>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
+#include "../MwfnIO/MwfnIO.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 
 #include "Int4C2E.h"
 #include "Parallel.h"
@@ -494,8 +494,8 @@ EigenMatrix getRepulsion2(
 	return rawhessian + rawhessian.transpose() - (EigenMatrix)rawhessian.diagonal().asDiagonal();
 }
 
-Int4C2E::Int4C2E(Multiwfn& mwfn, double exx, double threshold, bool verbose){
-	this->Mwfn = &mwfn;
+Int4C2E::Int4C2E(Mwfn& mwfn, double exx, double threshold, bool verbose){
+	this->MWFN = &mwfn;
 	this->EXX = exx;
 	this->Threshold = threshold;
 	this->Verbose = verbose;
@@ -504,7 +504,7 @@ Int4C2E::Int4C2E(Multiwfn& mwfn, double exx, double threshold, bool verbose){
 void Int4C2E::getRepulsionDiag(){
 	if (this->Verbose) std::printf("Calculating diagonal elements of repulsion integrals ... ");
 	const auto start = __now__;
-	__Make_Basis_Set__(this->Mwfn)
+	__Make_Basis_Set__(this->MWFN)
 	this->RepulsionDiags = ::getRepulsionDiag(obs);
 	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
 }
@@ -512,9 +512,9 @@ void Int4C2E::getRepulsionDiag(){
 void Int4C2E::getRepulsionLength(){
 	if (this->Verbose) std::printf("Calculating numbers of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
 	const auto start = __now__;
-	const long int nbasis = this->Mwfn->getNumBasis();
-	const long int nshells = this->Mwfn->getNumShells();
-	__Make_Basis_Set__(this->Mwfn)
+	const long int nbasis = this->MWFN->getNumBasis();
+	const long int nshells = this->MWFN->getNumShells();
+	__Make_Basis_Set__(this->MWFN)
 	assert(std::get<0>(this->RepulsionDiags).size() > 0 && "Diagonal elements of repulsion integrals are missing!");
 	std::tie(this->RepulsionLength, this->ShellQuartetLength) = ::getRepulsionLength(obs, std::get<0>(this->RepulsionDiags), this->Threshold);
 	if (this->Verbose){
@@ -538,7 +538,7 @@ void Int4C2E::getRepulsionLength(){
 void Int4C2E::getRepulsionIndices(){
 	if (this->Verbose) std::printf("Generating indices of non-equivalent integrals and shell quartets after Cauchy-Schwarz screening ... ");
 	const auto start = __now__;
-	__Make_Basis_Set__(this->Mwfn)
+	__Make_Basis_Set__(this->MWFN)
 	assert(this->ShellIs.empty() && "Shell indices have already been obtained!");
 	this->ShellIs.resize(this->ShellQuartetLength);
 	this->ShellJs.resize(this->ShellQuartetLength);
@@ -555,7 +555,7 @@ void Int4C2E::getRepulsionIndices(){
 void Int4C2E::getThreadPointers(int nthreads){
 	if (this->Verbose) std::printf("Arranging for %d threads to calculate 4c-2e repulsion integrals ... ", nthreads);
 	const auto start = __now__;
-	__Make_Basis_Set__(this->Mwfn)
+	__Make_Basis_Set__(this->MWFN)
 	assert(!this->ShellIs.empty() && "Shell indices are missing!");
 	auto [sqheads, bqheads] = ::getThreadPointers( // std::vector<long int>
 		obs, ShellQuartetLength, nthreads,
@@ -571,7 +571,7 @@ void Int4C2E::getThreadPointers(int nthreads){
 void Int4C2E::CalculateIntegrals(int order){
 	if (this->Verbose) std::printf("Calculating 4c-2e repulsion integrals of Order %d ... ", order);
 	const auto start = __now__;
-	__Make_Basis_Set__(this->Mwfn)
+	__Make_Basis_Set__(this->MWFN)
 	if ( order == 0 ){
 		this->BasisIs.resize(this->RepulsionLength);
 		this->BasisJs.resize(this->RepulsionLength);
@@ -706,7 +706,7 @@ std::vector<EigenMatrix> Int4C2E::ContractInts(std::vector<EigenMatrix>& Ds, int
 	const int nmatrices = (int)Ds.size();
 	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integrals with %d matrices ... ", nmatrices);
 	const auto start = __now__;
-	__Make_Basis_Set__(this->Mwfn)
+	__Make_Basis_Set__(this->MWFN)
 	const std::vector<EigenMatrix> Gs = GhfMultiple(
 		this->BasisIs.data(), this->BasisJs.data(),
 		this->BasisKs.data(), this->BasisLs.data(),
@@ -769,7 +769,7 @@ std::tuple<EigenMatrix, EigenMatrix, EigenMatrix, EigenMatrix> Guhf(
 std::tuple<EigenMatrix, EigenMatrix> Int4C2E::ContractInts(EigenMatrix Da, EigenMatrix Db, int nthreads){ // UHF
 	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integrals with 1 matrix ... ");
 	const auto start = __now__;
-	__Make_Basis_Set__(this->Mwfn)
+	__Make_Basis_Set__(this->MWFN)
 	auto [Ja, Jb, Ka, Kb] = Guhf(
 		this->BasisIs.data(), this->BasisJs.data(),
 		this->BasisKs.data(), this->BasisLs.data(),
@@ -785,7 +785,7 @@ std::vector<double> Int4C2E::ContractGrads(EigenMatrix D1, EigenMatrix D2){
 }
 
 std::vector<std::vector<double>> Int4C2E::ContractGrads(std::vector<EigenMatrix>& D1s, EigenMatrix D2){
-	const int natoms = this->Mwfn->getNumCenters();
+	const int natoms = this->MWFN->getNumCenters();
 	const std::vector<EigenMatrix> GD2 = this->ContractGrads(D2);
 	const int nmatrices = (int)D1s.size();
 	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integral nuclear gradient with %d matrix from the left and 1 matrix from the right ... ", nmatrices);
@@ -801,12 +801,12 @@ std::vector<std::vector<double>> Int4C2E::ContractGrads(std::vector<EigenMatrix>
 std::vector<EigenMatrix> Int4C2E::ContractGrads(EigenMatrix D){
 	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integral nuclear gradient with 1 matrix ... ");
 	const auto start = __now__;
-	const int natoms = this->Mwfn->getNumCenters();
+	const int natoms = this->MWFN->getNumCenters();
 	for ( auto& [key, value] : this->GradCache ) if ( key.isApprox(D) ){
 		if (this->Verbose) std::printf("Found in cache -> Done in %f s\n", __duration__(start, __now__));
 		return value;
 	}
-	__Make_Basis_Set__(this->Mwfn)
+	__Make_Basis_Set__(this->MWFN)
 	const std::vector<std::vector<EigenMatrix>> GDs_ = getRepulsion1(
 			obs,
 			shell2atom,
@@ -828,8 +828,8 @@ std::vector<std::vector<double>> Int4C2E::ContractHesss(EigenMatrix D1, EigenMat
 	EigenMatrix D = D1; D = D2;
 	if (this->Verbose) std::printf("Contracting 4c-2e repulsion integral nuclear hessian with 1 matrix ... ");
 	const auto start = __now__;
-	const int natoms = this->Mwfn->getNumCenters();
-	__Make_Basis_Set__(this->Mwfn)
+	const int natoms = this->MWFN->getNumCenters();
+	__Make_Basis_Set__(this->MWFN)
 	const EigenMatrix GDs_ = getRepulsion2(
 		obs,
 		shell2atom,

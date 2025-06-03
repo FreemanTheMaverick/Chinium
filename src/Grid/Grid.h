@@ -1,12 +1,12 @@
 class Grid{ public:
-	Multiwfn* Mwfn;
+	Mwfn* MWFN;
 	int Type = 0; // 0 - LDA, 1 - GGA, 2 - mGGA
 	int NumGrids = 0;
 	std::vector<double> Xs;
 	std::vector<double> Ys;
 	std::vector<double> Zs;
 	Eigen::Tensor<double, 1> Weights;
-	Grid(Multiwfn* mwfn, std::string grid, int output);
+	Grid(Mwfn* mwfn, std::string grid, int output);
 	Grid(Grid& another_grid, int from, int length, int output);
 
 	Eigen::Tensor<double, 2> AOs; // g - grids, mu - basis

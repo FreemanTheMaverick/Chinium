@@ -1,5 +1,5 @@
 class Int4C2E{ public:
-	Multiwfn* Mwfn;
+	Mwfn* MWFN;
 	double Threshold;
 	double EXX;
 	bool Verbose;
@@ -25,7 +25,7 @@ class Int4C2E{ public:
 	std::vector<std::vector<std::vector<double>>> RepulsionHesss;
 	std::vector<std::tuple<EigenMatrix, std::vector<EigenMatrix>>> GradCache;
 
-	Int4C2E(Multiwfn& mwfn, double exx, double threshold, bool verbose);
+	Int4C2E(Mwfn& mwfn, double exx, double threshold, bool verbose);
 	void getRepulsionDiag(); // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
 	void getRepulsionLength(); // Numbers of nonequivalent two-electron integrals and shell quartets after Cauchy-Schwarz screening.
 	void getRepulsionIndices();

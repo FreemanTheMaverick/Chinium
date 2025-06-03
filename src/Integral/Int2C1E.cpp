@@ -10,7 +10,7 @@
 #include <chrono>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
+#include "../MwfnIO/MwfnIO.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 
 #include "Int2C1E.h"
 #include "Macro.h"
@@ -179,8 +179,8 @@ EigenMatrix getTwoCenter2(
 	return hessian + hessian.transpose() - (EigenMatrix)hessian.diagonal().asDiagonal();
 }
 
-Int2C1E::Int2C1E(Multiwfn& mwfn, bool verbose){
-	this->Mwfn = &mwfn;
+Int2C1E::Int2C1E(Mwfn& mwfn, bool verbose){
+	this->MWFN = &mwfn;
 	this->Verbose = verbose;
 	const int natoms = mwfn.getNumCenters();
 	this->OverlapGrads.resize(3 * natoms);
@@ -198,7 +198,7 @@ Int2C1E::Int2C1E(Multiwfn& mwfn, bool verbose){
 
 #define __Make_Point_Charges__\
 	std::vector<std::pair<double, std::array<double, 3>>> libint2charges = {};\
-	for ( MwfnCenter& center : this->Mwfn->Centers )\
+	for ( MwfnCenter& center : this->MWFN->Centers )\
 		libint2charges.push_back(std::make_pair(\
 			center.Nuclear_charge,\
 			std::experimental::make_array(\
@@ -207,14 +207,14 @@ Int2C1E::Int2C1E(Multiwfn& mwfn, bool verbose){
 				center.Coordinates[2])));
 
 void Int2C1E::CalculateIntegrals(int order){
-	__Make_Basis_Set__(this->Mwfn)
+	__Make_Basis_Set__(this->MWFN)
 	__Make_Point_Charges__
-	const int natoms = this->Mwfn->getNumCenters();
+	const int natoms = this->MWFN->getNumCenters();
 	if ( order == 0 ){
 		if (this->Verbose) std::printf("Calculating 2c-1e integrals ... ");
 		const auto start = __now__;
 		std::vector<EigenMatrix> matrices = getTwoCenter0( obs, libint2charges, libint2::Operator::emultipole2 );
-		this->Overlap = this->Mwfn->Overlap = matrices[0];
+		this->Overlap = this->MWFN->Overlap = matrices[0];
 		this->DipoleX = matrices[1];
 		this->DipoleY = matrices[2];
 		this->DipoleZ = matrices[3];
@@ -258,7 +258,7 @@ std::tuple<
 	std::vector<std::vector<double>>,
 	std::vector<std::vector<double>>
 > Int2C1E::ContractGrads(std::vector<EigenMatrix>& Ds, std::vector<EigenMatrix>& Ws){
-	const int natoms = this->Mwfn->getNumCenters();
+	const int natoms = this->MWFN->getNumCenters();
 	const int nDs = (int)Ds.size();
 	const int nWs = (int)Ws.size();
 	if ( this->OverlapGrads[0].size() == 0 || this->KineticGrads[0].size() == 0 || this->NuclearGrads[0].size() == 0 )
@@ -286,9 +286,9 @@ std::tuple<
 > Int2C1E::ContractHesss(EigenMatrix D, EigenMatrix W){
 	if (this->Verbose) std::printf("Contracting 2c-1e integral nuclear hessians with D and W ... ");
 	const auto start = __now__;
-	__Make_Basis_Set__(this->Mwfn)
+	__Make_Basis_Set__(this->MWFN)
 	__Make_Point_Charges__
-	const int natoms = this->Mwfn->getNumCenters();
+	const int natoms = this->MWFN->getNumCenters();
 	EigenMatrix SW_ = getTwoCenter2(obs, libint2charges, shell2atom, libint2::Operator::overlap, W);
 	EigenMatrix KD_ = getTwoCenter2(obs, libint2charges, shell2atom, libint2::Operator::kinetic, D);
 	EigenMatrix VD_ = getTwoCenter2(obs, libint2charges, shell2atom, libint2::Operator::nuclear, D);

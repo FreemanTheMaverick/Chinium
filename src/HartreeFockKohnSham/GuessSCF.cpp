@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h"
+#include "../MwfnIO/MwfnIO.h"
 #include "../Integral/Int2C1E.h"
 #include "../Grid/Grid.h"
 
@@ -55,7 +55,7 @@ EigenMatrix SuperpositionAtomicPotential(std::string path, std::vector<MwfnCente
 	return grid.getFock(0);
 }
 
-void GuessSCF(Multiwfn& mwfn, Int2C1E& int2c1e, Grid& grid, std::string guess, const bool output){
+void GuessSCF(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Grid& grid, std::string guess, const bool output){
 	EigenMatrix V = EigenZero(mwfn.getNumBasis(), mwfn.getNumBasis());
 	bool potential = 0;
 	if ( guess.compare("SAP") == 0 ){
@@ -76,8 +76,8 @@ void GuessSCF(Multiwfn& mwfn, Int2C1E& int2c1e, Grid& grid, std::string guess, c
 			const EigenMatrix eps = solver.eigenvalues();
 			mwfn.setCoefficientMatrix(C, spin);
 			mwfn.setEnergy(eps, spin);
-			if ( mwfn.Temperature > 0 ){
-				const EigenArray n = 1. / ( 1. + ( ( eps.array() - mwfn.ChemicalPotential ) / mwfn.Temperature ).exp() );
+			if ( env.Temperature > 0 ){
+				const EigenArray n = 1. / ( 1. + ( ( eps.array() - env.ChemicalPotential ) / env.Temperature ).exp() );
 				if ( spin == 0 ) mwfn.setOccupation(2 * n, 0);
 				else mwfn.setOccupation(n, spin);
 			}

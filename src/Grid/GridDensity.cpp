@@ -10,7 +10,7 @@
 #include <omp.h>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h"
+#include "../MwfnIO/MwfnIO.h"
 #include "Grid.h"
 
 void Grid::getDensity(EigenMatrix D_){
@@ -106,15 +106,15 @@ double Grid::getNumElectrons(){
 
 void Grid::getDensitySkeleton(EigenMatrix D_){
 	const int ngrids = this->NumGrids;
-	const int nbasis = this->Mwfn->getNumBasis();
-	const int natoms = this->Mwfn->getNumCenters();
-	const std::vector<int> atom2bf = this->Mwfn->Atom2Basis();
+	const int nbasis = this->MWFN->getNumBasis();
+	const int natoms = this->MWFN->getNumCenters();
+	const std::vector<int> atom2bf = this->MWFN->Atom2Basis();
 	Eigen::Tensor<double, 2> D = Eigen::TensorMap<Eigen::Tensor<double, 2>>(D_.data(), nbasis, nbasis);
 	if ( this->Type >= 0 ){
 		RhoGrads.resize(ngrids, 3, natoms); RhoGrads.setZero();
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
 			const int head = atom2bf[iatom];
-			const int length = this->Mwfn->Centers[iatom].getNumBasis();
+			const int length = this->MWFN->Centers[iatom].getNumBasis();
 			const Eigen::Tensor<double, 2> Da = SliceTensor(D, {head, 0}, {length, nbasis});
 			const Eigen::Tensor<double, 3> AO1sa = SliceTensor(AO1s, {0, head, 0}, {ngrids, length, 3});
 			Eigen::Tensor<double, 2> RhoGradsa(ngrids, 3);
@@ -129,7 +129,7 @@ void Grid::getDensitySkeleton(EigenMatrix D_){
 		SigmaGrads.resize(ngrids, 3, natoms); SigmaGrads.setZero();
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
 			const int head = atom2bf[iatom];
-			const int length = this->Mwfn->Centers[iatom].getNumBasis();
+			const int length = this->MWFN->Centers[iatom].getNumBasis();
 			Eigen::Tensor<double, 2> Da = SliceTensor(D, {head, 0}, {length, nbasis});
 			const Eigen::Tensor<double, 3> AO2sa = SliceTensor(AO2s, {0, head, 0}, {ngrids, length, 6});
 			Eigen::Tensor<double, 3> Rho1Gradsa(ngrids, 3, 3);
@@ -150,14 +150,14 @@ void Grid::getDensitySkeleton(EigenMatrix D_){
 void Grid::getDensitySkeleton2(EigenMatrix D_){
 	const int ngrids = this->NumGrids;
 	const int nbasis = (int)D_.cols();
-	const int natoms = this->Mwfn->getNumCenters();
-	const std::vector<int> atom2bf = this->Mwfn->Atom2Basis();
+	const int natoms = this->MWFN->getNumCenters();
+	const std::vector<int> atom2bf = this->MWFN->Atom2Basis();
 	Eigen::Tensor<double, 2> D = Eigen::TensorMap<Eigen::Tensor<double, 2>>(D_.data(), nbasis, nbasis);
 	if ( this->Type >= 0 ){
 		RhoHesss.resize(ngrids, 3, natoms, 3, natoms); RhoHesss.setZero();
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
 			const int ihead = atom2bf[iatom];
-			const int ilength = this->Mwfn->Centers[iatom].getNumBasis();
+			const int ilength = this->MWFN->Centers[iatom].getNumBasis();
 			const Eigen::Tensor<double, 2> Da = SliceTensor(D, {ihead, 0}, {ilength, nbasis});
 			const Eigen::Tensor<double, 3> AO2sa = SliceTensor(AO2s, {0, ihead, 0}, {ngrids, ilength, 6});
 			Eigen::Tensor<double, 3> RhoHesssaa(ngrids, 3, 3);
@@ -170,7 +170,7 @@ void Grid::getDensitySkeleton2(EigenMatrix D_){
 			RhoHesssaa.resize(0, 0, 0);
 			for ( int jatom = 0; jatom < iatom; jatom++ ){
 				const int jhead = atom2bf[jatom];
-				const int jlength = this->Mwfn->Centers[jatom].getNumBasis();
+				const int jlength = this->MWFN->Centers[jatom].getNumBasis();
 				const Eigen::Tensor<double, 2> Dab = SliceTensor(D, {ihead, jhead}, {ilength, jlength});
 				const Eigen::Tensor<double, 3> AO1sb = SliceTensor(AO1s, {0, jhead, 0}, {ngrids, jlength, 3});
 				Eigen::Tensor<double, 3> RhoHesssab(ngrids, 3, 3);
@@ -186,7 +186,7 @@ void Grid::getDensitySkeleton2(EigenMatrix D_){
 		Rho1Hesss.resize(ngrids, 3, 3, natoms, 3, natoms); Rho1Hesss.setZero();
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
 			const int ihead = atom2bf[iatom];
-			const int ilength = this->Mwfn->Centers[iatom].getNumBasis();
+			const int ilength = this->MWFN->Centers[iatom].getNumBasis();
 			Eigen::Tensor<double, 4> Rho1Hesssaa(ngrids, 3, 3, 3);
 			Rho1Hesssaa.setZero();
 			Eigen::Tensor<double, 2> Daa = SliceTensor(D, {ihead, ihead}, {ilength, ilength});
@@ -203,7 +203,7 @@ void Grid::getDensitySkeleton2(EigenMatrix D_){
 			Rho1Hesssaa.resize(0, 0, 0, 0);
 			for ( int jatom = 0; jatom < iatom; jatom++ ){
 				const int jhead = atom2bf[jatom];
-				const int jlength = this->Mwfn->Centers[jatom].getNumBasis();
+				const int jlength = this->MWFN->Centers[jatom].getNumBasis();
 				Eigen::Tensor<double, 4> Rho1Hesssab(ngrids, 3, 3, 3);
 				Rho1Hesssab.setZero();
 				Eigen::Tensor<double, 2> Dab = SliceTensor(D, {ihead, jhead}, {ilength, jlength});

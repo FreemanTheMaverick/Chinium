@@ -13,7 +13,7 @@
 #include <omp.h>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h"
+#include "../MwfnIO/MwfnIO.h"
 #include "../Integral/Int4C2E.h"
 #include "../Integral/Parallel.h"
 #include "../Grid/Grid.h"

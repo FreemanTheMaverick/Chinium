@@ -1,1 +1,1 @@
-void Normalize(Multiwfn* mwfn);
+void Normalize(Mwfn* mwfn);

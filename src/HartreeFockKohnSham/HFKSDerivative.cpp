@@ -11,7 +11,7 @@
 #include <omp.h>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h"
+#include "../MwfnIO/MwfnIO.h"
 #include "../Integral/Int2C1E.h"
 #include "../Integral/Int4C2E.h"
 #include "../Grid/Grid.h"
@@ -47,7 +47,7 @@
 #define __max_num_grids__ 100000
 #define __Occupation_Cutoff__ 1.e-8
 
-std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int2c1e, Int4C2E& int4c2e, ExchangeCorrelation& xc, Grid& grid, int derivative, int output, int nthreads){
+std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C2E& int4c2e, ExchangeCorrelation& xc, Grid& grid, int derivative, int output, int nthreads){
 
 	Eigen::setNbThreads(nthreads);
 
@@ -174,7 +174,7 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int
 			if ( i != j ) Hessian[j][i] -= 2 * dWs[i].cwiseProduct(int2c1e.OverlapGrads[j]).sum();
 		}
 
-		if ( mwfn.Temperature > 0 ){
+		if ( env.Temperature > 0 ){
 			std::vector<int> frac_indeces;
 			for ( int i = 0; i < mwfn.getNumIndBasis(); i++ ){
 				if ( mwfn.Orbitals[i].Occ > 2 * __Occupation_Cutoff__ && mwfn.Orbitals[i].Occ < 2. - 2 * __Occupation_Cutoff__)
@@ -198,7 +198,7 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Multiwfn& mwfn, Int2C1E& int
 			if (output) std::printf("Occupation-gradient coupled-perturbed self-consistent-field ...\n");
 			start = __now__;
 			const EigenArray ns = mwfn.getOccupation().array() / 2;
-			const EigenVector Nes = (ns * ( ns - 1. )) / mwfn.Temperature;
+			const EigenVector Nes = (ns * ( ns - 1. )) / env.Temperature;
 			const std::vector<EigenVector> dNs = OccupationGradient(
 					mwfn.getCoefficientMatrix(),
 					mwfn.getEnergy(),

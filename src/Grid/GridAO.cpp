@@ -8,7 +8,7 @@
 #include <string>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h"
+#include "../MwfnIO/MwfnIO.h"
 #include "Grid.h"
 
 
@@ -220,7 +220,7 @@ void Grid::getAO(int derivative, int output){
 	if (output) std::printf("Generating grids to order %d of basis functions ... ", order);
 	auto start = __now__;
 	const int ngrids = this->NumGrids;
-	const int nbasis = this->Mwfn->getNumBasis();
+	const int nbasis = this->MWFN->getNumBasis();
 	double *aos{}, *ao1s{}, *ao2ls{}, *ao2s{}, *ao3s{};
 
 	if ( order >= 0 ){
@@ -248,7 +248,7 @@ void Grid::getAO(int derivative, int output){
 	}
 
 	GetAoValues(
-			this->Mwfn->Centers,
+			this->MWFN->Centers,
 			this->Xs.data(), this->Ys.data(), this->Zs.data(),
 			this->NumGrids,
 

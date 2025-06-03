@@ -11,7 +11,7 @@ extern "C"{
 #include <vector>
 
 #include "Macro.h"
-#include "Multiwfn/Multiwfn.h"
+#include "MwfnIO/MwfnIO.h"
 #include "Grid/Grid.h"
 #include "ExchangeCorrelation.h"
 

@@ -12,7 +12,7 @@
 #include <cassert>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h"
+#include "../MwfnIO/MwfnIO.h"
 #include "Grid.h"
 #include "sphere_lebedev_rule.hpp"
 #include <iostream>
@@ -217,8 +217,8 @@ void UniformBoxGrid(const int natoms,double * atoms,const char * basisset,double
 }
 */
 
-Grid::Grid(Multiwfn* mwfn, std::string grid, int output){
-	this->Mwfn = mwfn;
+Grid::Grid(Mwfn* mwfn, std::string grid, int output){
+	this->MWFN = mwfn;
 	if ( grid.size() == 0 ) return;
 	std::string path = std::getenv("CHINIUM_PATH");
 	path += "/Grids/" + grid + "/";
@@ -265,7 +265,7 @@ Grid::Grid(Grid& grid, int from, int length, int output){
 	if (output > 0) std::printf("Copying sub-grids %d - %d from grids ...\n", from, from + length - 1);
 	assert(from + length - 1 < grid.NumGrids && "Invalid range!");
 
-	this->Mwfn = grid.Mwfn;
+	this->MWFN = grid.MWFN;
 	this->Type = grid.Type;
 
 	this->NumGrids = length;

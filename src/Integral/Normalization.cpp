@@ -5,11 +5,11 @@
 #include <iostream>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
+#include "../MwfnIO/MwfnIO.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 
 #include "Macro.h"
 
-void Normalize(Multiwfn* mwfn){
+void Normalize(Mwfn* mwfn){
 	__Make_Basis_Set__(mwfn)
 	int ishell = 0;
 	for ( MwfnCenter& center : mwfn->Centers ) for ( MwfnShell& shell : center.Shells ){

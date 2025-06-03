@@ -11,8 +11,7 @@
 
 #include "../Macro.h"
 
-#include "Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
-#include "../Integral/Normalization.h"
+#include "MwfnIO.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 
 
 #define __Construct_Orbitals__\
@@ -70,7 +69,7 @@
 		}\
 	__Read_Array_Tail__
 
-EigenMatrix Multiwfn::MatrixTransform(){ // Chinium orders basis functions in the order like P-1, P0, P+1 and D-2, D-1, D0, D+1, D+2, while .mwfn does like Px, Py, Pz and D0, D+1, D-1, D+2, D-2. This function is used to transform matrices between two forms. 
+EigenMatrix Mwfn::MatrixTransform(){ // Chinium orders basis functions in the order like P-1, P0, P+1 and D-2, D-1, D0, D+1, D+2, while .mwfn does like Px, Py, Pz and D0, D+1, D-1, D+2, D-2. This function is used to transform matrices between two forms. 
 	std::map<int, EigenMatrix> SPDFGHI; // 0 1 2 3 4 5 6 -6 -5 -4 -3 -2 -1
 	SPDFGHI[0] = EigenOne(1, 1);
 	SPDFGHI[1] = EigenOne(3, 3);
@@ -155,10 +154,10 @@ static double SafeStoD(std::string word){ // In FT theory, some occupation numbe
 	return value;
 }
 
-Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
+Mwfn::Mwfn(std::string mwfn_filename, const bool output){
 	std::ifstream file(mwfn_filename.c_str());
-	assert(file.good() && "Multiwfn file does not exist!");
-	if (output) std::printf("Reading existent Multiwfn file %s ...\n", mwfn_filename.c_str());
+	assert(file.good() && "Mwfn file does not exist!");
+	if (output) std::printf("Reading existent Mwfn file %s ...\n", mwfn_filename.c_str());
 	std::string line, word;
 	int tmp_int = -114;
 	int nbasis = -114;
@@ -326,7 +325,6 @@ Multiwfn::Multiwfn(std::string mwfn_filename, const bool output){
 		const EigenMatrix tmp_mat = mwfntransform.transpose() * this->getCoefficientMatrix(spin);
 		this->setCoefficientMatrix(tmp_mat, spin);
 	}
-	Normalize(this);
 }
 
 void PrintMatrix(std::FILE * file, EigenMatrix matrix, bool lower){
@@ -342,7 +340,7 @@ void PrintMatrix(std::FILE * file, EigenMatrix matrix, bool lower){
 	if ( this->Wfntype == 1 ) assert( ( spin == 1 || spin == 2 ) && "Invalid spin type!" );\
 	const int shift = ( this->Wfntype == 0 ? 0 : spin - 1 ) * this->getNumIndBasis();
 
-double Multiwfn::getNumElec(int spin){ // Total number of electrons if spin == -1 .
+double Mwfn::getNumElec(int spin){ // Total number of electrons if spin == -1 .
 	double nelec = 0;
 	if ( spin == -1 ){
 		for ( int i = 0; i < (int)this->Orbitals.size(); i++ )
@@ -355,7 +353,7 @@ double Multiwfn::getNumElec(int spin){ // Total number of electrons if spin == -
 	return nelec;
 }
 
-double Multiwfn::getCharge(){
+double Mwfn::getCharge(){
 	double nuclear_charge = 0;
 	for ( MwfnCenter& center : this->Centers )
 		nuclear_charge += center.Nuclear_charge;
@@ -363,22 +361,22 @@ double Multiwfn::getCharge(){
 	return nuclear_charge - nelec;
 }
 
-int Multiwfn::getNumCenters(){
+int Mwfn::getNumCenters(){
 	return this->Centers.size();
 }
 
-int Multiwfn::getNumBasis(){
+int Mwfn::getNumBasis(){
 	int nbasis = 0;
 	for ( MwfnCenter& center : this->Centers ) for ( MwfnShell& shell : center.Shells )
 		nbasis += shell.getSize();
 	return nbasis;
 }
 
-int Multiwfn::getNumIndBasis(){
+int Mwfn::getNumIndBasis(){
 	return this->Orbitals.size() / ( this->Wfntype == 0 ? 1 : 2);
 }
 
-int Multiwfn::getNumPrims(){
+int Mwfn::getNumPrims(){
 	int nprims = 0;
 	for ( MwfnCenter& center : this->Centers ) for ( MwfnShell& shell : center.Shells ){
 		int l = std::abs(shell.Type);
@@ -387,21 +385,21 @@ int Multiwfn::getNumPrims(){
 	return nprims;
 }
 
-int Multiwfn::getNumShells(){
+int Mwfn::getNumShells(){
 	int nshells = 0;
 	for ( MwfnCenter& center : this->Centers )
 		nshells += center.Shells.size();
 	return nshells;
 }
 
-int Multiwfn::getNumPrimShells(){
+int Mwfn::getNumPrimShells(){
 	int nprimshells = 0;
 	for ( MwfnCenter& center : this->Centers ) for ( MwfnShell& shell : center.Shells )
 		nprimshells += shell.getNumPrims();
 	return nprimshells;
 }
 
-EigenMatrix Multiwfn::getCoefficientMatrix(int spin){
+EigenMatrix Mwfn::getCoefficientMatrix(int spin){
 	__Check_Spin_Type_Shift__
 	EigenMatrix matrix = EigenZero(this->getNumBasis(), this->getNumIndBasis());
 	for ( int jcol = 0; jcol < this->getNumIndBasis(); jcol++ )
@@ -409,13 +407,13 @@ EigenMatrix Multiwfn::getCoefficientMatrix(int spin){
 	return matrix;
 }
 
-void Multiwfn::setCoefficientMatrix(EigenMatrix matrix, int spin){
+void Mwfn::setCoefficientMatrix(EigenMatrix matrix, int spin){
 	__Check_Spin_Type_Shift__
 	for ( int jcol = 0; jcol < this->getNumIndBasis(); jcol++ )
 		this->Orbitals[jcol + shift].Coeff = matrix.col(jcol);
 }
 
-EigenVector Multiwfn::getEnergy(int spin){
+EigenVector Mwfn::getEnergy(int spin){
 	__Check_Spin_Type_Shift__
 	EigenVector energies(this->getNumIndBasis());
 	for ( int iorbital = 0; iorbital < this->getNumIndBasis(); iorbital++ )
@@ -423,13 +421,13 @@ EigenVector Multiwfn::getEnergy(int spin){
 	return energies;
 }
 
-void Multiwfn::setEnergy(EigenVector energies, int spin){
+void Mwfn::setEnergy(EigenVector energies, int spin){
 	__Check_Spin_Type_Shift__
 	for ( int iorbital = 0; iorbital < this->getNumIndBasis(); iorbital++ )
 		this->Orbitals[iorbital + shift].Energy = energies(iorbital);
 }
 
-EigenVector Multiwfn::getOccupation(int spin){
+EigenVector Mwfn::getOccupation(int spin){
 	__Check_Spin_Type_Shift__
 	EigenVector occupancies(this->getNumIndBasis());
 	for ( int iorbital = 0; iorbital < this->getNumIndBasis(); iorbital++ )
@@ -437,33 +435,33 @@ EigenVector Multiwfn::getOccupation(int spin){
 	return occupancies;
 }
 
-void Multiwfn::setOccupation(EigenVector occupancies, int spin){
+void Mwfn::setOccupation(EigenVector occupancies, int spin){
 	__Check_Spin_Type_Shift__
 	for ( int iorbital = 0; iorbital < std::min((int)occupancies.size(), this->getNumIndBasis()); iorbital++ )
 		this->Orbitals[iorbital + shift].Occ = occupancies(iorbital);
 }
 
-EigenMatrix Multiwfn::getFock(int spin){
+EigenMatrix Mwfn::getFock(int spin){
 	const EigenMatrix S = this->Overlap;
 	const EigenDiagonal E = this->getEnergy(spin).asDiagonal();
 	const EigenMatrix C = this->getCoefficientMatrix(spin);
 	return S * C * E * C.transpose() * S;
 }
 
-EigenMatrix Multiwfn::getDensity(int spin){
+EigenMatrix Mwfn::getDensity(int spin){
 	const EigenDiagonal N = this->getOccupation(spin).asDiagonal();
 	const EigenMatrix C = this->getCoefficientMatrix(spin);
 	return C * N * C.transpose();
 }
 
-EigenMatrix Multiwfn::getEnergyDensity(int spin){
+EigenMatrix Mwfn::getEnergyDensity(int spin){
 	const EigenDiagonal N = this->getOccupation(spin).asDiagonal();
 	const EigenDiagonal E = this->getEnergy(spin).asDiagonal();
 	const EigenMatrix C = this->getCoefficientMatrix(spin);
 	return C * N * E * C.transpose();
 }
 
-std::vector<int> Multiwfn::Basis2Atom(){
+std::vector<int> Mwfn::Basis2Atom(){
 	std::vector<int> bf2atom = {}; bf2atom.reserve(this->getNumBasis());
 	for ( int icenter = 0; icenter < this->getNumCenters(); icenter++ ){
 		for ( int jbasis = 0; jbasis < this->Centers[icenter].getNumBasis(); jbasis++ ){
@@ -473,7 +471,7 @@ std::vector<int> Multiwfn::Basis2Atom(){
 	return bf2atom;
 }
 
-std::vector<int> Multiwfn::Atom2Basis(){
+std::vector<int> Mwfn::Atom2Basis(){
 	std::vector<int> atom2bf = {}; atom2bf.reserve(this->getNumCenters());
 	int ibasis = 0;
 	for ( MwfnCenter& center : this->Centers ){
@@ -482,7 +480,7 @@ std::vector<int> Multiwfn::Atom2Basis(){
 	}
 	return atom2bf;
 }
-void Multiwfn::Export(std::string mwfn_filename, const bool output){
+void Mwfn::Export(std::string mwfn_filename, const bool output){
 	std::FILE* file = std::fopen(mwfn_filename.c_str(), "w");
 	if (output) std::printf("Exporting wavefunction information to %s ...\n", mwfn_filename.c_str());
 	std::fprintf(file, "# Generated by Chinium\n");
@@ -683,7 +681,7 @@ std::vector<MwfnCenter> MwfnReadBasis(std::string basis_file_path_name){
 	return centers;
 }
 
-void Multiwfn::setBasis(std::string basis_filename, const bool output){
+void Mwfn::setBasis(std::string basis_filename, const bool output){
 	std::string basis_file_path_name = (std::string)std::getenv("CHINIUM_PATH") + "/BasisSets/" + basis_filename + ".gbs";
 	if (output) std::printf("Reading basis set file %s ...\n", basis_file_path_name.c_str());
 	std::vector<MwfnCenter> bare_centers = MwfnReadBasis(basis_file_path_name);
@@ -698,10 +696,9 @@ void Multiwfn::setBasis(std::string basis_filename, const bool output){
 		}
 		assert(found && "Basis set file does not include this element!");
 	}
-	Normalize(this);
 }
 
-void Multiwfn::setCenters(std::vector<std::vector<double>> atoms, const bool output){
+void Mwfn::setCenters(std::vector<std::vector<double>> atoms, const bool output){
 	if (output) std::printf("Reading atomic coordinates from input file ...\n");
 	this->Centers.clear();
 	this->Centers.reserve(atoms.size());
@@ -714,7 +711,7 @@ void Multiwfn::setCenters(std::vector<std::vector<double>> atoms, const bool out
 	}
 }
 
-void Multiwfn::PrintCenters(){
+void Mwfn::PrintCenters(){
 	std::printf("Atoms:\n");
 	std::printf("| Number | Symbol | Index | Charge |  X (Bohr)  |  Y (Bohr)  |  Z (Bohr)  |\n");
 	for ( int icenter = 0; icenter < this->getNumCenters(); icenter++ ){
@@ -732,7 +729,7 @@ void Multiwfn::PrintCenters(){
 	}
 }
 
-void Multiwfn::PrintOrbitals(){
+void Mwfn::PrintOrbitals(){
 	std::printf("Orbitals:\n");
 	if ( this->Wfntype == 0 ){
 		std::printf("| Number | Energy (eV) | Occupation |\n");

@@ -6,13 +6,13 @@
 #include <iostream>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h"
+#include "../MwfnIO/MwfnIO.h"
 #include "Grid.h"
 
 EigenMatrix Grid::getFock(int type){ // Default type = -1
 	if ( type == -1 ) type = this->Type;
 	const Eigen::Tensor<double, 1>& Ws = Weights;
-	const int nbasis = this->Mwfn->getNumBasis();
+	const int nbasis = this->MWFN->getNumBasis();
 	Eigen::Tensor<double, 2> F(nbasis, nbasis); F.setZero();
 	if ( type >= 0 ){
 		Eigen::Tensor<double, 2> F0(nbasis, nbasis); F0.setZero();
@@ -41,15 +41,15 @@ EigenMatrix Grid::getFock(int type){ // Default type = -1
 
 std::vector<EigenMatrix> Grid::getFockSkeleton(){
 	const Eigen::Tensor<double, 1>& Ws = Weights;
-	const int nbasis = this->Mwfn->getNumBasis();
+	const int nbasis = this->MWFN->getNumBasis();
 	const int ngrids = this->NumGrids;
-	const int natoms = this->Mwfn->getNumCenters();
-	const std::vector<int> atom2bf = this->Mwfn->Atom2Basis();
+	const int natoms = this->MWFN->getNumCenters();
+	const std::vector<int> atom2bf = this->MWFN->Atom2Basis();
 	Eigen::Tensor<double, 4> F(nbasis, nbasis, 3, natoms); F.setZero();
 	if ( this->Type >= 0 ){
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
 			const int ihead = atom2bf[iatom];
-			const int ilength = this->Mwfn->Centers[iatom].getNumBasis();
+			const int ilength = this->MWFN->Centers[iatom].getNumBasis();
 			const Eigen::Tensor<double, 3> AO1sa = SliceTensor(AO1s, {0, ihead, 0}, {ngrids, ilength, 3});
 			Eigen::Tensor<double, 3> F0a(ilength, nbasis, 3); F0a.setZero();
 			#include "FockEinSum/Ws_g...E1Rhos_g...AO1sa_g,mu,t...AOs_g,nu---F0a_mu,nu,t.hpp"
@@ -59,7 +59,7 @@ std::vector<EigenMatrix> Grid::getFockSkeleton(){
 	if ( this->Type >= 1 ){
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
 			const int ihead = atom2bf[iatom];
-			const int ilength = this->Mwfn->Centers[iatom].getNumBasis();
+			const int ilength = this->MWFN->Centers[iatom].getNumBasis();
 			Eigen::Tensor<double, 3> Fa1(ilength, nbasis, 3); Fa1.setZero();
 			const Eigen::Tensor<double, 3> AO2sa = SliceTensor(AO2s, {0, ihead, 0}, {ngrids, ilength, 6});
 			#include "FockEinSum/Ws_g...E1Sigmas_g...Rho1s_g,r...AO2sa_g,mu,r,t...AOs_g,nu---Fa1_mu,nu,t.hpp"
@@ -125,13 +125,13 @@ void getFockU(
 }
 
 std::vector<EigenMatrix> Grid::getFockU(){
-	const int nbasis = this->Mwfn->getNumBasis();
-	const int natoms = this->Mwfn->getNumCenters();
+	const int nbasis = this->MWFN->getNumBasis();
+	const int natoms = this->MWFN->getNumCenters();
 	Eigen::Tensor<double, 1>& Ws = Weights;
 	std::vector<EigenMatrix> Fmats(3 * natoms, EigenZero(nbasis, nbasis));
 	Eigen::Tensor<double, 1> dummy1;
 	Eigen::Tensor<double, 2> dummy2;
-	for ( int a = 0; a < this->Mwfn->getNumCenters(); a++ ) for ( int t = 0; t < 3; t++ ){
+	for ( int a = 0; a < this->MWFN->getNumCenters(); a++ ) for ( int t = 0; t < 3; t++ ){
 		Eigen::Tensor<double, 1> RhoGrad = dummy1;
 		Eigen::Tensor<double, 2> Rho1Grad = dummy2;
 		Eigen::Tensor<double, 1> SigmaGrad = dummy1;
@@ -161,7 +161,7 @@ std::vector<EigenMatrix> Grid::getFockU(
 		assert( nmats == (int)Rho1ss.size() );
 		assert( nmats == (int)Sigmass.size() );
 	}
-	const int nbasis = this->Mwfn->getNumBasis();
+	const int nbasis = this->MWFN->getNumBasis();
 	Eigen::Tensor<double, 1>& Ws = Weights;
 	std::vector<EigenMatrix> Fmats(nmats, EigenZero(nbasis, nbasis));
 	for ( int imat = 0; imat < nmats; imat++ ){

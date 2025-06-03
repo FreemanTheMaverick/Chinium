@@ -8,7 +8,8 @@
 
 #include "Macro.h"
 #include "Gateway.h"
-#include "Multiwfn/Multiwfn.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
+#include "MwfnIO/MwfnIO.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
+#include "Integral/Normalization.h"
 #include "Integral/Int2C1E.h"
 #include "Integral/Int4C2E.h"
 #include "Grid/Grid.h"
@@ -42,9 +43,9 @@ int main(int argc, char* argv[]){ (void)argc;
 	const double chemicalpotential = ReadChemicalPotential(inp);
 	
 	// Deciding whether to read existing mwfn file.
-	Multiwfn mwfn;
+	Mwfn mwfn;
 	if ( atoms.empty() || basis.empty() || guess == "READ" )
-		mwfn = Multiwfn(mwfn_name, 1);
+		mwfn = Mwfn(mwfn_name, 1);
 
 	// Atoms and basis
 	if ( !atoms.empty() ){
@@ -65,11 +66,11 @@ int main(int argc, char* argv[]){ (void)argc;
 		if ( !basis.empty() ) mwfn.setBasis(basis, 1);
 		// Else do nothing (just keep the existent atoms and basis in the mwfn)
 	}
+	Normalize(&mwfn);
 	mwfn.PrintCenters();
 
 	// FT-DFT related
-	mwfn.Temperature = temperature;
-	mwfn.ChemicalPotential = chemicalpotential;
+	Environment env(temperature, chemicalpotential);
 
 	// Initializing E and its derivatives
 	if ( guess != "READ" ){
@@ -79,12 +80,15 @@ int main(int argc, char* argv[]){ (void)argc;
 			else mwfn.Wfntype = 1;
 		}
 	}
-	mwfn.E_tot = 0;
-	mwfn.Gradient = EigenZero(mwfn.getNumCenters(), 3);
-	mwfn.Hessian = EigenZero(3 * mwfn.getNumCenters(), 3 * mwfn.getNumCenters());
+	double E_tot = 0;
+	EigenMatrix Gradient = EigenZero(mwfn.getNumCenters(), 3);
+	EigenMatrix Hessian = EigenZero(3 * mwfn.getNumCenters(), 3 * mwfn.getNumCenters());
 
 	// Nuclear repulsion
-	mwfn.NuclearRepulsion({0, 1, 2}, 1);
+	const auto [E_nuc, G_nuc, H_nuc] = mwfn.NuclearRepulsion(1);
+	E_tot += E_nuc;
+	Gradient += G_nuc;
+	Hessian += H_nuc;
 
 	// Electron integrals, density functional and grid
 	Int2C1E int2c1e = Int2C1E(mwfn, 1);
@@ -133,32 +137,33 @@ int main(int argc, char* argv[]){ (void)argc;
 				mwfn.setOccupation((EigenVector)(EigenZero(na, 1).array() + 1).matrix(), 1);
 				mwfn.setOccupation((EigenVector)(EigenZero(nb, 1).array() + 1).matrix(), 2);
 			}
-			GuessSCF(mwfn, int2c1e, grid, guess, 1);
+			GuessSCF(mwfn, env, int2c1e, grid, guess, 1);
 		}
-		HartreeFockKohnSham(mwfn, int2c1e, int4c2e, xc, grid, scf, 4, nthreads);
+		const double E_scf = HartreeFockKohnSham(mwfn, env, int2c1e, int4c2e, xc, grid, scf, 4, nthreads);
+		E_tot += E_scf;
 		if (xc) grid.SaveDensity();
-		std::printf("Total energy: %17.10f\n", mwfn.E_tot);
+		std::printf("Total energy: %17.10f\n", E_tot);
 		mwfn.PrintOrbitals();
 		mwfn.Export(mwfn_name, 1);
 
 		if ( derivative > 0 ){
 			int2c1e.CalculateIntegrals(1);
-			auto [grad, hess] = HFKSDerivative(mwfn, int2c1e, int4c2e, xc, grid, derivative, 2, nthreads);
-			mwfn.Gradient += grad;
-			mwfn.Hessian += hess;
+			auto [grad, hess] = HFKSDerivative(mwfn, env, int2c1e, int4c2e, xc, grid, derivative, 2, nthreads);
+			Gradient += grad;
+			Hessian += hess;
 		}
 
 		if ( derivative > 0 ){
 			std::printf("Total nuclear gradient:\n");
 			for ( int iatom = 0; iatom < mwfn.getNumCenters(); iatom++ )
-				std::printf("| %3d  %2s  % 10.17f  % 10.17f  % 10.17f\n", iatom, mwfn.Centers[iatom].getSymbol().c_str(), mwfn.Gradient(iatom, 0), mwfn.Gradient(iatom, 1), mwfn.Gradient(iatom, 2));
+				std::printf("| %3d  %2s  % 10.17f  % 10.17f  % 10.17f\n", iatom, mwfn.Centers[iatom].getSymbol().c_str(), Gradient(iatom, 0), Gradient(iatom, 1), Gradient(iatom, 2));
 		}
 		if ( derivative > 1 ){
 			std::printf("Total nuclear hessian:\n");
 			for ( int xpert = 0; xpert < mwfn.getNumCenters() * 3; xpert++ ){
 				std::printf("|");
 				for (int ypert = 0; ypert <= xpert; ypert++ )
-					std::printf(" % f", mwfn.Hessian(xpert, ypert));
+					std::printf(" % f", Hessian(xpert, ypert));
 				std::printf("\n");
 			}
 		}

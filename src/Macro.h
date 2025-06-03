@@ -1,3 +1,4 @@
+#include "Macro/Environment.h"
 #include "Macro/IndexSymbol.h"
 #include "Macro/Abbreviation.h"
 #include "Macro/Time.h"

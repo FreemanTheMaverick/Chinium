@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h"
+#include "../MwfnIO/MwfnIO.h"
 #include "Grid.h"
 
 double Grid::getEnergy(){
@@ -18,7 +18,7 @@ double Grid::getEnergy(){
 }
 
 std::vector<double> Grid::getEnergyGrad(){
-	const int natoms = this->Mwfn->getNumCenters();
+	const int natoms = this->MWFN->getNumCenters();
 	Eigen::Tensor<double, 1>& Ws = Weights;
 	Eigen::Tensor<double, 2> G(3, natoms); G.setZero();
 	if ( this->Type >= 0 ){
@@ -32,7 +32,7 @@ std::vector<double> Grid::getEnergyGrad(){
 }
 
 std::vector<std::vector<double>> Grid::getEnergyHess(){
-	const int natoms = this->Mwfn->getNumCenters();
+	const int natoms = this->MWFN->getNumCenters();
 	Eigen::Tensor<double, 1>& Ws = Weights;
 	Eigen::Tensor<double, 4> H(3, natoms, 3, natoms); H.setZero();
 	if ( this->Type >= 0 ){

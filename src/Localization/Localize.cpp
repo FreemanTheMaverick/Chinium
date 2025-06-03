@@ -10,7 +10,7 @@
 #include <cstdio>
 
 #include "../Macro.h"
-#include "../Multiwfn/Multiwfn.h"
+#include "../MwfnIO/MwfnIO.h"
 #include "../Integral/Int2C1E.h"
 
 #include "Fock.h"
@@ -19,7 +19,7 @@
 
 #include <iostream>
 
-void Localize(Multiwfn& mwfn, Int2C1E& int2c1e, std::string scheme, std::string range, int output){
+void Localize(Mwfn& mwfn, Int2C1E& int2c1e, std::string scheme, std::string range, int output){
 
 	std::transform(scheme.begin(), scheme.end(), scheme.begin(), ::toupper);
 	std::transform(range.begin(), range.end(), range.begin(), ::toupper);

@@ -11,7 +11,7 @@
 
 #include "../Macro.h"
 
-#include "Multiwfn.h"
+#include "MwfnIO.h"
 
 
 #define __Loop_Over_Atom_Pairs__\
@@ -94,7 +94,7 @@ EigenMatrix NuclearRepulsion2(std::vector<std::pair<double, std::array<double, 3
 	return H;
 }
 
-void Multiwfn::NuclearRepulsion(std::vector<double> orders, int output){
+std::tuple<double, EigenMatrix, EigenMatrix> Mwfn::NuclearRepulsion(int output){
 	std::vector<std::pair<double, std::array<double, 3>>> libint2charges = {}; // Making point charges.
 	for ( MwfnCenter& center : this->Centers )
 		libint2charges.push_back(std::make_pair(
@@ -106,24 +106,11 @@ void Multiwfn::NuclearRepulsion(std::vector<double> orders, int output){
 				)
 		));
 
-	if (std::find(orders.begin(), orders.end(), 0) != orders.end()){
-		if (output) std::printf("Calculating nuclear repulsion energy ... ");
-		const auto start = __now__;
-		this->E_tot += NuclearRepulsion0(libint2charges);
-		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
-	}
-	if (std::find(orders.begin(), orders.end(), 1) != orders.end()){
-		const auto start = __now__;
-		if (output) std::printf("Calculating nuclear repulsion gradient ... ");
-		assert(this->Gradient.rows() == this->getNumCenters() && this->Gradient.cols() == 3 && "Nuclear gradient is not allocated!");
-		this->Gradient += NuclearRepulsion1(libint2charges);
-		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
-	}
-	if (std::find(orders.begin(), orders.end(), 2) != orders.end()){
-		const auto start = __now__;
-		if (output) std::printf("Calculating nuclear repulsion hessian ... ");
-		assert(this->Hessian.rows() == 3*this->getNumCenters() && this->Hessian.cols() == 3*this->getNumCenters() && "Nuclear hessian is not allocated!");
-		this->Hessian += NuclearRepulsion2(libint2charges);
-		if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
-	}
+	if (output) std::printf("Calculating nuclear repulsion energy ... ");
+	const auto start = __now__;
+	double E_nuc = NuclearRepulsion0(libint2charges);
+	EigenMatrix G_nuc = NuclearRepulsion1(libint2charges);
+	EigenMatrix H_nuc = NuclearRepulsion2(libint2charges);
+	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	return std::make_tuple(E_nuc, G_nuc, H_nuc);
 }

@@ -1,5 +1,5 @@
 class Int2C1E{ public:
-	Multiwfn* Mwfn;
+	Mwfn* MWFN;
 	bool Verbose;
 
 	// Zeroth order
@@ -26,7 +26,7 @@ class Int2C1E{ public:
 	std::vector<std::vector<EigenMatrix>> KineticHesss;
 	std::vector<std::vector<EigenMatrix>> NuclearHesss;
 
-	Int2C1E(Multiwfn& mwfn, bool verbose);
+	Int2C1E(Mwfn& mwfn, bool verbose);
 	void CalculateIntegrals(int order);
 	std::tuple<
 		std::vector<double>,
