@@ -6,9 +6,9 @@
 #include <chrono>
 #include <cstdio>
 #include <string>
+#include <libmwfn.h>
 
 #include "../Macro.h"
-#include "../MwfnIO/MwfnIO.h"
 #include "Grid.h"
 
 

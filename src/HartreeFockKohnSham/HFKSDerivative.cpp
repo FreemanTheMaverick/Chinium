@@ -9,9 +9,9 @@
 #include <chrono>
 #include <cassert>
 #include <omp.h>
+#include <libmwfn.h>
 
 #include "../Macro.h"
-#include "../MwfnIO/MwfnIO.h"
 #include "../Integral/Int2C1E.h"
 #include "../Integral/Int4C2E.h"
 #include "../Grid/Grid.h"

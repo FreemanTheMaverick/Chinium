@@ -8,9 +8,9 @@
 #include <functional>
 #include <chrono>
 #include <omp.h>
+#include <libmwfn.h>
 
 #include "../Macro.h"
-#include "../MwfnIO/MwfnIO.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 
 #include "Int4C2E.h"
 #include "Parallel.h"

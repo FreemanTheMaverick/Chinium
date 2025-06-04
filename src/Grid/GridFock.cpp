@@ -4,9 +4,9 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <libmwfn.h>
 
 #include "../Macro.h"
-#include "../MwfnIO/MwfnIO.h"
 #include "Grid.h"
 
 EigenMatrix Grid::getFock(int type){ // Default type = -1

@@ -8,9 +8,9 @@
 #include <string>
 #include <cassert>
 #include <vector>
+#include <libmwfn.h>
 
 #include "../Macro.h"
-#include "../MwfnIO/MwfnIO.h"
 #include "../Integral/Int2C1E.h"
 #include "../Grid/Grid.h"
 

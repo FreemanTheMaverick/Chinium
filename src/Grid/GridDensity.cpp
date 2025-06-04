@@ -8,9 +8,9 @@
 #include <algorithm>
 #include <cassert>
 #include <omp.h>
+#include <libmwfn.h>
 
 #include "../Macro.h"
-#include "../MwfnIO/MwfnIO.h"
 #include "Grid.h"
 
 void Grid::getDensity(EigenMatrix D_){

@@ -3,9 +3,9 @@
 #include <vector>
 #include <string>
 #include <iostream>
+#include <libmwfn.h>
 
 #include "../Macro.h"
-#include "../MwfnIO/MwfnIO.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 
 #include "Macro.h"
 

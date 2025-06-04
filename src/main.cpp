@@ -5,10 +5,10 @@
 #include <string>
 #include <cstdio>
 #include <cstddef>
+#include <libmwfn.h>
 
 #include "Macro.h"
 #include "Gateway.h"
-#include "MwfnIO/MwfnIO.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
 #include "Integral/Normalization.h"
 #include "Integral/Int2C1E.h"
 #include "Integral/Int4C2E.h"
@@ -44,14 +44,19 @@ int main(int argc, char* argv[]){ (void)argc;
 	
 	// Deciding whether to read existing mwfn file.
 	Mwfn mwfn;
-	if ( atoms.empty() || basis.empty() || guess == "READ" )
-		mwfn = Mwfn(mwfn_name, 1);
+	if ( atoms.empty() || basis.empty() || guess == "READ" ){
+		std::printf("Reading existent Mwfn file %s ...\n", mwfn_name.c_str());
+		mwfn = Mwfn(mwfn_name);
+	}
 
 	// Atoms and basis
+	std::string basis_file_path_name = (std::string)std::getenv("CHINIUM_PATH") + "/BasisSets/" + basis + ".gbs";
 	if ( !atoms.empty() ){
 		if ( !basis.empty() ){
-			mwfn.setCenters(atoms, 1);
-			mwfn.setBasis(basis, 1);
+			std::printf("Setting atomic coordinates given by input file ...\n");
+			mwfn.setCenters(atoms);
+			std::printf("Reading basis set file %s ...\n", basis_file_path_name.c_str());
+			mwfn.setBasis(basis_file_path_name);
 		}else{
 			assert( mwfn.getNumCenters() == (int)atoms.size() && "Different numbers of atoms between the input file and the read mwfn file!" );
 			for ( int iatom = 0; iatom < mwfn.getNumCenters(); iatom++ ){
@@ -63,8 +68,9 @@ int main(int argc, char* argv[]){ (void)argc;
 			}
 		}
 	}else{ // If atoms are not specified in the input file
-		if ( !basis.empty() ) mwfn.setBasis(basis, 1);
-		// Else do nothing (just keep the existent atoms and basis in the mwfn)
+		if ( !basis.empty() ){
+			mwfn.setBasis(basis_file_path_name);
+		} // Else do nothing (just keep the existent atoms and basis in the mwfn)
 	}
 	Normalize(&mwfn);
 	mwfn.PrintCenters();
@@ -85,7 +91,8 @@ int main(int argc, char* argv[]){ (void)argc;
 	EigenMatrix Hessian = EigenZero(3 * mwfn.getNumCenters(), 3 * mwfn.getNumCenters());
 
 	// Nuclear repulsion
-	const auto [E_nuc, G_nuc, H_nuc] = mwfn.NuclearRepulsion(1);
+	std::printf("Calculating nuclear repulsion energy ...\n");
+	const auto [E_nuc, G_nuc, H_nuc] = mwfn.NuclearRepulsion();
 	E_tot += E_nuc;
 	Gradient += G_nuc;
 	Hessian += H_nuc;
@@ -113,20 +120,11 @@ int main(int argc, char* argv[]){ (void)argc;
 		if ( guess == "READ" ){ // Orthogonalizing the orbitals read from mwfn.
 			Eigen::SelfAdjointEigenSolver<EigenMatrix> solver;
 			const EigenMatrix S = int2c1e.Overlap;
-			if ( mwfn.Wfntype == 0 ){
-				const EigenMatrix C = mwfn.getCoefficientMatrix(0);
+			for ( int spin : mwfn.getSpins() ){
+				const EigenMatrix C = mwfn.getCoefficientMatrix(spin);
 				solver.compute(C.transpose() * S * C);
 				const EigenMatrix X = solver.operatorInverseSqrt();
-				mwfn.setCoefficientMatrix(C * X, 0);
-			}else if ( mwfn.Wfntype == 1 ){
-				const EigenMatrix Ca = mwfn.getCoefficientMatrix(1);
-				solver.compute(Ca.transpose() * S * Ca);
-				const EigenMatrix Xa = solver.operatorInverseSqrt();
-				mwfn.setCoefficientMatrix(Ca * Xa, 1);
-				const EigenMatrix Cb = mwfn.getCoefficientMatrix(2);
-				solver.compute(Cb.transpose() * S * Cb);
-				const EigenMatrix Xb = solver.operatorInverseSqrt();
-				mwfn.setCoefficientMatrix(Cb * Xb, 2);
+				mwfn.setCoefficientMatrix(C * X, spin);
 			}
 		}else{
 			if ( mwfn.Wfntype == 0 ){
@@ -144,7 +142,8 @@ int main(int argc, char* argv[]){ (void)argc;
 		if (xc) grid.SaveDensity();
 		std::printf("Total energy: %17.10f\n", E_tot);
 		mwfn.PrintOrbitals();
-		mwfn.Export(mwfn_name, 1);
+		std::printf("Exporting wavefunction information to %s ...\n", mwfn_name.c_str());
+		mwfn.Export(mwfn_name);
 
 		if ( derivative > 0 ){
 			int2c1e.CalculateIntegrals(1);
@@ -171,7 +170,8 @@ int main(int argc, char* argv[]){ (void)argc;
 	else if ( jobtype == "LOCALIZATION" ){
 		Localize(mwfn, int2c1e, method, "occ", 2);
 		Localize(mwfn, int2c1e, method, "vir", 2);
-		mwfn.Export(mwfn_name, 1);
+		std::printf("Exporting wavefunction information to %s ...\n", mwfn_name.c_str());
+		mwfn.Export(mwfn_name);
 	}
 
 	std::printf("*** Chinium terminated normally ***\n");

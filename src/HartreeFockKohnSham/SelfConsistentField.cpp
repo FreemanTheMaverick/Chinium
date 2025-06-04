@@ -12,9 +12,9 @@
 #include <memory>
 #include <Maniverse/Manifold/Grassmann.h>
 #include <Maniverse/Optimizer/TrustRegion.h>
+#include <libmwfn.h>
 
 #include "../Macro.h"
-#include "../MwfnIO/MwfnIO.h"
 #include "../Integral/Int2C1E.h"
 #include "../Integral/Int4C2E.h"
 #include "../Grid/Grid.h"

@@ -9,9 +9,9 @@ extern "C"{
 #include <cassert>
 #include <string>
 #include <vector>
+#include <libmwfn.h>
 
 #include "Macro.h"
-#include "MwfnIO/MwfnIO.h"
 #include "Grid/Grid.h"
 #include "ExchangeCorrelation.h"
 

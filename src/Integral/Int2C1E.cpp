@@ -8,10 +8,9 @@
 #include <experimental/array> // std::array, std::experimental::make_array
 #include <utility> // std::pair, std::make_pair
 #include <chrono>
+#include <libmwfn.h>
 
 #include "../Macro.h"
-#include "../MwfnIO/MwfnIO.h" // Requires <Eigen/Dense>, <vector>, <string>, "Macro.h".
-
 #include "Int2C1E.h"
 #include "Macro.h"
 

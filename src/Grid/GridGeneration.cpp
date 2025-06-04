@@ -10,9 +10,9 @@
 #include <map>
 #include <functional>
 #include <cassert>
+#include <libmwfn.h>
 
 #include "../Macro.h"
-#include "../MwfnIO/MwfnIO.h"
 #include "Grid.h"
 #include "sphere_lebedev_rule.hpp"
 #include <iostream>
