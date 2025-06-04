@@ -102,8 +102,9 @@ int main(int argc, char* argv[]){ (void)argc;
 	Int4C2E int4c2e = Int4C2E(mwfn, 1, -1, 1); // EXX is unknown by now.
 	ExchangeCorrelation xc;
 	Grid grid(&mwfn, grid_str, 1);
+	int2c1e.CalculateIntegrals(0);
+	mwfn.Overlap = int2c1e.Overlap;
 	if ( jobtype == "SCF" ){
-		int2c1e.CalculateIntegrals(0);
 		int4c2e.getRepulsionDiag();
 		int4c2e.getRepulsionLength();
 		int4c2e.getRepulsionIndices();
@@ -118,14 +119,7 @@ int main(int argc, char* argv[]){ (void)argc;
 			}else grid.getAO(0, 1); // For SAP initial guess.
 		}
 		if ( guess == "READ" ){ // Orthogonalizing the orbitals read from mwfn.
-			Eigen::SelfAdjointEigenSolver<EigenMatrix> solver;
-			const EigenMatrix S = int2c1e.Overlap;
-			for ( int spin : mwfn.getSpins() ){
-				const EigenMatrix C = mwfn.getCoefficientMatrix(spin);
-				solver.compute(C.transpose() * S * C);
-				const EigenMatrix X = solver.operatorInverseSqrt();
-				mwfn.setCoefficientMatrix(C * X, spin);
-			}
+			mwfn.Orthogonalize("Lowdin");
 		}else{
 			if ( mwfn.Wfntype == 0 ){
 				mwfn.Orbitals.resize(mwfn.getNumBasis());

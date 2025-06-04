@@ -3,13 +3,14 @@ CXX = __CXX__
 # Note: MAKE is implicitly defined, no need to export unless overriding
 
 # --- Paths to Dependencies ---
-EIGEN3_PATH    = __EIGEN3_PATH__
+EIGEN3_PATH    = __EIGEN3__
 # Eigen3: The path where you can find "Eigen/", "signature_of_eigen3_matrix_library" and "unsupported/".
-LIBINT2_PATH   = __LIBINT2_PATH__
+LIBINT2_PATH   = __LIBINT2__
 # LIBINT2: The path where you can find "include/", "lib/" and "share/".
-LIBXC_PATH     = __LIBXC_PATH__
+LIBXC_PATH     = __LIBXC__
 # LIBXC: The path where you can find "bin/", "include/" and "lib/".
-MANIVERSE_PATH = __MANIVERSE_PATH__
+LIBMWFN_PATH   = __LIBMWFN__
+MANIVERSE_PATH = __MANIVERSE__
 
 # --- Project Structure ---
 TARGET      = Chinium
@@ -28,11 +29,14 @@ DEPS        = $(OBJECTS:.o=.d)
 CPPFLAGS    = -isystem $(EIGEN3_PATH) \
               -isystem $(LIBINT2_PATH)/include \
               -isystem $(LIBXC_PATH)/include \
+              -isystem $(LIBMWFN_PATH)/include \
               -isystem $(MANIVERSE_PATH)/include \
               -DEIGEN_INITIALIZE_MATRICES_BY_ZERO \
               -MMD -MP # Generate dependency files
 
-CXXFLAGS    = -Wall -Wextra -Wpedantic -fopenmp -O3 -std=c++2a -march=native
+CXXFLAGS    = -std=c++2a \
+			  -O3 -fopenmp -march=native \
+			  -Wall -Wextra -Wpedantic -Wno-array-bounds
 
 # Linker Flags (apply to the final linking step)
 # -L flags specify paths for the *linker* to search during the build
@@ -40,16 +44,19 @@ CXXFLAGS    = -Wall -Wextra -Wpedantic -fopenmp -O3 -std=c++2a -march=native
 LDFLAGS     = -L$(LIBINT2_PATH)/lib \
               -L$(LIBXC_PATH)/lib \
               -L$(LIBXC_PATH)/lib64 \
+              -L$(LIBMWFN_PATH)/lib \
               -L$(MANIVERSE_PATH)/lib \
               -Wl,-rpath,$(LIBINT2_PATH)/lib \
               -Wl,-rpath,$(LIBXC_PATH)/lib \
               -Wl,-rpath,$(LIBXC_PATH)/lib64 \
+              -Wl,-rpath,$(LIBMWFN_PATH)/lib \
               -Wl,-rpath,$(MANIVERSE_PATH)/lib \
               -fopenmp # Often needed for linking OpenMP code too
 
 # Libraries to Link
 LDLIBS      = -lint2 \
               -lxc \
+              -l:libmwfn.a \
               -l:libmaniverse.a # Explicitly link the static archive
 
 # --- Main Rules ---
