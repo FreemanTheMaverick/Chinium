@@ -13,9 +13,10 @@
 #include <libmwfn.h>
 
 #include "../Macro.h"
+#include "Tensor.h"
 #include "Grid.h"
 #include "sphere_lebedev_rule.hpp"
-#include <iostream>
+
 int SphericalGridNumber(std::string path, std::vector<MwfnCenter>& centers){
 	int ngrids = 0;
 	__Z_2_Name__

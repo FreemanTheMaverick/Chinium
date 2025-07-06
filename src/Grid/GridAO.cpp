@@ -9,8 +9,8 @@
 #include <libmwfn.h>
 
 #include "../Macro.h"
+#include "Tensor.h"
 #include "Grid.h"
-
 
 void GetAoValues(
 		std::vector<MwfnCenter>& centers,

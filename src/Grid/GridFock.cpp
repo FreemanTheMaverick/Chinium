@@ -7,6 +7,7 @@
 #include <libmwfn.h>
 
 #include "../Macro.h"
+#include "Tensor.h"
 #include "Grid.h"
 
 EigenMatrix Grid::getFock(int type){ // Default type = -1

@@ -1,4 +1,3 @@
-#ifdef EIGEN_CXX11_TENSOR_MODULE_H
 template<int ndim> inline Eigen::Tensor<double, ndim> SliceTensor(
 		const Eigen::Tensor<double, ndim>& tensor,
 		const int (&offsets_)[ndim], const int (&extents_)[ndim]){
@@ -25,5 +24,3 @@ template<int ndim> inline Eigen::Tensor<double, ndim> PadTensor(
 	}
 	return tensor.pad(paddings);
 }
-
-#endif

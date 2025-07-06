@@ -6,6 +6,7 @@
 #include <libmwfn.h>
 
 #include "../Macro.h"
+#include "Tensor.h"
 #include "Grid.h"
 
 double Grid::getEnergy(){

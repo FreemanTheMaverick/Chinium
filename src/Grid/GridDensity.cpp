@@ -11,6 +11,7 @@
 #include <libmwfn.h>
 
 #include "../Macro.h"
+#include "Tensor.h"
 #include "Grid.h"
 
 void Grid::getDensity(EigenMatrix D_){
