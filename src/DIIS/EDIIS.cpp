@@ -9,10 +9,10 @@
 #include <Maniverse/Optimizer/TrustRegion.h>
 
 #include "../Macro.h"
-#include "ADIIS.h"
+#include "EDIIS.h"
 
 
-ADIIS::ADIIS(
+EDIIS::EDIIS(
 		std::function<std::tuple<
 			std::vector<EigenMatrix>,
 			std::vector<EigenMatrix>,
@@ -21,25 +21,22 @@ ADIIS::ADIIS(
 		>* update_func,
 		int nmatrices, int max_size, double tolerance,
 		int max_iter, int verbose): DIIS(update_func, nmatrices, max_size, tolerance, max_iter, verbose){
-	this->Name = "Augmented-DIIS (ADIIS)";
+	this->Name = "Energy-DIIS (EDIIS)";
 }
 
 #define Es(i) this->Auxiliariess[index][i](0, ncols - 1)
 #define Ds(i) this->Auxiliariess[index][i].leftCols(ncols - 1)
 #define Fs(i) this->Updatess[index][i]
-#define E this->Auxiliariess[index].back()(0, ncols - 1)
-#define D this->Auxiliariess[index].back().leftCols(ncols - 1)
-#define F this->Updatess[index].back()
 
-EigenVector ADIIS::Extrapolate(int index){
+EigenVector EDIIS::Extrapolate(int index){
 	const int size = this->getCurrentSize();
 	EigenMatrix A = EigenZero(size, 1);
 	EigenMatrix B = EigenZero(size, size);
 	for ( int i = 0; i < size; i++ ){
 		const int ncols = this->Auxiliariess[index][i].cols();
-		A(i) = Dot(Ds(i) - D, F);
+		A(i) = Es(i) / 2;
 		for ( int j = 0; j < size; j++ )
-			B(i, j) = Dot(Ds(i) - D, Fs(j) - F);
+			B(i, j) = - Dot(Ds(i) - Ds(j), Fs(i) - Fs(j));
 	}
 	EigenMatrix p = EigenZero(size, 1); p(size - 1) = 0.9;
 	for ( int i = 0; i < size - 1; i++ )
@@ -70,7 +67,7 @@ EigenVector ADIIS::Extrapolate(int index){
 				0.001, 1, 1000, L, M, 0
 	);
 	if ( this->Verbose > 1 && !converged ){
-		std::printf("| Warning: Optimization of ADIIS weights did not fully converged!\n");
+		std::printf("| Warning: Optimization of EDIIS weights did not fully converged!\n");
 		std::printf("| Warning: This is probably fine if SCF convergence is met later.\n");
 	}
 

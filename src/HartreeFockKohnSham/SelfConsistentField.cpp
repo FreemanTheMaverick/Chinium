@@ -20,6 +20,7 @@
 #include "../Grid/Grid.h"
 #include "../ExchangeCorrelation.h"
 #include "../DIIS/CDIIS.h"
+#include "../DIIS/EDIIS.h"
 #include "../DIIS/ADIIS.h"
 
 #define S (int2c1e.Overlap)
@@ -193,12 +194,13 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		Fnew_ << Fnewa_, Fnewb_;
 		EigenMatrix G_ = EigenZero(Fa.rows(), Fa.cols() * 2);
 		G_ << Ga_, Gb_;
-		EigenMatrix D_ = EigenZero(Fa.rows(), Fa.cols() * 2);
-		D_ << Da_, Db_;
+		EigenMatrix Aux_ = EigenZero(Fa.rows(), Fa.cols() * 2 + 1);
+		Aux_ << Da_, Db_, EigenZero(Fa.rows(), 1);
+		Aux_(0, Fa.cols() * 2) = E;
 		return std::make_tuple(
 				std::vector<EigenMatrix>{Fnew_},
 				std::vector<EigenMatrix>{G_},
-				std::vector<EigenMatrix>{D_}
+				std::vector<EigenMatrix>{Aux_}
 		);
 	};
 	EigenMatrix F = EigenZero(Fa.rows(), Fa.cols() * 2);
@@ -270,10 +272,13 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 			std::printf("Changed by %E from the last step\n", E - oldE);
 		}
 		EigenMatrix G_ = Fnew_ * D_ * S - S * D_ * Fnew_;
+		EigenMatrix Aux_ = EigenZero(F.rows(), F.cols() + 1);
+		Aux_ << D_, EigenZero(F.rows(), 1);
+		Aux_(0, F.cols()) = E;
 		return std::make_tuple(
 				std::vector<EigenMatrix>{Fnew_},
 				std::vector<EigenMatrix>{G_},
-				std::vector<EigenMatrix>{D_}
+				std::vector<EigenMatrix>{Aux_}
 		);
 	};
 	std::vector<EigenMatrix> Fs = {F};
