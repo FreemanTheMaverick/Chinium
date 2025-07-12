@@ -17,11 +17,6 @@
 void Grid::getDensity(EigenMatrix D_){
 	const int ngrids = this->NumGrids;
 	const int nbasis = (int)D_.cols();
-	Eigen::Tensor<double, 1>& Rhos = this->Rhos_Cache;
-	Eigen::Tensor<double, 2>& Rho1s = this->Rho1s_Cache;
-	Eigen::Tensor<double, 1>& Sigmas = this->Sigmas_Cache;
-	Eigen::Tensor<double, 1>& Lapls = this->Lapls_Cache;
-	Eigen::Tensor<double, 1>& Taus = this->Taus_Cache;
 	Eigen::Tensor<double, 2> D = Eigen::TensorMap<Eigen::Tensor<double, 2>>(D_.data(), nbasis, nbasis);
 	if ( this->Type >= 0 ){
 		Rhos.resize(ngrids); Rhos.setZero();
@@ -81,26 +76,9 @@ void Grid::getDensityU(
 	}
 }
 
-void Grid::SaveDensity(){
-	this->Rhos = this->Rhos_Cache;
-	this->Rho1s = this->Rho1s_Cache;
-	this->Sigmas = this->Sigmas_Cache;
-	this->Lapls = this->Lapls_Cache;
-	this->Taus = this->Taus_Cache;
-}
-
-void Grid::RetrieveDensity(){
-	this->Rhos_Cache = this->Rhos;
-	this->Rho1s_Cache = this->Rho1s;
-	this->Sigmas_Cache = this->Sigmas;
-	this->Lapls_Cache = this->Lapls;
-	this->Taus_Cache = this->Taus;
-}
-
 double Grid::getNumElectrons(){
 	assert( this->NumGrids == Weights.dimension(0) );
-	assert( this->Rhos.size() ? this->NumGrids == Rhos.dimension(0) : this->NumGrids == Rhos_Cache.dimension(0) );
-	Eigen::Tensor<double, 1>& Rhos = this->Rhos.size() ? this->Rhos : this->Rhos_Cache;
+	assert( this->NumGrids == Rhos.dimension(0) );
 	const Eigen::Tensor<double, 0> n = (Weights * Rhos).sum();
 	return n();
 }

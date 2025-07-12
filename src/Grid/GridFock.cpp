@@ -22,7 +22,6 @@ EigenMatrix Grid::getFock(int type){ // Default type = -1
 	}
 	if ( type >= 1 ){
 		Eigen::Tensor<double, 2> F1(nbasis, nbasis); F1.setZero();
-		Eigen::Tensor<double, 2>& Rho1s = this->Rho1s.size() ? this->Rho1s : this->Rho1s_Cache;
 		#include "FockEinSum/Ws_g...E1Sigmas_g...Rho1s_g,r...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu.hpp"
 		F += 2. * F1;
 	}

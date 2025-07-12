@@ -1,6 +1,5 @@
 class Int2C1E{ public:
 	Mwfn* MWFN;
-	bool Verbose;
 
 	// Zeroth order
 	EigenMatrix Overlap;
@@ -26,21 +25,21 @@ class Int2C1E{ public:
 	std::vector<std::vector<EigenMatrix>> KineticHesss;
 	std::vector<std::vector<EigenMatrix>> NuclearHesss;
 
-	Int2C1E(Mwfn& mwfn, bool verbose);
-	void CalculateIntegrals(int order);
+	Int2C1E(Mwfn& mwfn);
+	void CalculateIntegrals(int order, int output);
 	std::tuple<
 		std::vector<double>,
 		std::vector<double>,
 		std::vector<double>
-	> ContractGrads(EigenMatrix D, EigenMatrix W);
+	> ContractGrads(EigenMatrix D, EigenMatrix W, int output);
 	std::tuple<
 		std::vector<std::vector<double>>,
 		std::vector<std::vector<double>>,
 		std::vector<std::vector<double>>
-	> ContractGrads(std::vector<EigenMatrix>& Ds, std::vector<EigenMatrix>& Ws);
+	> ContractGrads(std::vector<EigenMatrix>& Ds, std::vector<EigenMatrix>& Ws, int output);
 	std::tuple<
 		std::vector<std::vector<double>>,
 		std::vector<std::vector<double>>,
 		std::vector<std::vector<double>>
-	> ContractHesss(EigenMatrix D, EigenMatrix W);
+	> ContractHesss(EigenMatrix D, EigenMatrix W, int output);
 };

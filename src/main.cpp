@@ -98,18 +98,18 @@ int main(int argc, char* argv[]){ (void)argc;
 	Hessian += H_nuc;
 
 	// Electron integrals, density functional and grid
-	Int2C1E int2c1e = Int2C1E(mwfn, 1);
-	Int4C2E int4c2e = Int4C2E(mwfn, 1, -1, 1); // EXX is unknown by now.
+	Int2C1E int2c1e = Int2C1E(mwfn);
+	Int4C2E int4c2e = Int4C2E(mwfn, 1, -1); // EXX is unknown by now.
 	ExchangeCorrelation xc;
 	Grid grid(&mwfn, grid_str, 1);
-	int2c1e.CalculateIntegrals(0);
+	int2c1e.CalculateIntegrals(0, 1);
 	mwfn.Overlap = int2c1e.Overlap;
 	if ( jobtype == "SCF" ){
-		int4c2e.getRepulsionDiag();
-		int4c2e.getRepulsionLength();
-		int4c2e.getRepulsionIndices();
-		int4c2e.getThreadPointers(nthreads);
-		int4c2e.CalculateIntegrals(0);
+		int4c2e.getRepulsionDiag(1);
+		int4c2e.getRepulsionLength(1);
+		int4c2e.getRepulsionIndices(1);
+		int4c2e.getThreadPointers(nthreads, 1);
+		int4c2e.CalculateIntegrals(0, 1);
 		if ( method != "HF" || guess == "SAP" ){
 			if ( method != "HF" ){
 				xc.Read(method, 1);
@@ -133,14 +133,13 @@ int main(int argc, char* argv[]){ (void)argc;
 		}
 		const double E_scf = HartreeFockKohnSham(mwfn, env, int2c1e, int4c2e, xc, grid, scf, 4, nthreads);
 		E_tot += E_scf;
-		if (xc) grid.SaveDensity();
 		std::printf("Total energy: %17.10f\n", E_tot);
 		mwfn.PrintOrbitals();
 		std::printf("Exporting wavefunction information to %s ...\n", mwfn_name.c_str());
 		mwfn.Export(mwfn_name);
 
 		if ( derivative > 0 ){
-			int2c1e.CalculateIntegrals(1);
+			int2c1e.CalculateIntegrals(1, 1);
 			auto [grad, hess] = HFKSDerivative(mwfn, env, int2c1e, int4c2e, xc, grid, derivative, 2, nthreads);
 			Gradient += grad;
 			Hessian += hess;

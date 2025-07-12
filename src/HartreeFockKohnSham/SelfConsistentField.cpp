@@ -28,6 +28,7 @@
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedNewton(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
 		int output, int nthreads){
 	double E = 0;
@@ -43,54 +44,13 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedNewton(
 		> (EigenMatrix, int)
 	> dfunc_newton = [&](EigenMatrix Dprime_, int order){
 		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
-		const EigenMatrix F_ = Hcore + int4c2e.ContractInts(D_, nthreads);
-		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
-		eigensolver.compute(Fprime_);
-		epsilons = eigensolver.eigenvalues();
-		C = Z * eigensolver.eigenvectors();
-		const double E_ = 0.5 * ( D_ * ( Hcore + F_ ) ).trace();
-		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-		if ( order == 2 ) He = [Z, &int4c2e, nthreads](EigenMatrix vprime){
-			const EigenMatrix v = Z * vprime * Z.transpose();
-			return (EigenMatrix)(Z.transpose() * int4c2e.ContractInts(v, nthreads) * Z);
-		};
-		return std::make_tuple(E_, Fprime_, He);
-	};
-	TrustRegionSetting tr_setting;
-	assert(
-			TrustRegion(
-				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.00001, 1, 100, E, M, output
-			) && "Convergence failed!"
-	);
-	return std::make_tuple(E, epsilons, C);
-}
-
-std::tuple<double, EigenVector, EigenMatrix> RestrictedQuasiNewton(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix Dprime, EigenMatrix Z,
-		int output, int nthreads){
-	double E = 0;
-	const int nbasis = Dprime.cols();
-	EigenVector epsilons = EigenZero(Z.cols(), 1);
-	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
-	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-	Grassmann M = Grassmann(Dprime, 1);
-	std::function<
-		std::tuple<
-			double,
-			EigenMatrix,
-			std::function<EigenMatrix (EigenMatrix)>
-		> (EigenMatrix, int)
-	> dfunc_quasi = [&](EigenMatrix Dprime_, int order){
-		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
-		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads);
+		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
 		double Exc_ = 0;
-		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
+		EigenMatrix Gxc_ = EigenZero(Ghf_.rows(), Ghf_.cols());
 		if (xc){
 			grid.getDensity(2 * D_);
 			xc.Evaluate("ev", grid);
+			xc.Evaluate("f", grid);
 			Exc_ = grid.getEnergy();
 			Gxc_ = grid.getFock();
 		}
@@ -102,17 +62,23 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedQuasiNewton(
 		C = Z * eigensolver.eigenvectors();
 		const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
 		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-		if ( order == 2 ) He = [](EigenMatrix vprime){
-			return EigenZero(vprime.rows(), vprime.cols());
+		if ( order == 2 ) He = [Z, &int4c2e, &grid, nthreads](EigenMatrix vprime){
+			const EigenMatrix v = Z * vprime * Z.transpose();
+			const EigenMatrix FhfU = int4c2e.ContractInts(v, nthreads, 0);
+			std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
+			std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
+			grid.getDensityU({2*v}, RhoUss, Rho1Uss, SigmaUss);
+			const EigenMatrix FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
+			const EigenMatrix FU = FhfU + FxcU;
+			return (EigenMatrix)(Z.transpose() * FU * Z);
 		};
 		return std::make_tuple(E_, Fprime_, He);
 	};
 	TrustRegionSetting tr_setting;
-	if (xc) tr_setting.R0 = 0.5;
 	assert(
 			TrustRegion(
-				dfunc_quasi, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.005, 20, 100, E, M, output
+				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
+				0.00001, 1, 100, E, M, output
 			) && "Convergence failed!"
 	);
 	return std::make_tuple(E, epsilons, C);
@@ -177,7 +143,7 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		}
 		const EigenMatrix Da_ = Ca * occa.asDiagonal() * Ca.transpose();
 		const EigenMatrix Db_ = Cb * occb.asDiagonal() * Cb.transpose();
-		auto [Ghfa_, Ghfb_] = int4c2e.ContractInts(Da_, Db_, nthreads);
+		auto [Ghfa_, Ghfb_] = int4c2e.ContractInts(Da_, Db_, nthreads, 1);
 		const EigenMatrix Fhfa_ = Hcore + Ghfa_;
 		const EigenMatrix Fhfb_ = Hcore + Ghfb_;
 		const EigenMatrix Fnewa_ = Fhfa_;
@@ -254,7 +220,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 			);
 		}
 		const EigenMatrix D_ = C * occupations.asDiagonal() * C.transpose();
-		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads);
+		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
 		if (xc){
@@ -297,29 +263,18 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 	const double T = env.Temperature;
 	const double Mu = env.ChemicalPotential;
 	if (output > 0) std::printf("Self-consistent field in %s-canonical ensemble\n", T > 0 ? "grand" : "micro");
-	if ( T > 0 && scf.compare("DIIS") != 0 ) throw std::runtime_error("Only DIIS optimization is supported for finite-temperature DFT!");
+	if ( T > 0 && scf == "DIIS" ) throw std::runtime_error("Only DIIS optimization is supported for finite-temperature DFT!");
 
 	const EigenMatrix Z = mwfn.getCoefficientMatrix(mwfn.Wfntype);
 
 	double E_scf = 0;
-	if ( scf.compare("NEWTON") == 0 ){
+	if ( scf == "GRASSMANN" ){
 		EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
-		auto [E, epsilons, C] = RestrictedNewton(int2c1e, int4c2e, Dprime, Z, output-1, nthreads);
+		auto [E, epsilons, C] = RestrictedNewton(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
 		E_scf = 2 * E;
 		mwfn.setEnergy(epsilons);
 		mwfn.setCoefficientMatrix(C);
-	}else if ( scf.compare("QUASI") == 0 ){
-		EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
-		auto [E, epsilons, C] = RestrictedQuasiNewton(
-				int2c1e, int4c2e,
-				xc, grid,
-				Dprime, Z,
-				output-1, nthreads
-		);
-		E_scf = 2 * E;
-		mwfn.setEnergy(epsilons);
-		mwfn.setCoefficientMatrix(C);
-	}else if ( scf.compare("DIIS") == 0 ){
+	}else if ( scf == "DIIS" ){
 		if ( mwfn.Wfntype == 0 ){
 			EigenMatrix F = mwfn.getFock();
 			EigenVector Occ = mwfn.getOccupation() / 2;

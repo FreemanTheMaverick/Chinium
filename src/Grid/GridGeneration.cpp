@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <sstream>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <map>
 #include <functional>
@@ -303,4 +304,30 @@ Grid::Grid(Grid& grid, int from, int length, int output){
 	__Copy_Sliced_Grid__(E2Rho2s);
 	__Copy_Sliced_Grid__(E2RhoSigmas);
 	__Copy_Sliced_Grid__(E2Sigma2s);
+}
+
+#define Show(member)\
+	std::cout << #member << this->member.dimensions() << std::endl;
+
+void Grid::WhatDoWeHave(){
+	std::cout << "MWFN " << this->MWFN << std::endl;
+
+	if ( this->Type == 0 ) std::cout << "DFT type: LDA" << std::endl;
+	if ( this->Type == 1 ) std::cout << "DFT type: GGA" << std::endl;
+	if ( this->Type == 2 ) std::cout << "DFT type: mGGA" << std::endl;
+
+	std::cout << "Number of grids: " << this->NumGrids << std::endl;
+	std::cout << "Xs " << this->Xs.size() << std::endl;
+	std::cout << "Ys " << this->Ys.size() << std::endl;
+	std::cout << "Zs " << this->Zs.size() << std::endl;
+	Show(Weights);
+
+	Show(AOs); Show(AO1s); Show(AO2Ls); Show(AO2s); Show(AO3s);
+	Show(Rhos); Show(Rho1s); Show(Sigmas); Show(Lapls); Show(Taus);
+	Show(RhoGrads); Show(Rho1Grads); Show(SigmaGrads);
+	Show(RhoHesss); Show(Rho1Hesss); Show(SigmaHesss);
+	Show(Es); Show(E1Rhos); Show(E1Sigmas); Show(E1Lapls); Show(E1Taus);
+	Show(E2Rho2s); Show(E2RhoSigmas); Show(E2Sigma2s);
+	Show(E3Rho3s); Show(E3Rho2Sigmas); Show(E3RhoSigma2s); Show(E3Sigma3s);
+	Show(E4Rho4s); Show(E4Rho3Sigmas); Show(E4Rho2Sigma2s); Show(E4RhoSigma3s); Show(E4Sigma4s);
 }

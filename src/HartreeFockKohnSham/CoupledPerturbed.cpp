@@ -126,7 +126,7 @@ std::tuple<
 
 		if (output) std::printf("Constructing U gradients of Fock matrix ...");
 		auto fock_start = __now__;
-		std::vector<EigenMatrix> undoneFU1s = int4c2e.ContractInts(undoneDs, nthreads);
+		std::vector<EigenMatrix> undoneFU1s = int4c2e.ContractInts(undoneDs, nthreads, 1);
 		std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
 		std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
 		for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
@@ -211,7 +211,7 @@ std::vector<EigenVector> OccupationGradient(
 				Ds[imatrix] += Des[p] * Exs[imatrix](p);
 			undoneDs[jundone++] = Ds[imatrix];
 		}
-		std::vector<EigenMatrix> undoneFUs = int4c2e.ContractInts(undoneDs, nthreads);
+		std::vector<EigenMatrix> undoneFUs = int4c2e.ContractInts(undoneDs, nthreads, 1);
 		std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
 		std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
 		for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
@@ -270,7 +270,7 @@ std::map<int, EigenMatrix> OccupationFluctuation(
 
 		if (output) std::printf("Constructing gradients of Fock matrix ...");
 		auto fock_start = __now__;
-		std::vector<EigenMatrix> undoneGs = int4c2e.ContractInts(undoneDs, nthreads);
+		std::vector<EigenMatrix> undoneGs = int4c2e.ContractInts(undoneDs, nthreads, 1);
 		std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
 		std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
 		for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;

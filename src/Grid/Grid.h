@@ -16,12 +16,12 @@ class Grid{ public:
 	Eigen::Tensor<double, 3> AO3s; // ..., (xxx, xxy, xyy, yyy, xxz, xyz, yyz, xzz, yzz, zzz)
 	void getAO(int derivative, int output);
 
-	// Temporary values (before (CP-)SCF converges)
-	Eigen::Tensor<double, 1> Rhos_Cache;
-	Eigen::Tensor<double, 2> Rho1s_Cache;
-	Eigen::Tensor<double, 1> Sigmas_Cache;
-	Eigen::Tensor<double, 1> Lapls_Cache;
-	Eigen::Tensor<double, 1> Taus_Cache;
+	Eigen::Tensor<double, 1> Rhos;
+	Eigen::Tensor<double, 2> Rho1s;
+	Eigen::Tensor<double, 1> Sigmas;
+	Eigen::Tensor<double, 1> Lapls;
+	Eigen::Tensor<double, 1> Taus;
+	double getNumElectrons();
 	void getDensity(EigenMatrix D);
 	void getDensityU(
 			std::vector<EigenMatrix> Ds_,
@@ -29,16 +29,6 @@ class Grid{ public:
 			std::vector<Eigen::Tensor<double, 2>>& Rho1ss,
 			std::vector<Eigen::Tensor<double, 1>>& Sigmass
 	);
-
-	// True values
-	Eigen::Tensor<double, 1> Rhos;
-	Eigen::Tensor<double, 2> Rho1s;
-	Eigen::Tensor<double, 1> Sigmas;
-	Eigen::Tensor<double, 1> Lapls;
-	Eigen::Tensor<double, 1> Taus;
-	void SaveDensity();
-	void RetrieveDensity();
-	double getNumElectrons();
 
 	Eigen::Tensor<double, 3> RhoGrads;
 	Eigen::Tensor<double, 4> Rho1Grads;
@@ -80,4 +70,6 @@ class Grid{ public:
 			std::vector<Eigen::Tensor<double, 2>>& Rho1ss,
 			std::vector<Eigen::Tensor<double, 1>>& Sigmass
 	);
+
+	void WhatDoWeHave();
 };

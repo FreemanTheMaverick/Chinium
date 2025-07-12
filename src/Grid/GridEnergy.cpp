@@ -11,9 +11,8 @@
 
 double Grid::getEnergy(){
 	assert( this->NumGrids == Weights.dimension(0) );
-	assert( this->Rhos.size() ? this->NumGrids == Rhos.dimension(0) : this->NumGrids == Rhos_Cache.dimension(0) );
+	assert( this->NumGrids == Rhos.dimension(0) );
 	assert( this->NumGrids == Es.dimension(0) );
-	Eigen::Tensor<double, 1>& Rhos = this->Rhos.size() ? this->Rhos : this->Rhos_Cache;
 	const Eigen::Tensor<double, 0> e = (Weights * Rhos * Es).sum();
 	return e();
 }

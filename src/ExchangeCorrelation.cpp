@@ -122,8 +122,8 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 	}*/
 
 #define __XC_GGA__\
-	assert( rhos.size() == (int)ngrids );\
-	assert( sigmas.size() == (int)ngrids );\
+	assert( rhos.size() == ngrids );\
+	assert( sigmas.size() == ngrids );\
 	if ( order == "e" ){\
 		__Allocate_Temporary__(es)\
 		xc_gga_exc(&func, ngrids, rhos.data(), sigmas.data(), es.data());\
@@ -175,10 +175,10 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 	}*/
 
 #define __XC_MGGA__\
-	assert( rhos.size() == (int)ngrids );\
-	assert( sigmas.size() == (int)ngrids );\
-	assert( lapls.size() == (int)ngrids );\
-	assert( taus.size() == (int)ngrids );\
+	assert( rhos.size() == ngrids );\
+	assert( sigmas.size() == ngrids );\
+	assert( lapls.size() == ngrids );\
+	assert( taus.size() == ngrids );\
 	if ( order == "e" ){\
 		__Allocate_Temporary__(es)\
 		xc_mgga_exc(&func, ngrids, rhos.data(), sigmas.data(), lapls.data(), taus.data(), es.data());\
@@ -212,10 +212,10 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 
 void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 	const int ngrids = grid.NumGrids;
-	__Alias_Density__(rhos, Rhos, Rhos_Cache)
-	__Alias_Density__(sigmas, Sigmas, Sigmas_Cache)
-	__Alias_Density__(lapls, Lapls, Lapls_Cache)
-	__Alias_Density__(taus, Taus, Taus_Cache)
+	Eigen::Tensor<double, 1>& rhos = grid.Rhos;
+	Eigen::Tensor<double, 1>& sigmas = grid.Sigmas;
+	Eigen::Tensor<double, 1>& lapls = grid.Lapls;
+	Eigen::Tensor<double, 1>& taus = grid.Taus;
 	if ( order == "e" ){
 		grid.Es.setZero();
 	}else if ( order == "v" ){

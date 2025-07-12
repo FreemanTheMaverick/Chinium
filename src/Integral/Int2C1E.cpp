@@ -178,9 +178,8 @@ EigenMatrix getTwoCenter2(
 	return hessian + hessian.transpose() - (EigenMatrix)hessian.diagonal().asDiagonal();
 }
 
-Int2C1E::Int2C1E(Mwfn& mwfn, bool verbose){
+Int2C1E::Int2C1E(Mwfn& mwfn){
 	this->MWFN = &mwfn;
-	this->Verbose = verbose;
 	const int natoms = mwfn.getNumCenters();
 	this->OverlapGrads.resize(3 * natoms);
 	this->KineticGrads.resize(3 * natoms);
@@ -205,12 +204,12 @@ Int2C1E::Int2C1E(Mwfn& mwfn, bool verbose){
 				center.Coordinates[1],\
 				center.Coordinates[2])));
 
-void Int2C1E::CalculateIntegrals(int order){
+void Int2C1E::CalculateIntegrals(int order, int output){
 	__Make_Basis_Set__(this->MWFN)
 	__Make_Point_Charges__
 	const int natoms = this->MWFN->getNumCenters();
 	if ( order == 0 ){
-		if (this->Verbose) std::printf("Calculating 2c-1e integrals ... ");
+		if (output>0) std::printf("Calculating 2c-1e integrals ... ");
 		const auto start = __now__;
 		std::vector<EigenMatrix> matrices = getTwoCenter0( obs, libint2charges, libint2::Operator::emultipole2 );
 		this->Overlap = this->MWFN->Overlap = matrices[0];
@@ -225,9 +224,9 @@ void Int2C1E::CalculateIntegrals(int order){
 		this->QuadrapoleZZ = matrices[9];
 		this->Kinetic = getTwoCenter0( obs, libint2charges, libint2::Operator::kinetic )[0];
 		this->Nuclear = getTwoCenter0( obs, libint2charges, libint2::Operator::nuclear )[0];
-		if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+		if (output>0) std::printf("Done in %f s\n", __duration__(start, __now__));
 	}else if ( order == 1 ){
-		if (this->Verbose) std::printf("Calculating 2c-1e integral nuclear gradient ... ");
+		if (output>0) std::printf("Calculating 2c-1e integral nuclear gradient ... ");
 		const auto start = __now__;
 		const std::vector<std::vector<EigenMatrix>> overlapgrads = getTwoCenter1(obs, libint2charges, shell2atom, libint2::Operator::overlap);
 		const std::vector<std::vector<EigenMatrix>> kineticgrads = getTwoCenter1(obs, libint2charges, shell2atom, libint2::Operator::kinetic);
@@ -237,7 +236,7 @@ void Int2C1E::CalculateIntegrals(int order){
 			this->KineticGrads[tot] = kineticgrads[iatom][xyz];
 			this->NuclearGrads[tot] = nucleargrads[iatom][xyz];
 		}
-		if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+		if (output>0) std::printf("Done in %f s\n", __duration__(start, __now__));
 	}
 }
 
@@ -245,10 +244,10 @@ std::tuple<
 	std::vector<double>,
 	std::vector<double>,
 	std::vector<double>
-> Int2C1E::ContractGrads(EigenMatrix D, EigenMatrix W){
+> Int2C1E::ContractGrads(EigenMatrix D, EigenMatrix W, int output){
 	std::vector<EigenMatrix> Ds = {D};
 	std::vector<EigenMatrix> Ws = {W};
-	auto [SW, KD, VD] = this->ContractGrads(Ds, Ws);
+	auto [SW, KD, VD] = this->ContractGrads(Ds, Ws, output);
 	return std::make_tuple(SW[0], KD[0], VD[0]);
 }
 
@@ -256,13 +255,13 @@ std::tuple<
 	std::vector<std::vector<double>>,
 	std::vector<std::vector<double>>,
 	std::vector<std::vector<double>>
-> Int2C1E::ContractGrads(std::vector<EigenMatrix>& Ds, std::vector<EigenMatrix>& Ws){
+> Int2C1E::ContractGrads(std::vector<EigenMatrix>& Ds, std::vector<EigenMatrix>& Ws, int output){
 	const int natoms = this->MWFN->getNumCenters();
 	const int nDs = (int)Ds.size();
 	const int nWs = (int)Ws.size();
 	if ( this->OverlapGrads[0].size() == 0 || this->KineticGrads[0].size() == 0 || this->NuclearGrads[0].size() == 0 )
-		this->CalculateIntegrals(1);
-	if (this->Verbose) std::printf("Contracting 2c-1e integral gradients with %d Ds and %d Ws ... ", nDs, nWs);
+		this->CalculateIntegrals(1, output);
+	if (output>0) std::printf("Contracting 2c-1e integral gradients with %d Ds and %d Ws ... ", nDs, nWs);
 	const auto start = __now__;
 	std::vector<std::vector<double>> SW(nWs, std::vector<double>(3 * natoms));
 	std::vector<std::vector<double>> KD(nDs, std::vector<double>(3 * natoms));
@@ -274,7 +273,7 @@ std::tuple<
 		KD[i][j] = Ds[i].cwiseProduct(this->KineticGrads[j]).sum();
 		VD[i][j] = Ds[i].cwiseProduct(this->NuclearGrads[j]).sum();
 	}
-	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+	if (output>0) std::printf("Done in %f s\n", __duration__(start, __now__));
 	return std::make_tuple(SW, KD, VD);
 }
 
@@ -282,8 +281,8 @@ std::tuple<
 	std::vector<std::vector<double>>,
 	std::vector<std::vector<double>>,
 	std::vector<std::vector<double>>
-> Int2C1E::ContractHesss(EigenMatrix D, EigenMatrix W){
-	if (this->Verbose) std::printf("Contracting 2c-1e integral nuclear hessians with D and W ... ");
+> Int2C1E::ContractHesss(EigenMatrix D, EigenMatrix W, int output){
+	if (output>0) std::printf("Contracting 2c-1e integral nuclear hessians with D and W ... ");
 	const auto start = __now__;
 	__Make_Basis_Set__(this->MWFN)
 	__Make_Point_Charges__
@@ -299,6 +298,6 @@ std::tuple<
 			KD[i][j] = KD_(i, j);
 			VD[i][j] = VD_(i, j);
 	}
-	if (this->Verbose) std::printf("Done in %f s\n", __duration__(start, __now__));
+	if (output>0) std::printf("Done in %f s\n", __duration__(start, __now__));
 	return std::make_tuple(SW, KD, VD);
 }

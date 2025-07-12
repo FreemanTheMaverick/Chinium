@@ -67,8 +67,8 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 	std::vector<EigenMatrix> Fskeletons(3 * natoms, EigenMatrix(nbasis, nbasis));
 
 	// HF gradient
-	auto [SWgrads, KDgrads, VDgrads] = int2c1e.ContractGrads(D, W); // std::vector<double>
-	const std::vector<double> DGDgrads = int4c2e.ContractGrads(D, D);
+	auto [SWgrads, KDgrads, VDgrads] = int2c1e.ContractGrads(D, W, 1); // std::vector<double>
+	const std::vector<double> DGDgrads = int4c2e.ContractGrads(D, D, 1);
 	__VectorIncrement__(Gradient, KDgrads, 2)
 	__VectorIncrement__(Gradient, VDgrads, 2)
 	__VectorIncrement__(Gradient, SWgrads, -2)
@@ -76,13 +76,13 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 
 	// HF skeleton hessian and skeleton Fock
 	if ( derivative > 1 ){
-		auto [SWhesss, KDhesss, VDhesss] = int2c1e.ContractHesss(D, W); // std::vector<std::vector<double>>
-		const std::vector<std::vector<double>> DGDhesss = int4c2e.ContractHesss(D, D);
+		auto [SWhesss, KDhesss, VDhesss] = int2c1e.ContractHesss(D, W, 1); // std::vector<std::vector<double>>
+		const std::vector<std::vector<double>> DGDhesss = int4c2e.ContractHesss(D, D, 1);
 		__VectorVectorIncrement__(Hessian, SWhesss, -2)
 		__VectorVectorIncrement__(Hessian, KDhesss, 2)
 		__VectorVectorIncrement__(Hessian, VDhesss, 2)
 		__VectorVectorIncrement__(Hessian, DGDhesss, 1)
-		const std::vector<EigenMatrix> DGgrads = int4c2e.ContractGrads(D);
+		const std::vector<EigenMatrix> DGgrads = int4c2e.ContractGrads(D, 1);
 		__VectorIncrement__(Fskeletons, int2c1e.KineticGrads, 1)
 		__VectorIncrement__(Fskeletons, int2c1e.NuclearGrads, 1)
 		__VectorIncrement__(Fskeletons, DGgrads, 1)

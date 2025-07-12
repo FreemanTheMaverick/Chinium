@@ -58,7 +58,7 @@ EigenMatrix SuperpositionAtomicPotential(std::string path, std::vector<MwfnCente
 void GuessSCF(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Grid& grid, std::string guess, const bool output){
 	EigenMatrix V = EigenZero(mwfn.getNumBasis(), mwfn.getNumBasis());
 	bool potential = 0;
-	if ( guess.compare("SAP") == 0 ){
+	if ( guess == "SAP" ){
 		std::string path = std::getenv("CHINIUM_PATH"); path += "/SAP/";
 		if (output) std::printf("SCF initial guess type ... SAP\n");
 		if (output) std::printf("Calculating superposition of atomic potential ... ");
