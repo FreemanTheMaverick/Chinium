@@ -1,7 +1,5 @@
 #include <Eigen/Dense>
 #include <unsupported/Eigen/CXX11/Tensor>
-#include <sstream>
-#include <fstream>
 #include <cstdio>
 #include <chrono>
 #include <cmath>
@@ -13,31 +11,15 @@
 #include "../Macro.h"
 #include "../Integral/Int2C1E.h"
 #include "../Grid/Grid.h"
+#include "SAP.h"
 
-#include <iostream>
-
-#define __nlines__ 751
-
-EigenMatrix SuperpositionAtomicPotential(std::string path, std::vector<MwfnCenter>& centers, Grid& grid){
+EigenMatrix SuperpositionAtomicPotential(std::vector<MwfnCenter>& centers, Grid& grid){
 	int ngrids = grid.NumGrids;
-	__Z_2_Name__
 	grid.E1Rhos.resize(ngrids); grid.E1Rhos.setZero();
 	for ( MwfnCenter& center : centers ){
-		const std::string atomname = Z2Name[center.Index];
 		const double atomx = center.Coordinates[0];
 		const double atomy = center.Coordinates[1];
 		const double atomz = center.Coordinates[2];
-		std::ifstream sapfile( path + "/v_" + atomname + ".dat" );
-		assert("SAP file is missing!" && sapfile.good());
-		double Rs[__nlines__];
-		double Zs[__nlines__];
-		for ( int iline=0 ; iline < __nlines__; iline++ ){
-			std::string thisline;
-			std::getline(sapfile, thisline);
-			std::stringstream ss(thisline);
-			ss >> Rs[iline];
-			ss >> Zs[iline];
-		}
 		for ( long int igrid = 0; igrid < ngrids; igrid++ ){
 			const double x = grid.Xs[igrid] - atomx;
 			const double y = grid.Ys[igrid] - atomy;
@@ -45,26 +27,27 @@ EigenMatrix SuperpositionAtomicPotential(std::string path, std::vector<MwfnCente
 			const double r = std::sqrt(x * x + y * y + z * z) + 1.e-12;
 			double bestdiff = 114514;
 			double bestvap = 114514;
-			for ( int iline = 0; iline < __nlines__; iline++ ){
-				bestdiff = ( bestdiff < std::abs( Rs[iline] - r ) ) ? bestdiff : std::abs( Rs[iline] - r );
-				bestvap = ( bestdiff < std::abs( Rs[iline] - r ) ) ? bestvap : Zs[iline] / r;
+			for ( int iradius = 0; iradius < __nradii__; iradius++ ){
+				if ( bestdiff > std::abs( Radii[iradius] - r ) ){
+					bestdiff = std::abs( Radii[iradius] - r );
+					bestvap = SAPs[center.Index][iradius] / r;
+				}
 			}
 			grid.E1Rhos(igrid) += bestvap;
 		}
 	}
-	return grid.getFock(0);
+	return grid.getFock(0); // Pretending LDA.
 }
 
 void GuessSCF(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Grid& grid, std::string guess, const bool output){
 	EigenMatrix V = EigenZero(mwfn.getNumBasis(), mwfn.getNumBasis());
 	bool potential = 0;
 	if ( guess == "SAP" ){
-		std::string path = std::getenv("CHINIUM_PATH"); path += "/SAP/";
 		if (output) std::printf("SCF initial guess type ... SAP\n");
 		if (output) std::printf("Calculating superposition of atomic potential ... ");
 		const auto start = __now__;
 		potential = 1;
-		V = SuperpositionAtomicPotential(path, mwfn.Centers, grid);
+		V = SuperpositionAtomicPotential(mwfn.Centers, grid);
 		if (output) std::printf("%f s\n", __duration__(start, __now__));
 	}else assert("Unrecognized initial guess type!" && 0);
 
