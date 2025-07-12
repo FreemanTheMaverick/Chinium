@@ -26,6 +26,91 @@
 #define S (int2c1e.Overlap)
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
 
+EigenMatrix RestrictedHessianARH(std::deque<EigenMatrix> Ds, std::deque<EigenMatrix> Fs, EigenMatrix v){
+	assert( Ds.size() == Fs.size() );
+	assert( Ds.size() > 1 );
+	const int size = (int)Ds.size() - 1;
+	const EigenMatrix D = Ds.back();
+	const EigenMatrix F = Fs.back();
+	const int nbasis = D.cols();
+	std::vector<EigenMatrix> Ddiff(size, EigenZero(nbasis, nbasis));
+	std::vector<EigenMatrix> Fdiff(size, EigenZero(nbasis, nbasis));
+	for ( int i = 0; i < size; i++ ){
+		Ddiff[i] = Ds[i] - D;
+		Fdiff[i] = Fs[i] - F;
+	}
+	EigenMatrix T = EigenZero(size, size);
+	for ( int i = 0; i < size; i++ ) for ( int j = i; j < size; j++ ){
+		T(i, j) = T(j, i) = Ddiff[i].cwiseProduct(Ddiff[j]).sum();
+	}
+	const EigenMatrix Tinv = T.inverse();
+	EigenMatrix Hv = EigenZero(nbasis, nbasis);
+	for ( int i = 0; i < size; i++ ) for ( int j = 0; j < size; j++ ){
+		Hv += Fdiff[i] * Tinv(i, j) * Ddiff[j].cwiseProduct(v).sum();
+	}
+	return 0.5 * ( Hv + Hv.transpose() );
+}
+
+std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmannARH(
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
+		EigenMatrix Dprime, EigenMatrix Z,
+		int output, int nthreads){
+	double E = 0;
+	EigenVector epsilons = EigenZero(Z.cols(), 1);
+	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+	std::deque<EigenMatrix> Dprimes = {};
+	std::deque<EigenMatrix> Fprimes = {};
+	Grassmann M = Grassmann(Dprime, 1);
+	std::function<
+		std::tuple<
+			double,
+			EigenMatrix,
+			std::function<EigenMatrix (EigenMatrix)>
+		> (EigenMatrix, int)
+	> dfunc_newton = [&](EigenMatrix Dprime_, int order){
+		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
+		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
+		double Exc_ = 0;
+		EigenMatrix Gxc_ = EigenZero(Ghf_.rows(), Ghf_.cols());
+		if (xc){
+			grid.getDensity(2 * D_);
+			xc.Evaluate("ev", grid);
+			Exc_ = grid.getEnergy();
+			Gxc_ = grid.getFock();
+		}
+		const EigenMatrix Fhf_ = Hcore + Ghf_;
+		const EigenMatrix F_ = Fhf_+ Gxc_;
+		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
+		eigensolver.compute(Fprime_);
+		epsilons = eigensolver.eigenvalues();
+		C = Z * eigensolver.eigenvectors();
+		Dprimes.push_back(Dprime_);
+		Fprimes.push_back(Fprime_);
+		if ( Dprimes.size() > 6 ){
+			Dprimes.pop_front();
+			Fprimes.pop_front();
+		}
+		const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
+		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
+		if ( order == 2 ) He = [&Dprimes, &Fprimes](EigenMatrix vprime){
+			if ( Dprimes.size() < 2 ) return vprime;
+			const EigenMatrix FUprime = RestrictedHessianARH(Dprimes, Fprimes, vprime);
+			return FUprime;
+		};
+		return std::make_tuple(E_, Fprime_, He);
+	};
+	TrustRegionSetting tr_setting;
+	assert(
+			TrustRegion(
+				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
+				0.00001, 1, 100, E, M, output
+			) && "Convergence failed!"
+	);
+	return std::make_tuple(E, epsilons, C);
+}
+
 
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmann(
@@ -270,7 +355,13 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 	const EigenMatrix Z = mwfn.getCoefficientMatrix(mwfn.Wfntype);
 
 	double E_scf = 0;
-	if ( scf == "GRASSMANN" ){
+	if ( scf == "GRASSMANN-ARH" ){
+		EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
+		auto [E, epsilons, C] = RestrictedGrassmannARH(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
+		E_scf = 2 * E;
+		mwfn.setEnergy(epsilons);
+		mwfn.setCoefficientMatrix(C);
+	}else if ( scf == "GRASSMANN" ){
 		EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
 		auto [E, epsilons, C] = RestrictedGrassmann(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
 		E_scf = 2 * E;

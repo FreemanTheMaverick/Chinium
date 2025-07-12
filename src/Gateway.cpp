@@ -7,7 +7,6 @@
 #include <string>
 #include <algorithm>
 #include <map>
-#include <cassert>
 
 #include "Macro.h"
 
@@ -23,20 +22,19 @@ std::vector<std::vector<double>> ReadXYZ(std::string inp){
 	int natoms = 0;
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("XYZ") == 0 ){
+		if ( thisline == "XYZ" ){
 			found = 1;
 			std::getline(file, thisline);
 			__To_Upper__(thisline);
-			if ( thisline.compare("READ") == 0 )
-				return {};
+			if ( thisline == "READ" ) return {};
 			std::stringstream ss(thisline);
 			ss >> natoms;
-			assert(natoms > 0 && "Invalid number of atoms!");
+			if ( natoms <= 0 ) throw std::runtime_error("Invalid number of atoms!");
 			atoms.resize(natoms);
 			for ( int iatom = 0; iatom < natoms; iatom++ ){
 				std::getline(file, thisline);
 				__To_Upper__(thisline);
-				assert(thisline.length() > 0 && "Missing atom!");
+				if ( thisline.length() == 0 ) throw std::runtime_error("Missing atom!");
 				std::stringstream ss_(thisline);
 				std::string symbol; ss_ >> symbol;
 				const double Z = Name2Z[symbol];
@@ -52,7 +50,7 @@ std::vector<std::vector<double>> ReadXYZ(std::string inp){
 			}
 		}
 	}
-	assert(found && "Missing atomic coordinates");
+	if ( ! found ) throw std::runtime_error("Missing atomic coordinates");
 	return atoms;
 }
 
@@ -63,18 +61,18 @@ std::string ReadBasisSet(std::string inp){
 	bool found = 0;
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("BASIS") == 0 ){
+		if ( thisline == "BASIS" ){
 			found = 1;
 			std::getline(file, thisline);
 			std::string thisline_ = thisline;
 			__To_Upper__(thisline_);
-			if ( thisline_.compare("READ") == 0 )
+			if ( thisline_ == "READ" )
 				return "";
 			std::stringstream ss(thisline);
 			ss >> basis;
 		}
 	}
-	assert(basis.length() > 0 && "Missing basis set name!");
+	if ( basis.length() == 0 ) throw std::runtime_error("Missing basis set name!");
 	return basis;
 }
 
@@ -90,7 +88,7 @@ std::tuple<int, int> ReadNumElectrons(std::string inp){
 	bool found = 0;
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("CHARGE") == 0 ){
+		if ( thisline == "CHARGE" ){
 			found = 1;
 			std::getline(file, thisline);
 			if ( thisline.length() == 0 ) throw std::runtime_error("Missing charge!");
@@ -102,7 +100,7 @@ std::tuple<int, int> ReadNumElectrons(std::string inp){
 	found = 0;
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("SPIN") == 0 ){
+		if ( thisline == "SPIN" ){
 			found = 1;
 			std::getline(file, thisline);
 			if ( thisline.length() == 0 ) throw std::runtime_error("Missing spin!");
@@ -127,10 +125,10 @@ int ReadWfnType(std::string inp){
 	int wfntype = -1; // 0 for spin-restricted, 1 for spin-unrestricted, -1 for depending on nelec and spin.
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("WFNTYPE")==0 ){
+		if ( thisline == "WFNTYPE" ){
 			found = 1;
 			std::getline(file, thisline);
-			assert(thisline.length() > 0 && "Missing WfnType!");
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing WfnType!");
 			std::stringstream ss(thisline);
 			ss >> wfntype;
 		}
@@ -146,15 +144,15 @@ int ReadNumThreads(std::string inp){
 	int nthreads = 1;
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("NTHREADS")==0 ){
+		if ( thisline == "NTHREADS" ){
 			found = 1;
 			std::getline(file, thisline);
-			assert(thisline.length() > 0 && "Missing nthreads!");
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing nthreads!");
 			std::stringstream ss(thisline);
 			ss >> nthreads;
 		}
 	}
-	assert(nthreads > 0 && "Invalid number of threads!");
+	if ( nthreads < 0 ) throw std::runtime_error("Invalid number of threads!");
 	return nthreads;
 }
 
@@ -165,16 +163,16 @@ std::string ReadJobType(std::string inp){
 	std::string jobtype = "SCF";
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("JOBTYPE") == 0 ){
+		if ( thisline == "JOBTYPE" ){
 			found = 1;
 			std::getline(file, thisline);
 			__To_Upper__(thisline);
-			assert(thisline.length() > 0 && "Missing job type!");
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing job type!");
 			std::stringstream ss(thisline);
 			ss >> jobtype;
 		}
 	}
-	assert(( jobtype.compare("SCF") == 0 || jobtype.compare("LOCALIZATION") == 0 ) && "Invalid job type!");
+	if ( jobtype != "SCF" && jobtype != "LOCALIZATION" ) throw std::runtime_error("Invalid job type!");
 	return jobtype;
 }
 
@@ -185,7 +183,7 @@ std::string ReadSCF(std::string inp){
 	std::string scf = "DIIS";
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("SCFTYPE") == 0 ){
+		if ( thisline == "SCFTYPE" ){
 			found = 1;
 			std::getline(file, thisline);
 			__To_Upper__(thisline);
@@ -194,7 +192,7 @@ std::string ReadSCF(std::string inp){
 			ss >> scf;
 		}
 	}
-	if ( scf != "DIIS" && scf != "GRASSMANN" ) throw std::runtime_error("Invalid SCF type!");
+	if ( scf != "DIIS" && scf != "GRASSMANN" && scf != "GRASSMANN-ARH" ) throw std::runtime_error("Invalid SCF type!");
 	return scf;
 }
 
@@ -205,16 +203,16 @@ std::string ReadGuess(std::string inp){
 	std::string guess = "SAP";
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("GUESS") == 0 ){
+		if ( thisline == "GUESS" ){
 			found = 1;
 			std::getline(file, thisline);
 			__To_Upper__(thisline);
-			assert(thisline.length() > 0 && "Missing guess!");
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing guess!");
 			std::stringstream ss(thisline);
 			ss >> guess;
 		}
 	}
-	assert(( guess.compare("SAP") == 0 || guess.compare("READ") == 0 ) && "Invalid guess!");
+	if ( guess != "SAP" && guess != "READ" ) throw std::runtime_error("Invalid guess!");
 	return guess;
 }
 
@@ -225,11 +223,11 @@ std::string ReadGrid(std::string inp){
 	std::string grid = "";
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("GRID") == 0){
+		if ( thisline == "GRID" ){
 			found = 1;
 			std::getline(file, thisline);
 			__To_Upper__(thisline);
-			assert(thisline.length() > 0 && "Missing grid!");
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing grid!");
 			std::stringstream ss(thisline);
 			ss >> grid;
 		}
@@ -244,11 +242,11 @@ std::string ReadMethod(std::string inp){
 	std::string method = "HF";
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("METHOD") == 0 ){
+		if ( thisline == "METHOD" ){
 			found = 1;
 			std::getline(file, thisline);
 			__To_Upper__(thisline);
-			assert(thisline.length() > 0 && "Missing method!");
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing method!");
 			std::stringstream ss(thisline);
 			ss >> method;
 		}
@@ -263,15 +261,15 @@ int ReadDerivative(std::string inp){
 	double order = 0;
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("DERIVATIVE") == 0 ){
+		if ( thisline == "DERIVATIVE" ){
 			found = 1;
 			std::getline(file, thisline);
-			assert(thisline.length() > 0 && "Missing derivative!");
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing derivative!");
 			std::stringstream ss(thisline);
 			ss >> order;
 		}
 	}
-	assert(order >= 0 && "Invalid order of derivative!");
+	if ( order < 0 ) throw std::runtime_error("Invalid order of derivative!");
 	return order;
 }
 
@@ -282,15 +280,15 @@ double ReadTemperature(std::string inp){
 	double temperature = 0;
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if (thisline.compare("TEMPERATURE")==0){
+		if ( thisline == "TEMPERATURE" ){
 			found = 1;
 			std::getline(file, thisline);
 			std::stringstream ss(thisline);
-			assert(thisline.length() > 0 && "Missing temperature!");
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing temperature!");
 			ss >> temperature;
 		}
 	}
-	assert(temperature >= 0 && "Invalid temperature!");
+	if ( temperature < 0 ) throw std::runtime_error("Invalid temperature!");
 	return temperature;
 }
 
@@ -301,11 +299,11 @@ double ReadChemicalPotential(std::string inp){
 	double chemicalpotential = 0;
 	while ( std::getline(file, thisline) && ! found ){
 		__To_Upper__(thisline);
-		if ( thisline.compare("CHEMICALPOTENTIAL") == 0 ){
+		if ( thisline == "CHEMICALPOTENTIAL" ){
 			found = 1;
 			std::getline(file, thisline);
 			std::stringstream ss(thisline);
-			assert(thisline.length() > 0 && "Missing chemical potential!");
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing chemical potential!");
 			ss >> chemicalpotential;
 		}
 	}
