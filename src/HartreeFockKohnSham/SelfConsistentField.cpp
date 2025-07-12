@@ -26,7 +26,9 @@
 #define S (int2c1e.Overlap)
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedNewton(
+
+
+std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
@@ -270,7 +272,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 	double E_scf = 0;
 	if ( scf == "GRASSMANN" ){
 		EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
-		auto [E, epsilons, C] = RestrictedNewton(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
+		auto [E, epsilons, C] = RestrictedGrassmann(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
 		E_scf = 2 * E;
 		mwfn.setEnergy(epsilons);
 		mwfn.setCoefficientMatrix(C);

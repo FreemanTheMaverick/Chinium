@@ -194,7 +194,7 @@ std::string ReadSCF(std::string inp){
 			ss >> scf;
 		}
 	}
-	if ( scf.compare("DIIS") != 0 && scf.compare("NEWTON") != 0 && scf.compare("QUASI") != 0 ) throw std::runtime_error("Invalid SCF type!");
+	if ( scf != "DIIS" && scf != "GRASSMANN" ) throw std::runtime_error("Invalid SCF type!");
 	return scf;
 }
 
