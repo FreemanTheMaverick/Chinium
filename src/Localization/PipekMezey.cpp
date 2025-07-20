@@ -12,21 +12,20 @@
 
 #include "../Macro.h"
 
-#include <iostream>
-
 
 EigenMatrix PipekMezey(std::vector<EigenMatrix> Qrefs, int output){
 	const EigenMatrix kappa = Eigen::MatrixXd::Random(Qrefs[0].cols(), Qrefs[0].cols()) / 100000000 ;
 	const EigenMatrix p = ( kappa - kappa.transpose() ).exp();
-	Orthogonal M = Orthogonal(p, 1);
+	Iterate M({Orthogonal(p).Clone()}, 1);
 
 	std::function<
 		std::tuple<
 			double,
-			EigenMatrix,
-			std::function<EigenMatrix (EigenMatrix)>
-		>(EigenMatrix, int)
-	> func = [Qrefs](EigenMatrix U, int order){
+			std::vector<EigenMatrix>,
+			std::vector<std::function<EigenMatrix (EigenMatrix)>>
+		>(std::vector<EigenMatrix>, int)
+	> func = [Qrefs](std::vector<EigenMatrix> Us, int order){
+		const EigenMatrix U = Us[0];
 
 		std::vector<EigenDiagonal> Qdiags(Qrefs.size());
 		for ( int i = 0; i < (int)Qrefs.size(); i++ )
@@ -55,7 +54,11 @@ EigenMatrix PipekMezey(std::vector<EigenMatrix> Qrefs, int output){
 			return -4 * hess1 + -8 * hess2;
 		};
 
-		return std::make_tuple(L, Ge, He);
+		return std::make_tuple(
+				L,
+				std::vector<EigenMatrix>{Ge},
+				std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
+		);
 	};
 
 	double L = 0;
@@ -67,5 +70,5 @@ EigenMatrix PipekMezey(std::vector<EigenMatrix> Qrefs, int output){
 			) && "Convergence Failed!"
 	);
 
-	return M.P;
+	return M.Point;
 }

@@ -31,6 +31,7 @@ class Int4C2E{ public:
 	void getThreadPointers(int nthreads, int output);
 	void CalculateIntegrals(int order, int output);
 	EigenMatrix ContractInts(EigenMatrix D, int nthreads, int output);
+	std::tuple<EigenMatrix, EigenMatrix> ContractInts2(EigenMatrix Da, int nthreads, int output);
 	std::vector<EigenMatrix> ContractInts(std::vector<EigenMatrix>& Ds, int nthreads, int output);
 	std::tuple<EigenMatrix, EigenMatrix> ContractInts(EigenMatrix Da, EigenMatrix Db, int nthreads, int output);
 	std::vector<EigenMatrix> ContractGrads(EigenMatrix D, int output);

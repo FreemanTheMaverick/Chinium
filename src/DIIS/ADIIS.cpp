@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <deque>
+#include <vector>
 #include <functional>
 #include <string>
 #include <cstdio>
@@ -44,22 +45,26 @@ EigenVector ADIIS::Extrapolate(int index){
 	EigenMatrix p = EigenZero(size, 1); p(size - 1) = 0.9;
 	for ( int i = 0; i < size - 1; i++ )
 		p(i) = ( 1. - p(size - 1) ) / ( size - 1 );
-	Simplex M = Simplex(p, 1);
+	Iterate M({Simplex(p).Clone()}, 1);
 
 	std::function<
 		std::tuple<
 			double,
-			EigenMatrix,
-			std::function<EigenMatrix (EigenMatrix)>
-		> (EigenMatrix, int)
-	> func = [A, B](EigenMatrix x_, int order){
+			std::vector<EigenMatrix>,
+			std::vector<std::function<EigenMatrix (EigenMatrix)>>
+		> (std::vector<EigenMatrix>, int)
+	> func = [A, B](std::vector<EigenMatrix> xs_, int){
+		const EigenMatrix x_ = xs_[0];
 		const double L = Dot(x_, A + 0.5 * B * x_);
 		const EigenMatrix G = A + B * x_;
-		std::function<EigenMatrix (EigenMatrix)> H = [](EigenMatrix v__){ return v__; };
-		if ( order == 2) H = [B](EigenMatrix v__){
+		const std::function<EigenMatrix (EigenMatrix)> H = [B](EigenMatrix v__){
 			return (EigenMatrix)(B * v__);
 		};
-		return std::make_tuple(L, G, H);
+		return std::make_tuple(
+				L,
+				std::vector<EigenMatrix>{G},
+				std::vector<std::function<EigenMatrix (EigenMatrix)>>{H}
+		);
 	};
 
 	if( this->Verbose > 1 ) std::printf("| Calling Maniverse for optimization on the Simplex manifold\n");
@@ -74,5 +79,5 @@ EigenVector ADIIS::Extrapolate(int index){
 		std::printf("| Warning: This is probably fine if SCF convergence is met later.\n");
 	}
 
-	return (EigenVector)M.P;
+	return (EigenVector)M.Point;
 }

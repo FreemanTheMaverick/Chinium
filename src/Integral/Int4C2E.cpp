@@ -778,6 +778,61 @@ std::tuple<EigenMatrix, EigenMatrix> Int4C2E::ContractInts(EigenMatrix Da, Eigen
 	return std::make_tuple(Ja + Jb - Ka, Ja + Jb - Kb);
 }
 
+std::tuple<EigenMatrix, EigenMatrix> Guhf(
+		short int* is, short int* js, short int* ks, short int* ls,
+		double* ints, long int length,
+		EigenMatrix Da, double kscale, int nthreads){
+	Eigen::setNbThreads(1);
+	std::vector<long int> heads = getThreadPointers(length, nthreads);
+	EigenMatrix rawJa = EigenZero(Da.rows(), Da.cols());
+	EigenMatrix rawJb = EigenZero(Da.rows(), Da.cols());
+	EigenMatrix rawKa = EigenZero(Da.rows(), Da.cols());
+	EigenMatrix rawKb = EigenZero(Da.rows(), Da.cols());
+	#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
+	#pragma omp parallel for reduction(EigenMatrixSum: rawJa, rawJb, rawKa, rawKb) num_threads(nthreads)
+	for ( int ithread = 0; ithread < nthreads; ithread++ ){
+		const long int head = heads[ithread];
+		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
+		short int* iranger = is + head;
+		short int* jranger = js + head;
+		short int* kranger = ks + head;
+		short int* lranger = ls + head;
+		double* repulsionranger = ints + head;
+		for ( long int iint = 0; iint < nints; iint++ ){
+			const short int i = *(iranger++);
+			const short int j = *(jranger++);
+			const short int k = *(kranger++);
+			const short int l = *(lranger++);
+			const double repulsion = *(repulsionranger++);
+			rawJa(i, j) += Da(k, l) * repulsion;
+			rawJa(k, l) += Da(i, j) * repulsion;
+			if ( kscale > 0. ){
+				rawKa(i, k) += Da(j, l) * repulsion;
+				rawKa(j, l) += Da(i, k) * repulsion;
+				rawKa(i, l) += Da(j, k) * repulsion;
+				rawKa(j, k) += Da(i, l) * repulsion;
+			}
+		}
+	}
+	Eigen::setNbThreads(nthreads);
+	const EigenMatrix Ja = 0.25 * ( rawJa + rawJa.transpose() );
+	const EigenMatrix Ka = 0.125 * ( rawKa + rawKa.transpose() );
+	return std::make_tuple(Ja, Ka);
+}
+
+std::tuple<EigenMatrix, EigenMatrix> Int4C2E::ContractInts2(EigenMatrix Da, int nthreads, int output){ // UHF
+	if (output>0) std::printf("Contracting 4c-2e repulsion integrals with 1 matrix ... ");
+	const auto start = __now__;
+	__Make_Basis_Set__(this->MWFN)
+	auto [Ja, Ka] = Guhf(
+		this->BasisIs.data(), this->BasisJs.data(),
+		this->BasisKs.data(), this->BasisLs.data(),
+		this->RepulsionInts.data(), this->RepulsionLength,
+		Da, this->EXX, nthreads);
+	if (output>0) std::printf("Done in %f s\n", __duration__(start, __now__));
+	return std::make_tuple(Ja, Ka);
+}
+
 std::vector<double> Int4C2E::ContractGrads(EigenMatrix D1, EigenMatrix D2, int output){
 	std::vector<EigenMatrix> D1s = {D1};
 	return this->ContractGrads(D1s, D2, output)[0];

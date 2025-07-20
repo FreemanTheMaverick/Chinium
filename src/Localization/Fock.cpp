@@ -18,15 +18,16 @@
 EigenMatrix Fock(EigenMatrix Fref, EigenMatrix F2ref, int output){
 	const EigenMatrix kappa = Eigen::MatrixXd::Random(Fref.rows(), Fref.cols()) / 10 ;
 	const EigenMatrix p = ( kappa - kappa.transpose() ).exp();
-	Orthogonal M = Orthogonal(p, 1);
+	Iterate M({Orthogonal(p).Clone()}, 1);
 
 	std::function<
 		std::tuple<
 			double,
-			EigenMatrix,
-			std::function<EigenMatrix (EigenMatrix)>
-		>(EigenMatrix, int)
-	> func = [Fref, F2ref](EigenMatrix U, int order){
+			std::vector<EigenMatrix>,
+			std::vector<std::function<EigenMatrix (EigenMatrix)>>
+		>(std::vector<EigenMatrix>, int)
+	> func = [Fref, F2ref](std::vector<EigenMatrix> Us, int order){
+		const EigenMatrix U = Us[0];
 		const EigenMatrix F = U.transpose() * Fref * U;
 		const EigenMatrix F2 = U.transpose() * F2ref * U;
 		const double L = F2.trace() - std::pow(F.diagonal().norm(), 2);
@@ -47,7 +48,11 @@ EigenMatrix Fock(EigenMatrix Fref, EigenMatrix F2ref, int output){
 			);
 		};
 
-		return std::make_tuple(L, Ge, He);
+		return std::make_tuple(
+				L,
+				std::vector<EigenMatrix>{Ge},
+				std::vector<std::function<EigenMatrix (EigenMatrix)>> {He}
+		);
 	};
 
 	double L = 0;
@@ -59,5 +64,5 @@ EigenMatrix Fock(EigenMatrix Fref, EigenMatrix F2ref, int output){
 			) && "Convergence Failed!"
 	);
 
-	return M.P;
+	return M.Point;
 }

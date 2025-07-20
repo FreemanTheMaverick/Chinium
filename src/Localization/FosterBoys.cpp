@@ -21,7 +21,7 @@ EigenMatrix FosterBoys(
 		EigenMatrix W2aoSum, int output){
 	const EigenMatrix kappa = Eigen::MatrixXd::Random(Cref.cols(), Cref.cols()) / 10 ;
 	const EigenMatrix p = ( kappa - kappa.transpose() ).exp();
-	Orthogonal M = Orthogonal(p, 1);
+	Iterate M({Orthogonal(p).Clone()}, 1);
 	const EigenMatrix Wxref = Cref.transpose() * Wxao * Cref;
 	const EigenMatrix Wyref = Cref.transpose() * Wyao * Cref;
 	const EigenMatrix Wzref = Cref.transpose() * Wzao * Cref;
@@ -30,10 +30,11 @@ EigenMatrix FosterBoys(
 	std::function<
 		std::tuple<
 			double,
-			EigenMatrix,
-			std::function<EigenMatrix (EigenMatrix)>
-		>(EigenMatrix, int)
-	> func = [Wxref, Wyref, Wzref, W2refSum](EigenMatrix U, int order){
+			std::vector<EigenMatrix>,
+			std::vector<std::function<EigenMatrix (EigenMatrix)>>
+		>(std::vector<EigenMatrix>, int)
+	> func = [Wxref, Wyref, Wzref, W2refSum](std::vector<EigenMatrix> Us, int order){
+		const EigenMatrix U = Us[0];
 		const EigenMatrix Wx = U.transpose() * Wxref * U;
 		const EigenMatrix Wy = U.transpose() * Wyref * U;
 		const EigenMatrix Wz = U.transpose() * Wzref * U;
@@ -77,7 +78,11 @@ EigenMatrix FosterBoys(
 				- eightWzrefU * Diag( UTWzref * v) );
 		};
 
-		return std::make_tuple(L, Ge, He);
+		return std::make_tuple(
+				L,
+				std::vector<EigenMatrix>{Ge},
+				std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
+		);
 	};
 
 	double L = 0;
@@ -89,5 +94,5 @@ EigenMatrix FosterBoys(
 			) && "Convergence Failed!"
 	);
 
-	return M.P;
+	return M.Point;
 }
