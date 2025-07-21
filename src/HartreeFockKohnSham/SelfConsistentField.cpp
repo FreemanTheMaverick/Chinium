@@ -24,7 +24,6 @@
 #include "../DIIS/EDIIS.h"
 #include "../DIIS/ADIIS.h"
 
-#include <random>
 #include <iostream>
 
 #define S (int2c1e.Overlap)
@@ -286,10 +285,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	EigenMatrix C1 = EigenZero(Z1.rows(), Z1.cols());
 	EigenMatrix C2 = EigenZero(Z2.rows(), Z2.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-	EigenMatrix Jtmp1 = EigenZero(Z1.rows(), Z1.rows());
-	EigenMatrix Ktmp1 = EigenZero(Z1.rows(), Z1.rows());
-	EigenMatrix Jtmp2 = EigenZero(Z2.rows(), Z2.rows());
-	EigenMatrix Ktmp2 = EigenZero(Z2.rows(), Z2.rows());
+	EigenMatrix Vtmp1 = EigenZero(Z1.rows(), Z1.rows());
+	EigenMatrix Gtmp2 = EigenZero(Z1.rows(), Z1.rows());
 	Iterate M({Grassmann(D1prime).Clone(), Grassmann(D2prime).Clone()}, 1);
 	std::function<
 		std::tuple<
@@ -302,10 +299,9 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		const EigenMatrix D2prime_ = Dprimes_[1];
 		const EigenMatrix D1_ = Z1 * D1prime_ * Z1.transpose();
 		const EigenMatrix D2_ = Z2 * D2prime_ * Z2.transpose();
-		auto [J1_, K1_] = int4c2e.ContractInts2(D1_, nthreads, 1);
-		auto [J2_, K2_] = int4c2e.ContractInts2(D2_, nthreads, 1);
-		const EigenMatrix Fhf1_ = Hcore + J1_ + J2_ - K1_;
-		const EigenMatrix Fhf2_ = Hcore + J1_ + J2_ - K2_;
+		auto [Ghf1_, Ghf2_] = int4c2e.ContractInts(D1_, D2_, nthreads, 1);
+		const EigenMatrix Fhf1_ = Hcore + Ghf1_;
+		const EigenMatrix Fhf2_ = Hcore + Ghf2_;
 		const EigenMatrix F1_ = Fhf1_;
 		const EigenMatrix F2_ = Fhf2_;
 		const EigenMatrix F1prime_ = Z1.transpose() * F1_ * Z1; // Euclidean gradient
@@ -319,23 +315,150 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		const double E_ = 0.5 * ( Dot(D1_, Hcore + F1_) + Dot(D2_, Hcore + F2_) );
 		std::vector<std::function<EigenMatrix (EigenMatrix)>> He;
 		if ( order == 2 ){
-			He.push_back([Z1, &Jtmp1, &Ktmp1, &int4c2e, nthreads](EigenMatrix v1prime){
-				const EigenMatrix v1 = Z1 * v1prime * Z1.transpose();
-				std::tie(Jtmp1, Ktmp1) = int4c2e.ContractInts2(v1, nthreads, 0);
-				const EigenMatrix F1U = Jtmp1 - Ktmp1;
-				return (EigenMatrix)(Z1.transpose() * F1U * Z1);
+			He.push_back([&Vtmp1](EigenMatrix v1prime){
+				Vtmp1 = v1prime;
+				return EigenZero(v1prime.rows(), v1prime.cols());
 			});
-			He.push_back([Z2, &Jtmp2, &Ktmp2, &int4c2e, nthreads](EigenMatrix v2prime){
+			He.push_back([Z1, Z2, &Vtmp1, &int4c2e, &Gtmp2, nthreads](EigenMatrix v2prime){
+				const EigenMatrix v1 = Z1 * Vtmp1 * Z1.transpose();
 				const EigenMatrix v2 = Z2 * v2prime * Z2.transpose();
-				std::tie(Jtmp2, Ktmp2) = int4c2e.ContractInts2(v2, nthreads, 0);
-				return (EigenMatrix)(Z2.transpose() * Jtmp2 * Z2);
+				auto [Gtmp1_, Gtmp2_] = int4c2e.ContractInts(v1, v2, nthreads, 0);
+				Gtmp2 = Gtmp2_;
+				return (EigenMatrix)(Z2.transpose() * Gtmp1_ * Z2);
 			});
-			He.push_back([Z1, &Jtmp1](EigenMatrix /*v1prime*/){
-				return (EigenMatrix)(Z1.transpose() * Jtmp1 * Z1);
+			He.push_back([Z1, &Gtmp2](EigenMatrix /*v1prime*/){
+				return (EigenMatrix)(Z1.transpose() * Gtmp2 * Z1);
 			});
-			He.push_back([Z2, &Jtmp2, &Ktmp2](EigenMatrix /*v2prime*/){
-				const EigenMatrix F2U = Jtmp2 - Ktmp2;
-				return (EigenMatrix)(Z2.transpose() * F2U * Z2);
+			He.push_back([](EigenMatrix v2prime){
+				return EigenZero(v2prime.rows(), v2prime.cols());
+			});
+		}
+		return std::make_tuple(
+				E_,
+				std::vector<EigenMatrix>{F1prime_, F2prime_},
+				He
+		);
+	};
+	TrustRegionSetting tr_setting;
+	if ( ! TrustRegion(
+				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
+				0.00001, 1, 100, E, M, output
+	) ) throw std::runtime_error("Convergence failed!");
+	return std::make_tuple(E, epsilon1s, epsilon2s, C1, C2);
+}
+
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedGrassmannARH(
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		EigenMatrix D1prime, EigenMatrix D2prime,
+		EigenMatrix Z1, EigenMatrix Z2,
+		int output, int nthreads){
+	double E = 0;
+	EigenVector epsilon1s = EigenZero(Z1.cols(), 1);
+	EigenVector epsilon2s = EigenZero(Z2.cols(), 1);
+	EigenMatrix C1 = EigenZero(Z1.rows(), Z1.cols());
+	EigenMatrix C2 = EigenZero(Z2.rows(), Z2.cols());
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+
+	// ARH hessian related
+	std::deque<EigenMatrix> D1primes;
+	std::deque<EigenMatrix> D2primes;
+	std::deque<EigenMatrix> F1primes;
+	std::deque<EigenMatrix> F2primes;
+	std::vector<double> TrDsv;
+
+	Iterate M({Grassmann(D1prime).Clone(), Grassmann(D2prime).Clone()}, 1);
+	std::function<
+		std::tuple<
+			double,
+			std::vector<EigenMatrix>,
+			std::vector<std::function<EigenMatrix (EigenMatrix)>>
+		> (std::vector<EigenMatrix>, int)
+	> dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int order){
+		const EigenMatrix D1prime_ = Dprimes_[0];
+		const EigenMatrix D2prime_ = Dprimes_[1];
+		const EigenMatrix D1_ = Z1 * D1prime_ * Z1.transpose();
+		const EigenMatrix D2_ = Z2 * D2prime_ * Z2.transpose();
+		auto [Ghf1_, Ghf2_] = int4c2e.ContractInts(D1_, D2_, nthreads, 1);
+		const EigenMatrix Fhf1_ = Hcore + Ghf1_;
+		const EigenMatrix Fhf2_ = Hcore + Ghf2_;
+		const EigenMatrix F1_ = Fhf1_;
+		const EigenMatrix F2_ = Fhf2_;
+		const EigenMatrix F1prime_ = Z1.transpose() * F1_ * Z1; // Euclidean gradient
+		const EigenMatrix F2prime_ = Z2.transpose() * F2_ * Z2; // Euclidean gradient
+
+		// ARH hessian related
+		D1primes.push_back(D1prime_);
+		D2primes.push_back(D2prime_);
+		F1primes.push_back(F1prime_);
+		F2primes.push_back(F2prime_);
+		if ( D1primes.size() > 20 ){
+			D1primes.pop_front();
+			D2primes.pop_front();
+			F1primes.pop_front();
+			F2primes.pop_front();
+		}
+
+		eigensolver.compute(F1prime_);
+		epsilon1s = eigensolver.eigenvalues();
+		C1 = Z1 * eigensolver.eigenvectors();
+		eigensolver.compute(F2prime_);
+		epsilon2s = eigensolver.eigenvalues();
+		C2 = Z2 * eigensolver.eigenvectors();
+		const double E_ = 0.5 * ( Dot(D1_, Hcore + F1_) + Dot(D2_, Hcore + F2_) );
+		std::vector<std::function<EigenMatrix (EigenMatrix)>> He;
+		if ( order == 2 && D1primes.size() > 1 ){
+			const int size = (int)D1primes.size() - 1;
+			const int nbasis = Z1.rows();
+			std::vector<EigenMatrix> D1diff(size, EigenZero(nbasis, nbasis));
+			std::vector<EigenMatrix> D2diff(size, EigenZero(nbasis, nbasis));
+			std::vector<EigenMatrix> F1diff(size, EigenZero(nbasis, nbasis));
+			std::vector<EigenMatrix> F2diff(size, EigenZero(nbasis, nbasis));
+			for ( int i = 0; i < size; i++ ){
+				D1diff[i] = D1primes[i] - D1prime_;
+				D2diff[i] = D2primes[i] - D2prime_;
+				F1diff[i] = F1primes[i] - F1prime_;
+				F2diff[i] = F2primes[i] - F2prime_;
+			}
+			EigenMatrix T = EigenZero(size, size);
+			for ( int i = 0; i < size; i++ ) for ( int j = i; j < size; j++ ){
+				T(i, j) = T(j, i) = D1diff[i].cwiseProduct(D1diff[j]).sum() + D2diff[i].cwiseProduct(D2diff[j]).sum();
+			}
+			const EigenMatrix Tinv = T.inverse();
+			TrDsv.resize(size);
+			He.push_back([nbasis, size, D1diff, &TrDsv](EigenMatrix v1){
+					for ( int j = 0; j < size; j++ )
+						TrDsv[j] = D1diff[j].cwiseProduct(v1).sum();
+					return EigenZero(nbasis, nbasis);
+			});
+			He.push_back([nbasis, size, F1diff, D2diff, Tinv, &TrDsv](EigenMatrix v2){
+					for ( int j = 0; j < size; j++ )
+						TrDsv[j] += D2diff[j].cwiseProduct(v2).sum();
+					EigenMatrix Hv1 = EigenZero(nbasis, nbasis);
+					for ( int i = 0; i < size; i++ ) for ( int j = 0; j < size; j++ )
+						Hv1 += F1diff[i] * Tinv(i, j) * TrDsv[j];
+					return Hv1;
+			});
+			He.push_back([](EigenMatrix v1){
+					return EigenZero(v1.rows(), v1.cols());
+			});
+			He.push_back([nbasis, size, F2diff, &TrDsv, Tinv](EigenMatrix /*v2*/){
+					EigenMatrix Hv2 = EigenZero(nbasis, nbasis);
+					for ( int i = 0; i < size; i++ ) for ( int j = 0; j < size; j++ )
+						Hv2 += F2diff[i] * Tinv(i, j) * TrDsv[j];
+					return (EigenMatrix)Hv2;
+			});
+		}else{
+			He.push_back([](EigenMatrix v1){
+					return v1;
+			});
+			He.push_back([](EigenMatrix v2){
+					return EigenZero(v2.rows(), v2.cols());
+			});
+			He.push_back([](EigenMatrix v1){
+					return EigenZero(v1.rows(), v1.cols());
+			});
+			He.push_back([](EigenMatrix v2){
+					return v2;
 			});
 		}
 		return std::make_tuple(
@@ -551,11 +674,22 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 		mwfn.setOccupation(occupations * 2);
 		mwfn.setCoefficientMatrix(C);
 	}else if ( scf == "GRASSMANN-ARH" ){
-		EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
-		auto [E, epsilons, C] = RestrictedGrassmannARH(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
-		E_scf = 2 * E;
-		mwfn.setEnergy(epsilons);
-		mwfn.setCoefficientMatrix(C);
+		if ( mwfn.Wfntype == 0 ){
+			EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
+			auto [E, epsilons, C] = RestrictedGrassmannARH(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
+			E_scf = 2 * E;
+			mwfn.setEnergy(epsilons);
+			mwfn.setCoefficientMatrix(C);
+		}else if ( mwfn.Wfntype == 1 ){
+			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
+			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
+			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedGrassmannARH(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
+			E_scf = E;
+			mwfn.setEnergy(epsilon1s, 1);
+			mwfn.setEnergy(epsilon2s, 2);
+			mwfn.setCoefficientMatrix(C1, 1);
+			mwfn.setCoefficientMatrix(C2, 2);
+		}
 	}else if ( scf == "GRASSMANN" ){
 		if ( mwfn.Wfntype == 0 ){
 			EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
