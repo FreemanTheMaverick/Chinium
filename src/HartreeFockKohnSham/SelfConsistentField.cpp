@@ -24,38 +24,8 @@
 #include "../DIIS/EDIIS.h"
 #include "../DIIS/ADIIS.h"
 
-#include <iostream>
-
 #define S (int2c1e.Overlap)
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
-
-std::function<EigenMatrix (EigenMatrix)> RestrictedHessianARH(std::deque<EigenMatrix> Ds, std::deque<EigenMatrix> Fs){
-	assert( Ds.size() == Fs.size() );
-	assert( Ds.size() > 1 );
-	const int size = (int)Ds.size() - 1;
-	const EigenMatrix D = Ds.back();
-	const EigenMatrix F = Fs.back();
-	const int nbasis = D.cols();
-	std::vector<EigenMatrix> Ddiff(size, EigenZero(nbasis, nbasis));
-	std::vector<EigenMatrix> Fdiff(size, EigenZero(nbasis, nbasis));
-	for ( int i = 0; i < size; i++ ){
-		Ddiff[i] = Ds[i] - D;
-		Fdiff[i] = Fs[i] - F;
-	}
-	EigenMatrix T = EigenZero(size, size);
-	for ( int i = 0; i < size; i++ ) for ( int j = i; j < size; j++ ){
-		T(i, j) = T(j, i) = Ddiff[i].cwiseProduct(Ddiff[j]).sum();
-	}
-	const EigenMatrix Tinv = T.inverse();
-	const std::function<EigenMatrix (EigenMatrix)> H = [size, nbasis, Ddiff, Fdiff, Tinv](EigenMatrix v){
-		EigenMatrix Hv = EigenZero(nbasis, nbasis);
-		for ( int i = 0; i < size; i++ ) for ( int j = 0; j < size; j++ ){
-			Hv += Fdiff[i] * Tinv(i, j) * Ddiff[j].cwiseProduct(v).sum();
-		}
-		return (EigenMatrix)Hv;
-	};
-	return H;
-}
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFock(
 		double T, double Mu,
@@ -160,8 +130,11 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmannARH(
 	EigenVector epsilons = EigenZero(Z.cols(), 1);
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-	std::deque<EigenMatrix> Dprimes = {};
-	std::deque<EigenMatrix> Fprimes = {};
+
+	// ARH hessian related
+	std::deque<EigenMatrix> Dprimes;
+	std::deque<EigenMatrix> Fprimes;
+
 	Iterate M({Grassmann(Dprime).Clone()}, 1);
 	std::function<
 		std::tuple<
@@ -184,20 +157,49 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmannARH(
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix F_ = Fhf_+ Gxc_;
 		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
-		eigensolver.compute(Fprime_);
-		epsilons = eigensolver.eigenvalues();
-		C = Z * eigensolver.eigenvectors();
+
+		// ARH hessian related
 		Dprimes.push_back(Dprime_);
 		Fprimes.push_back(Fprime_);
 		if ( Dprimes.size() > 20 ){
 			Dprimes.pop_front();
 			Fprimes.pop_front();
 		}
+
+		eigensolver.compute(Fprime_);
+		epsilons = eigensolver.eigenvalues();
+		C = Z * eigensolver.eigenvectors();
 		const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
 		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
 		if ( order == 2 && Dprimes.size() > 1 ){
-			He = RestrictedHessianARH(Dprimes, Fprimes);
-			if (output>0) std::printf("Augmented Roothaan-Hall hessian with %d previous iterations", (int)Dprimes.size());
+			if (output>0) std::printf("Using augmented Roothaan-Hall hessian with %d previous iterations\n", (int)Dprimes.size());
+			const int size = (int)Dprimes.size() - 1;
+			const int nbasis = Z.rows();
+			std::vector<EigenMatrix> Ddiff(size, EigenZero(nbasis, nbasis));
+			std::vector<EigenMatrix> Fdiff(size, EigenZero(nbasis, nbasis));
+			for ( int i = 0; i < size; i++ ){
+				Ddiff[i] = Dprimes[i] - Dprime_;
+				Fdiff[i] = Fprimes[i] - Fprime_;
+			}
+			EigenMatrix T = EigenZero(size, size);
+			for ( int i = 0; i < size; i++ ) for ( int j = i; j < size; j++ ){
+				T(i, j) = T(j, i) = Ddiff[i].cwiseProduct(Ddiff[j]).sum();
+			}
+			const EigenMatrix Tinv = T.inverse();
+			He = [nbasis, size, Ddiff, Fdiff, Tinv](EigenMatrix vprime){
+				std::vector<double> TrDsv(size);
+				for ( int j = 0; j < size; j++ )
+					TrDsv[j] = Ddiff[j].cwiseProduct(vprime).sum();
+				EigenMatrix Hv = EigenZero(nbasis, nbasis);
+				for ( int i = 0; i < size; i++ ){
+					double coeff = 0;
+					for ( int j = 0; j < size; j++ ){
+						coeff += Tinv(i, j) * TrDsv[j];
+					}
+					Hv += Fdiff[i] * coeff;
+				}
+				return (EigenMatrix)Hv;
+			};
 		}
 		return std::make_tuple(
 				E_,
@@ -208,7 +210,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmannARH(
 	TrustRegionSetting tr_setting;
 	if ( ! TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.00001, 1, 100, E, M, output
+				0.01, 1, 100, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilons, C);
 }
@@ -407,6 +409,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		const double E_ = 0.5 * ( Dot(D1_, Hcore + F1_) + Dot(D2_, Hcore + F2_) );
 		std::vector<std::function<EigenMatrix (EigenMatrix)>> He;
 		if ( order == 2 && D1primes.size() > 1 ){
+			if (output>0) std::printf("Using augmented Roothaan-Hall hessian with %d previous iterations\n", (int)D1primes.size());
 			const int size = (int)D1primes.size() - 1;
 			const int nbasis = Z1.rows();
 			std::vector<EigenMatrix> D1diff(size, EigenZero(nbasis, nbasis));
@@ -433,33 +436,35 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 			He.push_back([nbasis, size, F1diff, D2diff, Tinv, &TrDsv](EigenMatrix v2){
 					for ( int j = 0; j < size; j++ )
 						TrDsv[j] += D2diff[j].cwiseProduct(v2).sum();
-					EigenMatrix Hv1 = EigenZero(nbasis, nbasis);
-					for ( int i = 0; i < size; i++ ) for ( int j = 0; j < size; j++ )
-						Hv1 += F1diff[i] * Tinv(i, j) * TrDsv[j];
-					return Hv1;
+					EigenMatrix Hv2 = EigenZero(nbasis, nbasis);
+					for ( int i = 0; i < size; i++ ){
+						double coeff = 0;
+						for ( int j = 0; j < size; j++ ){
+							coeff += Tinv(i, j) * TrDsv[j];
+						}
+						Hv2 += F1diff[i] * coeff;
+					}
+					return Hv2;
 			});
 			He.push_back([](EigenMatrix v1){
 					return EigenZero(v1.rows(), v1.cols());
 			});
 			He.push_back([nbasis, size, F2diff, &TrDsv, Tinv](EigenMatrix /*v2*/){
 					EigenMatrix Hv2 = EigenZero(nbasis, nbasis);
-					for ( int i = 0; i < size; i++ ) for ( int j = 0; j < size; j++ )
-						Hv2 += F2diff[i] * Tinv(i, j) * TrDsv[j];
+					for ( int i = 0; i < size; i++ ){
+						double coeff = 0;
+						for ( int j = 0; j < size; j++ ){
+							coeff += Tinv(i, j) * TrDsv[j];
+						}
+						Hv2 += F2diff[i] * coeff;
+					}
 					return (EigenMatrix)Hv2;
 			});
 		}else{
-			He.push_back([](EigenMatrix v1){
-					return v1;
-			});
-			He.push_back([](EigenMatrix v2){
-					return EigenZero(v2.rows(), v2.cols());
-			});
-			He.push_back([](EigenMatrix v1){
-					return EigenZero(v1.rows(), v1.cols());
-			});
-			He.push_back([](EigenMatrix v2){
-					return v2;
-			});
+			He.push_back([](EigenMatrix v1){ return v1; });
+			He.push_back([](EigenMatrix v2){ return EigenZero(v2.rows(), v2.cols()); });
+			He.push_back([](EigenMatrix v1){ return EigenZero(v1.rows(), v1.cols()); });
+			He.push_back([](EigenMatrix v2){ return v2; });
 		}
 		return std::make_tuple(
 				E_,
@@ -470,7 +475,142 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	TrustRegionSetting tr_setting;
 	if ( ! TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.00001, 1, 100, E, M, output
+				0.01, 1, 200, E, M, output
+	) ) throw std::runtime_error("Convergence failed!");
+	return std::make_tuple(E, epsilon1s, epsilon2s, C1, C2);
+}
+
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedGrassmannARH_villain(
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		EigenMatrix D1prime, EigenMatrix D2prime,
+		EigenMatrix Z1, EigenMatrix Z2,
+		int output, int nthreads){
+	double E = 0;
+	EigenVector epsilon1s = EigenZero(Z1.cols(), 1);
+	EigenVector epsilon2s = EigenZero(Z2.cols(), 1);
+	EigenMatrix C1 = EigenZero(Z1.rows(), Z1.cols());
+	EigenMatrix C2 = EigenZero(Z2.rows(), Z2.cols());
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+
+	// ARH hessian related
+	std::deque<EigenMatrix> D1primes;
+	std::deque<EigenMatrix> D2primes;
+	std::deque<EigenMatrix> F1primes;
+	std::deque<EigenMatrix> F2primes;
+	std::vector<double> TrDsv;
+
+	Iterate M({Grassmann(D1prime).Clone(), Grassmann(D2prime).Clone()}, 1);
+	std::function<
+		std::tuple<
+			double,
+			std::vector<EigenMatrix>,
+			std::vector<std::function<EigenMatrix (EigenMatrix)>>
+		> (std::vector<EigenMatrix>, int)
+	> dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int order){
+		const EigenMatrix D1prime_ = Dprimes_[0];
+		const EigenMatrix D2prime_ = Dprimes_[1];
+		const EigenMatrix D1_ = Z1 * D1prime_ * Z1.transpose();
+		const EigenMatrix D2_ = Z2 * D2prime_ * Z2.transpose();
+		auto [Ghf1_, Ghf2_] = int4c2e.ContractInts(D1_, D2_, nthreads, 1);
+		const EigenMatrix Fhf1_ = Hcore + Ghf1_;
+		const EigenMatrix Fhf2_ = Hcore + Ghf2_;
+		const EigenMatrix F1_ = Fhf1_;
+		const EigenMatrix F2_ = Fhf2_;
+		const EigenMatrix F1prime_ = Z1.transpose() * F1_ * Z1; // Euclidean gradient
+		const EigenMatrix F2prime_ = Z2.transpose() * F2_ * Z2; // Euclidean gradient
+
+		// ARH hessian related
+		D1primes.push_back(D1prime_);
+		D2primes.push_back(D2prime_);
+		F1primes.push_back(F1prime_);
+		F2primes.push_back(F2prime_);
+		if ( D1primes.size() > 20 ){
+			D1primes.pop_front();
+			D2primes.pop_front();
+			F1primes.pop_front();
+			F2primes.pop_front();
+		}
+
+		eigensolver.compute(F1prime_);
+		epsilon1s = eigensolver.eigenvalues();
+		C1 = Z1 * eigensolver.eigenvectors();
+		eigensolver.compute(F2prime_);
+		epsilon2s = eigensolver.eigenvalues();
+		C2 = Z2 * eigensolver.eigenvectors();
+		const double E_ = 0.5 * ( Dot(D1_, Hcore + F1_) + Dot(D2_, Hcore + F2_) );
+		std::vector<std::function<EigenMatrix (EigenMatrix)>> He;
+		if ( order == 2 && D1primes.size() > 1 ){
+			const int size = (int)D1primes.size() - 1;
+			const int nbasis = Z1.rows();
+			std::vector<EigenMatrix> D1diff(size, EigenZero(nbasis, nbasis));
+			std::vector<EigenMatrix> D2diff(size, EigenZero(nbasis, nbasis));
+			std::vector<EigenMatrix> F1diff(size, EigenZero(nbasis, nbasis));
+			std::vector<EigenMatrix> F2diff(size, EigenZero(nbasis, nbasis));
+			for ( int i = 0; i < size; i++ ){
+				D1diff[i] = D1primes[i] - D1prime_;
+				D2diff[i] = D2primes[i] - D2prime_;
+				F1diff[i] = F1primes[i] - F1prime_;
+				F2diff[i] = F2primes[i] - F2prime_;
+			}
+			EigenMatrix T1 = EigenZero(size, size);
+			for ( int i = 0; i < size; i++ ) for ( int j = i; j < size; j++ ){
+				T1(i, j) = T1(j, i) = D1diff[i].cwiseProduct(D1diff[j]).sum();
+			}
+			EigenMatrix T2 = EigenZero(size, size);
+			for ( int i = 0; i < size; i++ ) for ( int j = i; j < size; j++ ){
+				T2(i, j) = T2(j, i) = D2diff[i].cwiseProduct(D2diff[j]).sum();
+			}
+			const EigenMatrix T1inv = T1.inverse();
+			const EigenMatrix T2inv = T2.inverse();
+			TrDsv.resize(size);
+			He.push_back([nbasis, size, D1diff, F1diff, &TrDsv, T1inv](EigenMatrix v1){
+					for ( int j = 0; j < size; j++ )
+						TrDsv[j] = D1diff[j].cwiseProduct(v1).sum();
+					EigenMatrix Hv1 = EigenZero(nbasis, nbasis);
+					for ( int i = 0; i < size; i++ ){
+						double coeff = 0;
+						for ( int j = 0; j < size; j++ ){
+							coeff += T1inv(i, j) * TrDsv[j];
+						}
+						Hv1 += F1diff[i] * coeff;
+					}
+					return Hv1;
+			});
+			He.push_back([](EigenMatrix v2){
+					return EigenZero(v2.rows(), v2.cols());
+			});
+			He.push_back([](EigenMatrix v1){
+					return EigenZero(v1.rows(), v1.cols());
+			});
+			He.push_back([nbasis, size, D2diff, F2diff, &TrDsv, T2inv](EigenMatrix v2){
+					for ( int j = 0; j < size; j++ )
+						TrDsv[j] = D2diff[j].cwiseProduct(v2).sum();
+					EigenMatrix Hv2 = EigenZero(nbasis, nbasis);
+					for ( int i = 0; i < size; i++ ){
+						double coeff = 0;
+						for ( int j = 0; j < size; j++ ){
+							coeff += T2inv(i, j) * TrDsv[j];
+						}
+						Hv2 += F2diff[i] * coeff;
+					}
+					return (EigenMatrix)Hv2;
+			});
+		}else{
+			He.push_back([](EigenMatrix v1){ return v1; });
+			He.push_back([](EigenMatrix v2){ return EigenZero(v2.rows(), v2.cols()); });
+			He.push_back([](EigenMatrix v1){ return EigenZero(v1.rows(), v1.cols()); });
+			He.push_back([](EigenMatrix v2){ return v2; });
+		}
+		return std::make_tuple(
+				E_,
+				std::vector<EigenMatrix>{F1prime_, F2prime_},
+				He
+		);
+	};
+	TrustRegionSetting tr_setting;
+	if ( ! TrustRegion(
+				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
+				0.01, 1, 200, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilon1s, epsilon2s, C1, C2);
 }
