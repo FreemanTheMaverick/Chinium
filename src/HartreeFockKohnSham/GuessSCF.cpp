@@ -54,7 +54,7 @@ void GuessSCF(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Grid& grid, std::s
 	if (potential){
 		Eigen::GeneralizedSelfAdjointEigenSolver<EigenMatrix> solver;
 		solver.compute(int2c1e.Kinetic + int2c1e.Nuclear + V, int2c1e.Overlap);
-		for ( int spin : ( mwfn.Wfntype == 0 ? std::vector<int>{0} : std::vector<int>{1, 2} ) ){
+		for ( int spin : ( mwfn.Wfntype == 0 || mwfn.Wfntype == 2 ? std::vector<int>{1} : std::vector<int>{1, 2} ) ){
 			const EigenMatrix C = solver.eigenvectors();
 			const EigenMatrix eps = solver.eigenvalues();
 			mwfn.setCoefficientMatrix(C, spin);

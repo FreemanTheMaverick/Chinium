@@ -17,7 +17,7 @@
 #include "HartreeFockKohnSham/HartreeFockKohnSham.h"
 #include "Localization/Localize.h"
 
-int main(int argc, char* argv[]){ (void)argc;
+int main(int /*argc*/, char* argv[]){
 	std::printf("*** Chinium started ***\n");
 
 	// File names
@@ -78,7 +78,7 @@ int main(int argc, char* argv[]){ (void)argc;
 	// FT-DFT related
 	Environment env(temperature, chemicalpotential);
 
-	// Initializing E and its derivatives
+	// Wavefunction type designation
 	if ( guess != "READ" ){
 		mwfn.Wfntype = wfntype;
 		if ( wfntype == -1 ){
@@ -86,6 +86,9 @@ int main(int argc, char* argv[]){ (void)argc;
 			else mwfn.Wfntype = 1;
 		}
 	}
+	if ( env.Temperature > 0 && mwfn.Wfntype == 2 ) throw std::runtime_error("FT-DFT cannot be used with spin-restricted open-shell wavefunctions!");
+
+	// Initializing E and its derivatives
 	double E_tot = 0;
 	EigenMatrix Gradient = EigenZero(mwfn.getNumCenters(), 3);
 	EigenMatrix Hessian = EigenZero(3 * mwfn.getNumCenters(), 3 * mwfn.getNumCenters());
@@ -123,11 +126,25 @@ int main(int argc, char* argv[]){ (void)argc;
 		}else{
 			if ( mwfn.Wfntype == 0 ){
 				mwfn.Orbitals.resize(mwfn.getNumBasis());
-				mwfn.setOccupation((EigenVector)(EigenZero(na, 1).array() + 2).matrix());
+				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
+				for ( int i = 0; i < na; i++ ) occ(i) = 2;
+				mwfn.setOccupation(occ);
 			}else if ( mwfn.Wfntype == 1 ){
 				mwfn.Orbitals.resize(mwfn.getNumBasis() * 2);
-				mwfn.setOccupation((EigenVector)(EigenZero(na, 1).array() + 1).matrix(), 1);
-				mwfn.setOccupation((EigenVector)(EigenZero(nb, 1).array() + 1).matrix(), 2);
+				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
+				for ( int i = 0; i < na; i++ ) occ(i) = 1;
+				mwfn.setOccupation(occ, 1);
+				occ.setZero();
+				for ( int i = 0; i < nb; i++ ) occ(i) = 1;
+				mwfn.setOccupation(occ, 2);
+			}else if ( mwfn.Wfntype == 2 ){
+				mwfn.Orbitals.resize(mwfn.getNumBasis());
+				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
+				for ( int i = 0; i < ( ( na > nb ) ? na : nb ); i++ ){
+					if ( i >= na || i >= nb ) occ(i) = 1;
+					else occ(i) = 2;
+				}
+				mwfn.setOccupation(occ);
 			}
 			GuessSCF(mwfn, env, int2c1e, grid, guess, 1);
 		}

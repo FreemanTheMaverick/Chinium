@@ -124,7 +124,7 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 	return std::make_tuple(E, epsa, epsb, occa, occb, Ca, Cb);
 }
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedGrassmann(
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
@@ -192,12 +192,12 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	TrustRegionSetting tr_setting;
 	if ( ! TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.00001, 1, 100, E, M, output
+				0.001, 1, 100, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilon1s, epsilon2s, C1, C2);
 }
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedGrassmannARH(
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
@@ -328,7 +328,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	return std::make_tuple(E, epsilon1s, epsilon2s, C1, C2);
 }
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedGrassmannARH_villain(
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH_villain(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,

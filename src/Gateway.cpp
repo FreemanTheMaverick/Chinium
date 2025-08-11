@@ -133,7 +133,7 @@ int ReadWfnType(std::string inp){
 			ss >> wfntype;
 		}
 	}
-	if ( wfntype != 0 && wfntype != 1 && wfntype != -1 ) std::runtime_error("Invalid type of wavefunction!");
+	if ( wfntype != -1 && wfntype != 0 && wfntype != 1 && wfntype != 2 ) std::runtime_error("Invalid type of wavefunction!");
 	return wfntype;
 }
 
@@ -192,7 +192,7 @@ std::string ReadSCF(std::string inp){
 			ss >> scf;
 		}
 	}
-	if ( scf != "DIIS" && scf != "GRASSMANN" && scf != "GRASSMANN-ARH" && scf != "FOCK" ) throw std::runtime_error("Invalid SCF type!");
+	if ( scf != "DIIS" && scf != "RIEMANN" && scf != "RIEMANN-ARH" && scf != "FOCK" ) throw std::runtime_error("Invalid SCF type!");
 	return scf;
 }
 

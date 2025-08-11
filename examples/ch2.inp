@@ -1,0 +1,35 @@
+nthreads
+1
+
+xyz
+3
+C    0     0.      0.
+H    0    -0.757   0.587
+H    0     0.757   0.587
+
+charge
+0
+
+spin
+3
+
+wfntype
+2
+
+guess
+sap
+
+grid
+SG-1
+
+method
+hf
+
+scftype
+riemann
+
+basis
+cc-pvdz
+
+derivative
+0

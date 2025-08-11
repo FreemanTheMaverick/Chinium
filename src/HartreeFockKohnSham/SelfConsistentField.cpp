@@ -26,6 +26,7 @@
 
 #include "Restricted.h"
 #include "Unrestricted.h"
+#include "RestrictedOpen.h"
 
 double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C2E& int4c2e, ExchangeCorrelation& xc, Grid& grid, std::string scf, int output, int nthreads){
 	Eigen::setNbThreads(nthreads);
@@ -35,7 +36,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 	if (output > 0) std::printf("Self-consistent field in %s-canonical ensemble\n", T > 0 ? "grand" : "micro");
 	if ( T > 0 && scf != "DIIS" && scf != "FOCK" ) throw std::runtime_error("Only DIIS optimization is supported for finite-temperature DFT!");
 
-	const EigenMatrix Z = mwfn.getCoefficientMatrix(mwfn.Wfntype);
+	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
 	EigenMatrix Z1 = EigenZero(Z.rows(), Z.cols());
 	EigenMatrix Z2 = EigenZero(Z.rows(), Z.cols());
 	if ( mwfn.Wfntype == 1 ){
@@ -52,39 +53,45 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 		mwfn.setEnergy(epsilons);
 		mwfn.setOccupation(occupations * 2);
 		mwfn.setCoefficientMatrix(C);
-	}else if ( scf == "GRASSMANN-ARH" ){
+	}else if ( scf == "RIEMANN-ARH" ){
 		if ( mwfn.Wfntype == 0 ){
 			EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
-			auto [E, epsilons, C] = RestrictedGrassmannARH(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
+			auto [E, epsilons, C] = RestrictedRiemannARH(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
 			E_scf = 2 * E;
-			mwfn.setEnergy(epsilons);
-			mwfn.setCoefficientMatrix(C);
+			mwfn.setEnergy(epsilons, 1);
+			mwfn.setCoefficientMatrix(C, 1);
 		}else if ( mwfn.Wfntype == 1 ){
 			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
 			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
-			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedGrassmannARH(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
+			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedRiemannARH(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
 			E_scf = E;
 			mwfn.setEnergy(epsilon1s, 1);
 			mwfn.setEnergy(epsilon2s, 2);
 			mwfn.setCoefficientMatrix(C1, 1);
 			mwfn.setCoefficientMatrix(C2, 2);
 		}
-	}else if ( scf == "GRASSMANN" ){
+	}else if ( scf == "RIEMANN" ){
 		if ( mwfn.Wfntype == 0 ){
 			EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
-			auto [E, epsilons, C] = RestrictedGrassmann(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
+			auto [E, epsilons, C] = RestrictedRiemann(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
 			E_scf = 2 * E;
-			mwfn.setEnergy(epsilons);
-			mwfn.setCoefficientMatrix(C);
+			mwfn.setEnergy(epsilons, 1);
+			mwfn.setCoefficientMatrix(C, 1);
 		}else if ( mwfn.Wfntype == 1 ){
 			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
 			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
-			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedGrassmann(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
+			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedRiemann(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
 			E_scf = E;
 			mwfn.setEnergy(epsilon1s, 1);
 			mwfn.setEnergy(epsilon2s, 2);
 			mwfn.setCoefficientMatrix(C1, 1);
 			mwfn.setCoefficientMatrix(C2, 2);
+		}else if ( mwfn.Wfntype == 2 ){
+			int nd = mwfn.getNumElec(2);
+			int ns = mwfn.getNumElec(1) - nd;
+			EigenMatrix Cprime = EigenOne(Z.rows(), ns + nd);
+			auto [E, epsilons, C] = RestrictedOpenRiemann(nd, ns, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			E_scf = E;
 		}
 	}else if ( scf == "DIIS" ){
 		if ( mwfn.Wfntype == 0 ){
@@ -98,9 +105,9 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 					output-1, nthreads
 			);
 			E_scf = E;
-			mwfn.setEnergy(epsilons);
-			mwfn.setOccupation(occupations * 2);
-			mwfn.setCoefficientMatrix(C);
+			mwfn.setEnergy(epsilons, 1);
+			mwfn.setOccupation(occupations * 2, 1);
+			mwfn.setCoefficientMatrix(C, 1);
 		}else if ( mwfn.Wfntype == 1 ){
 			EigenMatrix Fa = mwfn.getFock(1);
 			EigenMatrix Fb = mwfn.getFock(2);

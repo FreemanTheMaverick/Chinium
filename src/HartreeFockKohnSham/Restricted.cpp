@@ -103,7 +103,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 	return std::make_tuple(E, epsilons, occupations, C);
 }
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmann(
+std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
@@ -159,12 +159,12 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmann(
 	TrustRegionSetting tr_setting;
 	if ( ! TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.00001, 1, 100, E, M, output
+				0.001, 1, 100, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilons, C);
 }
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmannARH(
+std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemannARH(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
@@ -347,7 +347,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFock(
 	tr_setting.R0 = 1;
 	if ( !TrustRegion(
 			ffunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-1},
-			0.00001, 1, 100, E, M, output
+			0.001, 1, 100, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilons, occupations, C);
 }

@@ -7,21 +7,21 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		int output, int nthreads
 );
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedGrassmann(
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
 		int output, int nthreads
 );
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedGrassmannARH(
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
 		int output, int nthreads
 );
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedGrassmannARH_villain(
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH_villain(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,

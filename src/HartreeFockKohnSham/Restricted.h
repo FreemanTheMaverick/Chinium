@@ -6,14 +6,14 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		int output, int nthreads
 );
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmann(
+std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
 		int output, int nthreads
 );
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedGrassmannARH(
+std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemannARH(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
