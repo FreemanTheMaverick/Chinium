@@ -13,10 +13,13 @@ xyz
  S                 -1.75362482   -1.01245576    0.71591433
 
 guess
-read
+sap
 
 spin
 19
+
+wfntype
+1
 
 charge
 2
@@ -25,10 +28,10 @@ method
 hf
 
 scftype
-diis
+riemann
 
 basis
-read
+6-31g1
 
 derivative
 0

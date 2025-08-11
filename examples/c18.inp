@@ -32,16 +32,16 @@ guess
 sap
 
 method
-rhf
+hf
 
 scftype
-newton
+riemann-arh
 
 grid
-SG-2
+SG-1
 
 basis
-cc-pvdz
+cc-pvtz
 
 derivative
 0
