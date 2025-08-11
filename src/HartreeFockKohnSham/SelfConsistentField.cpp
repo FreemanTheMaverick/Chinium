@@ -55,7 +55,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 		mwfn.setCoefficientMatrix(C);
 	}else if ( scf == "RIEMANN-ARH" ){
 		if ( mwfn.Wfntype == 0 ){
-			EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
+			EigenMatrix Dprime = (mwfn.getOccupation(1) / 2).asDiagonal();
 			auto [E, epsilons, C] = RestrictedRiemannARH(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
 			E_scf = 2 * E;
 			mwfn.setEnergy(epsilons, 1);
@@ -72,7 +72,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 		}
 	}else if ( scf == "RIEMANN" ){
 		if ( mwfn.Wfntype == 0 ){
-			EigenMatrix Dprime = (mwfn.getOccupation() / 2).asDiagonal();
+			EigenMatrix Dprime = (mwfn.getOccupation(1) / 2).asDiagonal();
 			auto [E, epsilons, C] = RestrictedRiemann(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
 			E_scf = 2 * E;
 			mwfn.setEnergy(epsilons, 1);
@@ -95,8 +95,8 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 		}
 	}else if ( scf == "DIIS" ){
 		if ( mwfn.Wfntype == 0 ){
-			EigenMatrix F = mwfn.getFock();
-			EigenVector Occ = mwfn.getOccupation() / 2;
+			EigenMatrix F = mwfn.getFock(1);
+			EigenVector Occ = mwfn.getOccupation(1) / 2;
 			auto [E, epsilons, occupations, C] = RestrictedDIIS(
 					T, Mu,
 					int2c1e, int4c2e,
