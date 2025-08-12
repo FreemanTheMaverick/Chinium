@@ -253,7 +253,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemannARH(
 	TrustRegionSetting tr_setting;
 	if ( ! TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.01, 1, 100, E, M, output
+				0.01, 1, 300, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilons, C);
 }

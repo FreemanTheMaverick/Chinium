@@ -323,7 +323,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	TrustRegionSetting tr_setting;
 	if ( ! TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.01, 1, 200, E, M, output
+				0.01, 1, 300, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilon1s, epsilon2s, C1, C2);
 }
@@ -458,7 +458,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	TrustRegionSetting tr_setting;
 	if ( ! TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.01, 1, 200, E, M, output
+				0.01, 1, 300, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilon1s, epsilon2s, C1, C2);
 }

@@ -69,6 +69,12 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			mwfn.setEnergy(epsilon2s, 2);
 			mwfn.setCoefficientMatrix(C1, 1);
 			mwfn.setCoefficientMatrix(C2, 2);
+		}else if ( mwfn.Wfntype == 2 ){
+			int nd = mwfn.getNumElec(2);
+			int ns = mwfn.getNumElec(1) - nd;
+			EigenMatrix Cprime = EigenOne(Z.rows(), ns + nd);
+			auto [E, epsilons, C] = RestrictedOpenRiemannARH(nd, ns, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			E_scf = E;
 		}
 	}else if ( scf == "RIEMANN" ){
 		if ( mwfn.Wfntype == 0 ){

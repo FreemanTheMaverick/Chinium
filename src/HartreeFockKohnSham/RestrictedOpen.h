@@ -3,3 +3,9 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix Cprime, EigenMatrix Z,
 		int output, int nthreads);
+
+std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemannARH(
+		int nd, int ns,
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		EigenMatrix Cprime, EigenMatrix Z,
+		int output, int nthreads);
