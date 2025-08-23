@@ -137,7 +137,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 	EigenMatrix Vtmp1 = EigenZero(Z1.rows(), Z1.rows());
 	EigenMatrix Gtmp2 = EigenZero(Z1.rows(), Z1.rows());
-	Iterate M({Grassmann(D1prime).Clone(), Grassmann(D2prime).Clone()}, 1);
+	Maniverse::Iterate M({Maniverse::Grassmann(D1prime).Clone(), Maniverse::Grassmann(D2prime).Clone()}, 1);
 	std::function<
 		std::tuple<
 			double,
@@ -189,8 +189,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 				He
 		);
 	};
-	TrustRegionSetting tr_setting;
-	if ( ! TrustRegion(
+	Maniverse::TrustRegionSetting tr_setting;
+	if ( ! Maniverse::TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
 				0.001, 1, 100, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
@@ -216,7 +216,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	std::deque<EigenMatrix> F2primes;
 	std::vector<double> TrDsv;
 
-	Iterate M({Grassmann(D1prime).Clone(), Grassmann(D2prime).Clone()}, 1);
+	Maniverse::Iterate M({Maniverse::Grassmann(D1prime).Clone(), Maniverse::Grassmann(D2prime).Clone()}, 1);
 	std::function<
 		std::tuple<
 			double,
@@ -320,8 +320,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 				He
 		);
 	};
-	TrustRegionSetting tr_setting;
-	if ( ! TrustRegion(
+	Maniverse::TrustRegionSetting tr_setting;
+	if ( ! Maniverse::TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
 				0.01, 1, 300, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
@@ -347,7 +347,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	std::deque<EigenMatrix> F2primes;
 	std::vector<double> TrDsv;
 
-	Iterate M({Grassmann(D1prime).Clone(), Grassmann(D2prime).Clone()}, 1);
+	Maniverse::Iterate M({Maniverse::Grassmann(D1prime).Clone(), Maniverse::Grassmann(D2prime).Clone()}, 1);
 	std::function<
 		std::tuple<
 			double,
@@ -455,8 +455,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 				He
 		);
 	};
-	TrustRegionSetting tr_setting;
-	if ( ! TrustRegion(
+	Maniverse::TrustRegionSetting tr_setting;
+	if ( ! Maniverse::TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
 				0.01, 1, 300, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");

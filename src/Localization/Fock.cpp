@@ -12,13 +12,10 @@
 
 #include "../Macro.h"
 
-#include <iostream>
-
-
 EigenMatrix Fock(EigenMatrix Fref, EigenMatrix F2ref, int output){
 	const EigenMatrix kappa = Eigen::MatrixXd::Random(Fref.rows(), Fref.cols()) / 10 ;
 	const EigenMatrix p = ( kappa - kappa.transpose() ).exp();
-	Iterate M({Orthogonal(p).Clone()}, 1);
+	Maniverse::Iterate M({Maniverse::Orthogonal(p).Clone()}, 1);
 
 	std::function<
 		std::tuple<
@@ -41,11 +38,11 @@ EigenMatrix Fock(EigenMatrix Fref, EigenMatrix F2ref, int output){
 		const EigenMatrix UTFref = U.transpose() * Fref;
 		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix v){ return v; };
 		if ( order == 2 ) He = [Fdiag, twoF2ref, fourFref, eightFrefU, UTFref](EigenMatrix v){
-			return (EigenMatrix)(
+			return (
 					twoF2ref * v
 					- fourFref * v * Fdiag
 					- eightFrefU * (UTFref * v).diagonal().asDiagonal()
-			);
+			).eval();
 		};
 
 		return std::make_tuple(
@@ -56,13 +53,11 @@ EigenMatrix Fock(EigenMatrix Fref, EigenMatrix F2ref, int output){
 	};
 
 	double L = 0;
-	TrustRegionSetting tr_setting;
-	assert(
-			TrustRegion(
+	Maniverse::TrustRegionSetting tr_setting;
+	if ( ! Maniverse::TrustRegion(
 				func, tr_setting, {1.e-6, 1.e-4, 1.e-7},
 				0.001, 1, 100, L, M, output
-			) && "Convergence Failed!"
-	);
+	) ) throw std::runtime_error("Convergence Failed!");
 
 	return M.Point;
 }

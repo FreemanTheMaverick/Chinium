@@ -12,16 +12,13 @@
 
 #include "../Macro.h"
 
-#include <iostream>
-
-
 EigenMatrix FosterBoys(
 		EigenMatrix Cref,
 		EigenMatrix Wxao, EigenMatrix Wyao, EigenMatrix Wzao,
 		EigenMatrix W2aoSum, int output){
 	const EigenMatrix kappa = Eigen::MatrixXd::Random(Cref.cols(), Cref.cols()) / 10 ;
 	const EigenMatrix p = ( kappa - kappa.transpose() ).exp();
-	Iterate M({Orthogonal(p).Clone()}, 1);
+	Maniverse::Iterate M({Maniverse::Orthogonal(p).Clone()}, 1);
 	const EigenMatrix Wxref = Cref.transpose() * Wxao * Cref;
 	const EigenMatrix Wyref = Cref.transpose() * Wyao * Cref;
 	const EigenMatrix Wzref = Cref.transpose() * Wzao * Cref;
@@ -68,14 +65,15 @@ EigenMatrix FosterBoys(
 			eightWxrefU, eightWyrefU, eightWzrefU,
 			UTWxref, UTWyref, UTWzref
 		](EigenMatrix v){
-			return (EigenMatrix)(
+			return (
 				twoW2refSum * v
 				- fourWxref * v * DiagWx
 				- fourWyref * v * DiagWy
 				- fourWzref * v * DiagWz
 				- eightWxrefU * Diag( UTWxref * v)
 				- eightWyrefU * Diag( UTWyref * v)
-				- eightWzrefU * Diag( UTWzref * v) );
+				- eightWzrefU * Diag( UTWzref * v)
+			).eval();
 		};
 
 		return std::make_tuple(
@@ -86,13 +84,11 @@ EigenMatrix FosterBoys(
 	};
 
 	double L = 0;
-	TrustRegionSetting tr_setting;
-	assert(
-			TrustRegion(
+	Maniverse::TrustRegionSetting tr_setting;
+	if ( ! Maniverse::TrustRegion(
 				func, tr_setting, {1.e-6, 1.e-4, 1.e-7},
 				0.001, 1, 100, L, M, output
-			) && "Convergence Failed!"
-	);
+	) ) throw std::runtime_error("Convergence Failed!");
 
 	return M.Point;
 }

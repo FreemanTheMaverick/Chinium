@@ -112,7 +112,9 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	EigenVector epsilons = EigenZero(Z.cols(), 1);
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-	Iterate M({Grassmann(Dprime).Clone()}, 1);
+
+	Maniverse::Grassmann grassmann(Dprime);
+	Maniverse::Iterate M({grassmann.Clone()}, 1);
 	std::function<
 		std::tuple<
 			double,
@@ -156,8 +158,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 				std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
 		);
 	};
-	TrustRegionSetting tr_setting;
-	if ( ! TrustRegion(
+	Maniverse::TrustRegionSetting tr_setting;
+	if ( ! Maniverse::TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
 				0.001, 1, 100, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
@@ -178,7 +180,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemannARH(
 	std::deque<EigenMatrix> Dprimes;
 	std::deque<EigenMatrix> Fprimes;
 
-	Iterate M({Grassmann(Dprime).Clone()}, 1);
+	Maniverse::Grassmann grassmann(Dprime);
+	Maniverse::Iterate M({grassmann.Clone()}, 1);
 	std::function<
 		std::tuple<
 			double,
@@ -250,7 +253,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemannARH(
 				std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
 		);
 	};
-	TrustRegionSetting tr_setting;
+	Maniverse::TrustRegionSetting tr_setting;
 	if ( ! TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
 				0.01, 1, 300, E, M, output
@@ -269,7 +272,9 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFock(
 	EigenVector epsilons = EigenZero(Z.cols(), 1);
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-	Iterate M({RealSymmetric(Fprime).Clone()}, 1);
+
+	Maniverse::RealSymmetric rs(Fprime);
+	Maniverse::Iterate M({rs.Clone()}, 1);
 	std::function<
 		std::tuple<
 			double,
@@ -343,13 +348,11 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFock(
 				std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
 		);
 	};
-	TrustRegionSetting tr_setting;
+	Maniverse::TrustRegionSetting tr_setting;
 	tr_setting.R0 = 1;
-	if ( !TrustRegion(
+	if ( ! Maniverse::TrustRegion(
 			ffunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-1},
 			0.001, 1, 100, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilons, occupations, C);
 }
-
-

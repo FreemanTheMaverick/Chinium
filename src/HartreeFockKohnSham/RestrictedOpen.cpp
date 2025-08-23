@@ -32,9 +32,9 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 	EigenVector epsilons = EigenZero(Z.cols(), 1);
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-	Flag flag(Cprime);
+	Maniverse::Flag flag(Cprime);
 	flag.setBlockParameters({nd, ns});
-	Iterate M({flag.Clone()}, 1);
+	Maniverse::Iterate M({flag.Clone()}, 1);
 	std::function<
 		std::tuple<
 			double,
@@ -94,8 +94,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 				std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
 		);
 	};
-	TrustRegionSetting tr_setting;
-	if ( ! TrustRegion(
+	Maniverse::TrustRegionSetting tr_setting;
+	if ( ! Maniverse::TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
 				0.001, 1, 100, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
@@ -118,9 +118,9 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemannARH(
 	std::deque<EigenMatrix> Fdprimes;
 	std::deque<EigenMatrix> Fsprimes;
 
-	Flag flag(Cprime);
+	Maniverse::Flag flag(Cprime);
 	flag.setBlockParameters({nd, ns});
-	Iterate M({flag.Clone()}, 1);
+	Maniverse::Iterate M({flag.Clone()}, 1);
 	std::function<
 		std::tuple<
 			double,
@@ -218,14 +218,10 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemannARH(
 				std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
 		);
 	};
-	TrustRegionSetting tr_setting;
+	Maniverse::TrustRegionSetting tr_setting;
 	if ( ! TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
 				0.001, 1, 300, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilons, C);
 }
-
-
-
-

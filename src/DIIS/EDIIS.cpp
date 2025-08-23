@@ -12,7 +12,6 @@
 #include "../Macro.h"
 #include "EDIIS.h"
 
-
 EDIIS::EDIIS(
 		std::function<std::tuple<
 			std::vector<EigenMatrix>,
@@ -42,7 +41,7 @@ EigenVector EDIIS::Extrapolate(int index){
 	EigenMatrix p = EigenZero(size, 1); p(size - 1) = 0.9;
 	for ( int i = 0; i < size - 1; i++ )
 		p(i) = ( 1. - p(size - 1) ) / ( size - 1 );
-	Iterate M({Simplex(p).Clone()}, 1);
+	Maniverse::Iterate M({Maniverse::Simplex(p).Clone()}, 1);
 
 	std::function<
 		std::tuple<
@@ -64,10 +63,10 @@ EigenVector EDIIS::Extrapolate(int index){
 		);
 	};
 
-	if( this->Verbose > 1 ) std::printf("| Calling Maniverse for optimization on the Simplex manifold\n");
+	if ( this->Verbose > 1 ) std::printf("| Calling Maniverse for optimization on the Simplex manifold\n");
 	double L = 0;
-	TrustRegionSetting tr_setting;
-	const bool converged = TrustRegion(
+	Maniverse::TrustRegionSetting tr_setting;
+	const bool converged = Maniverse::TrustRegion(
 				func, tr_setting, {1.e-4, 1.e-6, 1e-2},
 				0.001, 1, 1000, L, M, 0
 	);
