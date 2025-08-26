@@ -23,6 +23,7 @@
 #include "../DIIS/CDIIS.h"
 #include "../DIIS/EDIIS.h"
 #include "../DIIS/ADIIS.h"
+#include "AugmentedRoothaanHall.h"
 
 #define S (int2c1e.Overlap)
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
@@ -125,79 +126,7 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemann(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		EigenMatrix D1prime, EigenMatrix D2prime,
-		EigenMatrix Z1, EigenMatrix Z2,
-		int output, int nthreads){
-	double E = 0;
-	EigenVector epsilon1s = EigenZero(Z1.cols(), 1);
-	EigenVector epsilon2s = EigenZero(Z2.cols(), 1);
-	EigenMatrix C1 = EigenZero(Z1.rows(), Z1.cols());
-	EigenMatrix C2 = EigenZero(Z2.rows(), Z2.cols());
-	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-	EigenMatrix Vtmp1 = EigenZero(Z1.rows(), Z1.rows());
-	EigenMatrix Gtmp2 = EigenZero(Z1.rows(), Z1.rows());
-	Maniverse::Iterate M({Maniverse::Grassmann(D1prime).Clone(), Maniverse::Grassmann(D2prime).Clone()}, 1);
-	std::function<
-		std::tuple<
-			double,
-			std::vector<EigenMatrix>,
-			std::vector<std::function<EigenMatrix (EigenMatrix)>>
-		> (std::vector<EigenMatrix>, int)
-	> dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int order){
-		const EigenMatrix D1prime_ = Dprimes_[0];
-		const EigenMatrix D2prime_ = Dprimes_[1];
-		const EigenMatrix D1_ = Z1 * D1prime_ * Z1.transpose();
-		const EigenMatrix D2_ = Z2 * D2prime_ * Z2.transpose();
-		auto [Ghf1_, Ghf2_] = int4c2e.ContractInts(D1_, D2_, nthreads, 1);
-		const EigenMatrix Fhf1_ = Hcore + Ghf1_;
-		const EigenMatrix Fhf2_ = Hcore + Ghf2_;
-		const EigenMatrix F1_ = Fhf1_;
-		const EigenMatrix F2_ = Fhf2_;
-		const EigenMatrix F1prime_ = Z1.transpose() * F1_ * Z1; // Euclidean gradient
-		const EigenMatrix F2prime_ = Z2.transpose() * F2_ * Z2; // Euclidean gradient
-		eigensolver.compute(F1prime_);
-		epsilon1s = eigensolver.eigenvalues();
-		C1 = Z1 * eigensolver.eigenvectors();
-		eigensolver.compute(F2prime_);
-		epsilon2s = eigensolver.eigenvalues();
-		C2 = Z2 * eigensolver.eigenvectors();
-		const double E_ = 0.5 * ( Dot(D1_, Hcore + F1_) + Dot(D2_, Hcore + F2_) );
-		std::vector<std::function<EigenMatrix (EigenMatrix)>> He;
-		if ( order == 2 ){
-			He.push_back([&Vtmp1](EigenMatrix v1prime){
-				Vtmp1 = v1prime;
-				return EigenZero(v1prime.rows(), v1prime.cols());
-			});
-			He.push_back([Z1, Z2, &Vtmp1, &int4c2e, &Gtmp2, nthreads](EigenMatrix v2prime){
-				const EigenMatrix v1 = Z1 * Vtmp1 * Z1.transpose();
-				const EigenMatrix v2 = Z2 * v2prime * Z2.transpose();
-				auto [Gtmp1_, Gtmp2_] = int4c2e.ContractInts(v1, v2, nthreads, 0);
-				Gtmp2 = Gtmp2_;
-				return (EigenMatrix)(Z2.transpose() * Gtmp1_ * Z2);
-			});
-			He.push_back([Z1, &Gtmp2](EigenMatrix /*v1prime*/){
-				return (EigenMatrix)(Z1.transpose() * Gtmp2 * Z1);
-			});
-			He.push_back([](EigenMatrix v2prime){
-				return EigenZero(v2prime.rows(), v2prime.cols());
-			});
-		}
-		return std::make_tuple(
-				E_,
-				std::vector<EigenMatrix>{F1prime_, F2prime_},
-				He
-		);
-	};
-	Maniverse::TrustRegionSetting tr_setting;
-	if ( ! Maniverse::TrustRegion(
-				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.001, 1, 100, E, M, output
-	) ) throw std::runtime_error("Convergence failed!");
-	return std::make_tuple(E, epsilon1s, epsilon2s, C1, C2);
-}
-
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH(
+		bool exact_hessian,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
@@ -210,11 +139,21 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 
 	// ARH hessian related
-	std::deque<EigenMatrix> D1primes;
-	std::deque<EigenMatrix> D2primes;
-	std::deque<EigenMatrix> F1primes;
-	std::deque<EigenMatrix> F2primes;
-	std::vector<double> TrDsv;
+	AugmentedRoothaanHall arh(exact_hessian ? 1 : 20, 1);
+	EigenMatrix v = EigenZero(D1prime.rows(), 2 * D1prime.cols());
+	EigenMatrix Hv = EigenZero(D1prime.rows(), 2 * D1prime.cols());
+	if ( exact_hessian ){
+		v.resize(0, 0);
+		Hv.resize(0, 0);
+	}
+
+	// Exact hessian related
+	EigenMatrix Vtmp1 = EigenZero(Z1.rows(), Z1.rows());
+	EigenMatrix Gtmp2 = EigenZero(Z1.rows(), Z1.rows());
+	if ( ! exact_hessian ){
+		Vtmp1.resize(0, 0);
+		Gtmp2.resize(0, 0);
+	}
 
 	Maniverse::Iterate M({Maniverse::Grassmann(D1prime).Clone(), Maniverse::Grassmann(D2prime).Clone()}, 1);
 	std::function<
@@ -237,15 +176,12 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		const EigenMatrix F2prime_ = Z2.transpose() * F2_ * Z2; // Euclidean gradient
 
 		// ARH hessian related
-		D1primes.push_back(D1prime_);
-		D2primes.push_back(D2prime_);
-		F1primes.push_back(F1prime_);
-		F2primes.push_back(F2prime_);
-		if ( D1primes.size() > 20 ){
-			D1primes.pop_front();
-			D2primes.pop_front();
-			F1primes.pop_front();
-			F2primes.pop_front();
+		if ( ! exact_hessian ){
+			EigenMatrix Dprime_ = EigenZero(D1prime_.rows(), 2 * D1prime_.cols());
+			Dprime_ << D1prime_, D2prime_;
+			EigenMatrix Fprime_ = EigenZero(F1prime_.rows(), 2 * F1prime_.cols());
+			Fprime_ << F1prime_, F2prime_;
+			arh.Append(Dprime_, Fprime_);
 		}
 
 		eigensolver.compute(F1prime_);
@@ -256,63 +192,43 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		C2 = Z2 * eigensolver.eigenvectors();
 		const double E_ = 0.5 * ( Dot(D1_, Hcore + F1_) + Dot(D2_, Hcore + F2_) );
 		std::vector<std::function<EigenMatrix (EigenMatrix)>> He;
-		if ( order == 2 && D1primes.size() > 1 ){
-			if (output>0) std::printf("Using augmented Roothaan-Hall hessian with %d previous iterations\n", (int)D1primes.size());
-			const int size = (int)D1primes.size() - 1;
-			const int nbasis = Z1.rows();
-			std::vector<EigenMatrix> D1diff(size, EigenZero(nbasis, nbasis));
-			std::vector<EigenMatrix> D2diff(size, EigenZero(nbasis, nbasis));
-			std::vector<EigenMatrix> F1diff(size, EigenZero(nbasis, nbasis));
-			std::vector<EigenMatrix> F2diff(size, EigenZero(nbasis, nbasis));
-			for ( int i = 0; i < size; i++ ){
-				D1diff[i] = D1primes[i] - D1prime_;
-				D2diff[i] = D2primes[i] - D2prime_;
-				F1diff[i] = F1primes[i] - F1prime_;
-				F2diff[i] = F2primes[i] - F2prime_;
-			}
-			EigenMatrix T = EigenZero(size, size);
-			for ( int i = 0; i < size; i++ ) for ( int j = i; j < size; j++ ){
-				T(i, j) = T(j, i) = D1diff[i].cwiseProduct(D1diff[j]).sum() + D2diff[i].cwiseProduct(D2diff[j]).sum();
-			}
-			const EigenMatrix Tinv = T.inverse();
-			TrDsv.resize(size);
-			He.push_back([nbasis, size, D1diff, &TrDsv](EigenMatrix v1){
-					for ( int j = 0; j < size; j++ )
-						TrDsv[j] = D1diff[j].cwiseProduct(v1).sum();
+		if ( order == 2 ){
+			if ( exact_hessian ){
+				He.push_back([&Vtmp1](EigenMatrix v1prime){
+					Vtmp1 = v1prime;
+					return EigenZero(v1prime.rows(), v1prime.cols());
+				});
+				He.push_back([Z1, Z2, &Vtmp1, &int4c2e, &Gtmp2, nthreads](EigenMatrix v2prime){
+					const EigenMatrix v1 = Z1 * Vtmp1 * Z1.transpose();
+					const EigenMatrix v2 = Z2 * v2prime * Z2.transpose();
+					auto [Gtmp1_, Gtmp2_] = int4c2e.ContractInts(v1, v2, nthreads, 0);
+					Gtmp2 = Gtmp2_;
+					return (EigenMatrix)(Z2.transpose() * Gtmp1_ * Z2);
+				});
+				He.push_back([Z1, &Gtmp2](EigenMatrix /*v1prime*/){
+					return (EigenMatrix)(Z1.transpose() * Gtmp2 * Z1);
+				});
+				He.push_back([](EigenMatrix v2prime){
+					return EigenZero(v2prime.rows(), v2prime.cols());
+				});
+			}else{
+				const int nbasis = D1prime_.cols();
+				He.push_back([&v, nbasis](EigenMatrix v1){
+					v.leftCols(nbasis) = v1;
 					return EigenZero(nbasis, nbasis);
-			});
-			He.push_back([nbasis, size, F1diff, D2diff, Tinv, &TrDsv](EigenMatrix v2){
-					for ( int j = 0; j < size; j++ )
-						TrDsv[j] += D2diff[j].cwiseProduct(v2).sum();
-					EigenMatrix Hv2 = EigenZero(nbasis, nbasis);
-					for ( int i = 0; i < size; i++ ){
-						double coeff = 0;
-						for ( int j = 0; j < size; j++ ){
-							coeff += Tinv(i, j) * TrDsv[j];
-						}
-						Hv2 += F1diff[i] * coeff;
-					}
-					return Hv2;
-			});
-			He.push_back([](EigenMatrix v1){
-					return EigenZero(v1.rows(), v1.cols());
-			});
-			He.push_back([nbasis, size, F2diff, &TrDsv, Tinv](EigenMatrix /*v2*/){
-					EigenMatrix Hv2 = EigenZero(nbasis, nbasis);
-					for ( int i = 0; i < size; i++ ){
-						double coeff = 0;
-						for ( int j = 0; j < size; j++ ){
-							coeff += Tinv(i, j) * TrDsv[j];
-						}
-						Hv2 += F2diff[i] * coeff;
-					}
-					return (EigenMatrix)Hv2;
-			});
-		}else{
-			He.push_back([](EigenMatrix v1){ return v1; });
-			He.push_back([](EigenMatrix v2){ return EigenZero(v2.rows(), v2.cols()); });
-			He.push_back([](EigenMatrix v1){ return EigenZero(v1.rows(), v1.cols()); });
-			He.push_back([](EigenMatrix v2){ return v2; });
+				});
+				He.push_back([&Hv, &v, &arh, nbasis](EigenMatrix v2){
+					v.rightCols(nbasis) = v2;
+					Hv = arh.Hessian(v);
+					return Hv.leftCols(nbasis);
+				});
+				He.push_back([&Hv, nbasis](EigenMatrix /*v1*/){
+					return Hv.rightCols(nbasis);
+				});
+				He.push_back([nbasis](EigenMatrix /*v2*/){
+					return EigenZero(nbasis, nbasis);
+				});
+			}
 		}
 		return std::make_tuple(
 				E_,
@@ -323,9 +239,25 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	Maniverse::TrustRegionSetting tr_setting;
 	if ( ! Maniverse::TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.01, 1, 300, E, M, output
+				exact_hessian ? 0.001 : 0.01, 1, 300, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilon1s, epsilon2s, C1, C2);
+}
+
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemann(
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		EigenMatrix D1prime, EigenMatrix D2prime,
+		EigenMatrix Z1, EigenMatrix Z2,
+		int output, int nthreads){
+	return UnrestrictedRiemann(1, int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
+}
+
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH(
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		EigenMatrix D1prime, EigenMatrix D2prime,
+		EigenMatrix Z1, EigenMatrix Z2,
+		int output, int nthreads){
+	return UnrestrictedRiemann(0, int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH_villain(

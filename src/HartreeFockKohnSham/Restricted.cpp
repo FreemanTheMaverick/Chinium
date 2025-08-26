@@ -23,6 +23,7 @@
 #include "../DIIS/CDIIS.h"
 #include "../DIIS/EDIIS.h"
 #include "../DIIS/ADIIS.h"
+#include "AugmentedRoothaanHall.h"
 
 #define S (int2c1e.Overlap)
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
@@ -104,6 +105,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 }
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
+		bool exact_hessian,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
@@ -113,72 +115,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 
-	Maniverse::Grassmann grassmann(Dprime);
-	Maniverse::Iterate M({grassmann.Clone()}, 1);
-	std::function<
-		std::tuple<
-			double,
-			std::vector<EigenMatrix>,
-			std::vector<std::function<EigenMatrix (EigenMatrix)>>
-		> (std::vector<EigenMatrix>, int)
-	> dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int order){
-		const EigenMatrix Dprime_ = Dprimes_[0];
-		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
-		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
-		double Exc_ = 0;
-		EigenMatrix Gxc_ = EigenZero(Ghf_.rows(), Ghf_.cols());
-		if (xc){
-			grid.getDensity(2 * D_);
-			xc.Evaluate("ev", grid);
-			xc.Evaluate("f", grid);
-			Exc_ = grid.getEnergy();
-			Gxc_ = grid.getFock();
-		}
-		const EigenMatrix Fhf_ = Hcore + Ghf_;
-		const EigenMatrix F_ = Fhf_+ Gxc_;
-		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
-		eigensolver.compute(Fprime_);
-		epsilons = eigensolver.eigenvalues();
-		C = Z * eigensolver.eigenvectors();
-		const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
-		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-		if ( order == 2 ) He = [Z, &int4c2e, &grid, nthreads](EigenMatrix vprime){
-			const EigenMatrix v = Z * vprime * Z.transpose();
-			const EigenMatrix FhfU = int4c2e.ContractInts(v, nthreads, 0);
-			std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
-			std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
-			grid.getDensityU({2*v}, RhoUss, Rho1Uss, SigmaUss);
-			const EigenMatrix FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
-			const EigenMatrix FU = FhfU + FxcU;
-			return (EigenMatrix)(Z.transpose() * FU * Z);
-		};
-		return std::make_tuple(
-				E_,
-				std::vector<EigenMatrix>{Fprime_},
-				std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
-		);
-	};
-	Maniverse::TrustRegionSetting tr_setting;
-	if ( ! Maniverse::TrustRegion(
-				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.001, 1, 100, E, M, output
-	) ) throw std::runtime_error("Convergence failed!");
-	return std::make_tuple(E, epsilons, C);
-}
-
-std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemannARH(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix Dprime, EigenMatrix Z,
-		int output, int nthreads){
-	double E = 0;
-	EigenVector epsilons = EigenZero(Z.cols(), 1);
-	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
-	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-
-	// ARH hessian related
-	std::deque<EigenMatrix> Dprimes;
-	std::deque<EigenMatrix> Fprimes;
+	AugmentedRoothaanHall arh(exact_hessian ? 1 : 20, 1);
 
 	Maniverse::Grassmann grassmann(Dprime);
 	Maniverse::Iterate M({grassmann.Clone()}, 1);
@@ -205,47 +142,28 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemannARH(
 		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
 
 		// ARH hessian related
-		Dprimes.push_back(Dprime_);
-		Fprimes.push_back(Fprime_);
-		if ( Dprimes.size() > 20 ){
-			Dprimes.pop_front();
-			Fprimes.pop_front();
-		}
+		if ( ! exact_hessian ) arh.Append(Dprime_, Fprime_);
 
 		eigensolver.compute(Fprime_);
 		epsilons = eigensolver.eigenvalues();
 		C = Z * eigensolver.eigenvectors();
 		const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
 		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-		if ( order == 2 && Dprimes.size() > 1 ){
-			if (output>0) std::printf("Using augmented Roothaan-Hall hessian with %d previous iterations\n", (int)Dprimes.size());
-			const int size = (int)Dprimes.size() - 1;
-			const int nbasis = Z.rows();
-			std::vector<EigenMatrix> Ddiff(size, EigenZero(nbasis, nbasis));
-			std::vector<EigenMatrix> Fdiff(size, EigenZero(nbasis, nbasis));
-			for ( int i = 0; i < size; i++ ){
-				Ddiff[i] = Dprimes[i] - Dprime_;
-				Fdiff[i] = Fprimes[i] - Fprime_;
-			}
-			EigenMatrix T = EigenZero(size, size);
-			for ( int i = 0; i < size; i++ ) for ( int j = i; j < size; j++ ){
-				T(i, j) = T(j, i) = Ddiff[i].cwiseProduct(Ddiff[j]).sum();
-			}
-			const EigenMatrix Tinv = T.inverse();
-			He = [nbasis, size, Ddiff, Fdiff, Tinv](EigenMatrix vprime){
-				std::vector<double> TrDsv(size);
-				for ( int j = 0; j < size; j++ )
-					TrDsv[j] = Ddiff[j].cwiseProduct(vprime).sum();
-				EigenMatrix Hv = EigenZero(nbasis, nbasis);
-				for ( int i = 0; i < size; i++ ){
-					double coeff = 0;
-					for ( int j = 0; j < size; j++ ){
-						coeff += Tinv(i, j) * TrDsv[j];
-					}
-					Hv += Fdiff[i] * coeff;
+		if ( order == 2 ){
+			if ( exact_hessian ) He = [Z, &int4c2e, &grid, &xc, nthreads](EigenMatrix vprime){
+				const EigenMatrix v = Z * vprime * Z.transpose();
+				const EigenMatrix FhfU = int4c2e.ContractInts(v, nthreads, 0);
+				EigenMatrix FxcU = EigenZero(vprime.rows(), vprime.cols());
+				if (xc){
+					std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
+					std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
+					grid.getDensityU({2*v}, RhoUss, Rho1Uss, SigmaUss);
+					FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
 				}
-				return (EigenMatrix)Hv;
+				const EigenMatrix FU = FhfU + FxcU;
+				return (Z.transpose() * FU * Z).eval();
 			};
+			else He = [&arh](EigenMatrix vprime){ return arh.Hessian(vprime); };
 		}
 		return std::make_tuple(
 				E_,
@@ -256,9 +174,25 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemannARH(
 	Maniverse::TrustRegionSetting tr_setting;
 	if ( ! TrustRegion(
 				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				0.01, 1, 300, E, M, output
+				exact_hessian ? 0.001 : 0.01, 1, 300, E, M, output
 	) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilons, C);
+}
+
+std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
+		EigenMatrix Dprime, EigenMatrix Z,
+		int output, int nthreads){
+	return RestrictedRiemann(1, int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
+}
+
+std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemannARH(
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
+		EigenMatrix Dprime, EigenMatrix Z,
+		int output, int nthreads){
+	return RestrictedRiemann(0, int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFock(
