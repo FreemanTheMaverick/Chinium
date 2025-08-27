@@ -5,7 +5,7 @@ class AugmentedRoothaanHall{ public:
 	std::vector<EigenMatrix> Pdiffs, Gdiffs;
 	EigenMatrix Tinv;
 
-	AugmentedRoothaanHall(int max_size, bool verbose);
+	void Init(int max_size, bool verbose);
 	void Append(EigenMatrix P, EigenMatrix G);
 	EigenMatrix Hessian(EigenMatrix v);
 };

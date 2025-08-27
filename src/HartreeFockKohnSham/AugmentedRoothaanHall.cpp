@@ -2,13 +2,17 @@
 #include <cmath>
 #include <deque>
 #include <vector>
+#include <cstdio>
 
 #include "../Macro.h"
 #include "AugmentedRoothaanHall.h"
 
 #define current_size (int)this->Ps.size()
 
-AugmentedRoothaanHall::AugmentedRoothaanHall(int max_size, bool verbose): MaxSize(max_size), Verbose(verbose){
+void AugmentedRoothaanHall::Init(int max_size, bool verbose){
+	if (verbose) std::printf("Initialized Augmented Roothaan Hall hessian with maximal size %d.\n", max_size);
+	this->MaxSize = max_size;
+	this->Verbose = verbose;
 	this->Pdiffs.reserve(max_size);
 	this->Gdiffs.reserve(max_size);
 }

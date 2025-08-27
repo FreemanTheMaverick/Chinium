@@ -12,6 +12,7 @@
 #include <memory>
 #include <Maniverse/Manifold/Grassmann.h>
 #include <Maniverse/Manifold/RealSymmetric.h>
+#include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/Optimizer/TrustRegion.h>
 #include <libmwfn.h>
 
@@ -104,8 +105,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 	return std::make_tuple(E, epsilons, occupations, C);
 }
 
+template <typename FuncType, bool exact_hess>
 std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
-		bool exact_hessian,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
@@ -115,17 +116,12 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 
-	AugmentedRoothaanHall arh(exact_hessian ? 1 : 20, 1);
+	AugmentedRoothaanHall arh;
+	if constexpr ( ! exact_hess ) arh.Init(20, 1);
 
 	Maniverse::Grassmann grassmann(Dprime);
 	Maniverse::Iterate M({grassmann.Clone()}, 1);
-	std::function<
-		std::tuple<
-			double,
-			std::vector<EigenMatrix>,
-			std::vector<std::function<EigenMatrix (EigenMatrix)>>
-		> (std::vector<EigenMatrix>, int)
-	> dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int order){
+	FuncType dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int order){
 		const EigenMatrix Dprime_ = Dprimes_[0];
 		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
 		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
@@ -134,6 +130,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		if (xc){
 			grid.getDensity(2 * D_);
 			xc.Evaluate("ev", grid);
+			if constexpr ( exact_hess ) xc.Evaluate("f", grid);
 			Exc_ = grid.getEnergy();
 			Gxc_ = grid.getFock();
 		}
@@ -142,57 +139,84 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
 
 		// ARH hessian related
-		if ( ! exact_hessian ) arh.Append(Dprime_, Fprime_);
+		if constexpr ( ! exact_hess ) arh.Append(Dprime_, Fprime_);
 
 		eigensolver.compute(Fprime_);
 		epsilons = eigensolver.eigenvalues();
 		C = Z * eigensolver.eigenvectors();
 		const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
-		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-		if ( order == 2 ){
-			if ( exact_hessian ) He = [Z, &int4c2e, &grid, &xc, nthreads](EigenMatrix vprime){
-				const EigenMatrix v = Z * vprime * Z.transpose();
-				const EigenMatrix FhfU = int4c2e.ContractInts(v, nthreads, 0);
-				EigenMatrix FxcU = EigenZero(vprime.rows(), vprime.cols());
-				if (xc){
-					std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
-					std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
-					grid.getDensityU({2*v}, RhoUss, Rho1Uss, SigmaUss);
-					FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
-				}
-				const EigenMatrix FU = FhfU + FxcU;
-				return (Z.transpose() * FU * Z).eval();
-			};
-			else He = [&arh](EigenMatrix vprime){ return arh.Hessian(vprime); };
+		if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconFirstFunc>){
+				return std::make_tuple(
+					E_,
+					std::vector<EigenMatrix>{Fprime_}
+			);
+		}else if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc>){
+			std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
+			if ( order == 2 ){
+				if constexpr ( exact_hess ) He = [Z, &int4c2e, &grid, &xc, nthreads](EigenMatrix vprime){
+					const EigenMatrix v = Z * vprime * Z.transpose();
+					const EigenMatrix FhfU = int4c2e.ContractInts(v, nthreads, 0);
+					EigenMatrix FxcU = EigenZero(vprime.rows(), vprime.cols());
+					if (xc){
+						std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
+						std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
+						grid.getDensityU({2*v}, RhoUss, Rho1Uss, SigmaUss);
+						FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
+					}
+					const EigenMatrix FU = FhfU + FxcU;
+					return (Z.transpose() * FU * Z).eval();
+				};
+				else He = [&arh](EigenMatrix vprime){ return arh.Hessian(vprime); };
+			}
+			return std::make_tuple(
+					E_,
+					std::vector<EigenMatrix>{Fprime_},
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
+			);
 		}
-		return std::make_tuple(
-				E_,
-				std::vector<EigenMatrix>{Fprime_},
-				std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
-		);
 	};
-	Maniverse::TrustRegionSetting tr_setting;
-	if ( ! TrustRegion(
-				dfunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-5},
-				exact_hessian ? 0.001 : 0.01, 1, 300, E, M, output
-	) ) throw std::runtime_error("Convergence failed!");
+	
+	const std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
+	if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconFirstFunc>){
+		if ( ! Maniverse::LBFGS(
+					dfunc_newton, tol,
+					20, 300, E, M, output
+		) ) throw std::runtime_error("Convergence failed!");
+	}else if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc>){
+		double ratio = 0;
+		if constexpr ( exact_hess ) ratio = 0.001;
+		else ratio = 0.01;
+		Maniverse::TrustRegionSetting tr_setting;
+		if ( ! Maniverse::TrustRegion(
+					dfunc_newton, tr_setting, tol,
+					ratio, 1, 300, E, M, output
+		) ) throw std::runtime_error("Convergence failed!");
+	}
 	return std::make_tuple(E, epsilons, C);
 }
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
+std::tuple<double, EigenVector, EigenMatrix> RestrictedLBFGS(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
 		int output, int nthreads){
-	return RestrictedRiemann(1, int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
+	return RestrictedRiemann<Maniverse::UnpreconFirstFunc, 0>(int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
 }
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemannARH(
+std::tuple<double, EigenVector, EigenMatrix> RestrictedNewton(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Dprime, EigenMatrix Z,
 		int output, int nthreads){
-	return RestrictedRiemann(0, int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
+	return RestrictedRiemann<Maniverse::UnpreconSecondFunc, 1>(int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
+}
+
+std::tuple<double, EigenVector, EigenMatrix> RestrictedARH(
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
+		EigenMatrix Dprime, EigenMatrix Z,
+		int output, int nthreads){
+	return RestrictedRiemann<Maniverse::UnpreconSecondFunc, 0>(int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFock(
