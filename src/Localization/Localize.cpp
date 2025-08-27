@@ -17,8 +17,6 @@
 #include "FosterBoys.h"
 #include "PipekMezey.h"
 
-#include <iostream>
-
 void Localize(Mwfn& mwfn, Int2C1E& int2c1e, std::string scheme, std::string range, int output){
 
 	std::transform(scheme.begin(), scheme.end(), scheme.begin(), ::toupper);

@@ -16,9 +16,6 @@
 #include "Parallel.h"
 #include "Macro.h"
 
-#include <iostream>
-
-
 std::tuple<EigenMatrix, EigenMatrix> getRepulsionDiag(libint2::BasisSet& obs){ // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
 	const int nbasis = libint2::nbf(obs);
 	EigenMatrix Diag1212 = EigenZero(nbasis, nbasis);

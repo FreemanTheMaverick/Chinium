@@ -3,7 +3,6 @@
 #include <cmath>
 #include <string>
 #include <vector>
-#include <iostream>
 #include <libmwfn.h>
 
 #include "../Macro.h"

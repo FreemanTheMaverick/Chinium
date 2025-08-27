@@ -2,7 +2,6 @@
 #include <libint2.hpp>
 #include <vector>
 #include <string>
-#include <iostream>
 #include <libmwfn.h>
 
 #include "../Macro.h"

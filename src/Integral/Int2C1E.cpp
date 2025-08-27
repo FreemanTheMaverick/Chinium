@@ -14,8 +14,6 @@
 #include "Int2C1E.h"
 #include "Macro.h"
 
-#include <iostream>
-
 std::vector<EigenMatrix> getTwoCenter0(
 		libint2::BasisSet& obs,
 		std::vector<std::pair<double, std::array<double, 3>>>& libint2charges,
