@@ -141,10 +141,10 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 
 	// ARH hessian related
 	AugmentedRoothaanHall arh;
-	if constexpr ( ! exact_hess ) arh.Init(20, 1);
+	if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc> ) arh.Init(20, 1);
 	EigenMatrix v = EigenZero(D1prime.rows(), 2 * D1prime.cols());
 	EigenMatrix Hv = EigenZero(D1prime.rows(), 2 * D1prime.cols());
-	if constexpr ( exact_hess ){
+	if constexpr ( exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc> ){
 		v.resize(0, 0);
 		Hv.resize(0, 0);
 	}
@@ -152,7 +152,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	// Exact hessian related
 	EigenMatrix Vtmp1 = EigenZero(Z1.rows(), Z1.rows());
 	EigenMatrix Gtmp2 = EigenZero(Z1.rows(), Z1.rows());
-	if constexpr ( ! exact_hess ){
+	if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconFirstFunc> ){
 		Vtmp1.resize(0, 0);
 		Gtmp2.resize(0, 0);
 	}
@@ -172,7 +172,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		const EigenMatrix F2prime_ = Z2.transpose() * F2_ * Z2; // Euclidean gradient
 
 		// ARH hessian related
-		if constexpr ( ! exact_hess ){
+		if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc> ){
 			EigenMatrix Dprime_ = EigenZero(D1prime_.rows(), 2 * D1prime_.cols());
 			Dprime_ << D1prime_, D2prime_;
 			EigenMatrix Fprime_ = EigenZero(F1prime_.rows(), 2 * F1prime_.cols());

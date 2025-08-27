@@ -45,61 +45,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 	}
 
 	double E_scf = 0;
-	if ( scf == "FOCK" ){
-		EigenMatrix Fprime = mwfn.getEnergy().asDiagonal();
-		EigenVector Occ = mwfn.getOccupation() / 2;
-		auto [E, epsilons, occupations, C] = RestrictedFock(T, Mu, int2c1e, int4c2e, xc, grid, Fprime, Occ, Z, output-1, nthreads);
-		E_scf = E * 2;
-		mwfn.setEnergy(epsilons);
-		mwfn.setOccupation(occupations * 2);
-		mwfn.setCoefficientMatrix(C);
-	}else if ( scf == "ARH" ){
-		if ( mwfn.Wfntype == 0 ){
-			EigenMatrix Dprime = mwfn.getOccupation(1).asDiagonal();
-			auto [E, epsilons, C] = RestrictedARH(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
-			E_scf = 2 * E;
-			mwfn.setEnergy(epsilons, 1);
-			mwfn.setCoefficientMatrix(C, 1);
-		}else if ( mwfn.Wfntype == 1 ){
-			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
-			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
-			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedARH(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
-			E_scf = E;
-			mwfn.setEnergy(epsilon1s, 1);
-			mwfn.setEnergy(epsilon2s, 2);
-			mwfn.setCoefficientMatrix(C1, 1);
-			mwfn.setCoefficientMatrix(C2, 2);
-		}else if ( mwfn.Wfntype == 2 ){
-			int nd = mwfn.getNumElec(2);
-			int ns = mwfn.getNumElec(1) - nd;
-			EigenMatrix Cprime = EigenOne(Z.rows(), ns + nd);
-			auto [E, epsilons, C] = RestrictedOpenARH(nd, ns, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
-			E_scf = E;
-		}
-	}else if ( scf == "NEWTON" ){
-		if ( mwfn.Wfntype == 0 ){
-			EigenMatrix Dprime = (mwfn.getOccupation(1)).asDiagonal();
-			auto [E, epsilons, C] = RestrictedNewton(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
-			E_scf = 2 * E;
-			mwfn.setEnergy(epsilons, 1);
-			mwfn.setCoefficientMatrix(C, 1);
-		}else if ( mwfn.Wfntype == 1 ){
-			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
-			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
-			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedNewton(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
-			E_scf = E;
-			mwfn.setEnergy(epsilon1s, 1);
-			mwfn.setEnergy(epsilon2s, 2);
-			mwfn.setCoefficientMatrix(C1, 1);
-			mwfn.setCoefficientMatrix(C2, 2);
-		}else if ( mwfn.Wfntype == 2 ){
-			int nd = mwfn.getNumElec(2);
-			int ns = mwfn.getNumElec(1) - nd;
-			EigenMatrix Cprime = EigenOne(Z.rows(), ns + nd);
-			auto [E, epsilons, C] = RestrictedOpenNewton(nd, ns, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
-			E_scf = E;
-		}
-	}else if ( scf == "DIIS" ){
+	if ( scf == "DIIS" ){
 		if ( mwfn.Wfntype == 0 ){
 			EigenMatrix F = mwfn.getFock(1);
 			EigenVector Occ = mwfn.getOccupation(1) / 2;
@@ -134,6 +80,75 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			mwfn.setOccupation(occb, 2);
 			mwfn.setCoefficientMatrix(Ca, 1);
 			mwfn.setCoefficientMatrix(Cb, 2);
+		}
+	}else if ( scf == "LBFGS" ){
+		if ( mwfn.Wfntype == 0 ){
+			EigenMatrix Dprime = (mwfn.getOccupation(1)).asDiagonal();
+			auto [E, epsilons, C] = RestrictedLBFGS(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
+			E_scf = 2 * E;
+			mwfn.setEnergy(epsilons, 1);
+			mwfn.setCoefficientMatrix(C, 1);
+		}else if ( mwfn.Wfntype == 1 ){
+			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
+			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
+			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedLBFGS(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
+			E_scf = E;
+			mwfn.setEnergy(epsilon1s, 1);
+			mwfn.setEnergy(epsilon2s, 2);
+			mwfn.setCoefficientMatrix(C1, 1);
+			mwfn.setCoefficientMatrix(C2, 2);
+		}else if ( mwfn.Wfntype == 2 ){
+			int nd = mwfn.getNumElec(2);
+			int ns = mwfn.getNumElec(1) - nd;
+			EigenMatrix Cprime = EigenOne(Z.rows(), ns + nd);
+			auto [E, epsilons, C] = RestrictedOpenLBFGS(nd, ns, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			E_scf = E;
+		}
+	}else if ( scf == "NEWTON" ){
+		if ( mwfn.Wfntype == 0 ){
+			EigenMatrix Dprime = (mwfn.getOccupation(1)).asDiagonal();
+			auto [E, epsilons, C] = RestrictedNewton(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
+			E_scf = 2 * E;
+			mwfn.setEnergy(epsilons, 1);
+			mwfn.setCoefficientMatrix(C, 1);
+		}else if ( mwfn.Wfntype == 1 ){
+			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
+			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
+			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedNewton(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
+			E_scf = E;
+			mwfn.setEnergy(epsilon1s, 1);
+			mwfn.setEnergy(epsilon2s, 2);
+			mwfn.setCoefficientMatrix(C1, 1);
+			mwfn.setCoefficientMatrix(C2, 2);
+		}else if ( mwfn.Wfntype == 2 ){
+			int nd = mwfn.getNumElec(2);
+			int ns = mwfn.getNumElec(1) - nd;
+			EigenMatrix Cprime = EigenOne(Z.rows(), ns + nd);
+			auto [E, epsilons, C] = RestrictedOpenNewton(nd, ns, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			E_scf = E;
+		}
+	}else if ( scf == "ARH" ){
+		if ( mwfn.Wfntype == 0 ){
+			EigenMatrix Dprime = mwfn.getOccupation(1).asDiagonal();
+			auto [E, epsilons, C] = RestrictedARH(int2c1e, int4c2e, xc, grid, Dprime, Z, output-1, nthreads);
+			E_scf = 2 * E;
+			mwfn.setEnergy(epsilons, 1);
+			mwfn.setCoefficientMatrix(C, 1);
+		}else if ( mwfn.Wfntype == 1 ){
+			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
+			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
+			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedARH(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
+			E_scf = E;
+			mwfn.setEnergy(epsilon1s, 1);
+			mwfn.setEnergy(epsilon2s, 2);
+			mwfn.setCoefficientMatrix(C1, 1);
+			mwfn.setCoefficientMatrix(C2, 2);
+		}else if ( mwfn.Wfntype == 2 ){
+			int nd = mwfn.getNumElec(2);
+			int ns = mwfn.getNumElec(1) - nd;
+			EigenMatrix Cprime = EigenOne(Z.rows(), ns + nd);
+			auto [E, epsilons, C] = RestrictedOpenARH(nd, ns, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			E_scf = E;
 		}
 	}
 	return E_scf;

@@ -38,7 +38,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 
 	// ARH hessian related
 	AugmentedRoothaanHall arh;
-	if constexpr ( ! exact_hess ) arh.Init(20, 1);
+	if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc> ) arh.Init(20, 1);
 
 	Maniverse::Flag flag(Cprime);
 	flag.setBlockParameters({nd, ns});
@@ -61,7 +61,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		const EigenMatrix Fsprime_ = Z.transpose() * Fs_ * Z;
 
 		// ARH hessian related
-		if constexpr ( ! exact_hess ){
+		if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc>){
 			EigenMatrix Dprime_ = EigenZero(Ddprime_.rows(), 2 * Ddprime_.cols());
 			Dprime_ << Ddprime_, Dsprime_;
 			EigenMatrix Fprime_ = EigenZero(Fdprime_.rows(), 2 * Fdprime_.cols());

@@ -116,8 +116,9 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 
+	// ARH hessian related
 	AugmentedRoothaanHall arh;
-	if constexpr ( ! exact_hess ) arh.Init(20, 1);
+	if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc> ) arh.Init(20, 1);
 
 	Maniverse::Grassmann grassmann(Dprime);
 	Maniverse::Iterate M({grassmann.Clone()}, 1);
@@ -139,7 +140,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
 
 		// ARH hessian related
-		if constexpr ( ! exact_hess ) arh.Append(Dprime_, Fprime_);
+		if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc> ) arh.Append(Dprime_, Fprime_);
 
 		eigensolver.compute(Fprime_);
 		epsilons = eigensolver.eigenvalues();
