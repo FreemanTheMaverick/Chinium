@@ -48,7 +48,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 	if ( scf == "DIIS" ){
 		if ( mwfn.Wfntype == 0 ){
 			EigenMatrix F = mwfn.getFock(1);
-			EigenVector Occ = mwfn.getOccupation(1) / 2;
+			EigenVector Occ = mwfn.getOccupation(1);
 			auto [E, epsilons, occupations, C] = RestrictedDIIS(
 					T, Mu,
 					int2c1e, int4c2e,
