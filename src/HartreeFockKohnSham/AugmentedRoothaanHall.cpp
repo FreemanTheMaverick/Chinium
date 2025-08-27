@@ -19,6 +19,7 @@ void AugmentedRoothaanHall::Init(int max_size, bool verbose){
 
 void AugmentedRoothaanHall::Append(EigenMatrix P, EigenMatrix G){
 	const int size = (int)this->Ps.size();
+	if (this->Verbose) std::printf("Current Augmented Roothaan Hall size = %d\n", size);
 	this->Pdiffs.resize(size);
 	this->Gdiffs.resize(size);
 	for ( int i = 0; i < size; i++ ){
