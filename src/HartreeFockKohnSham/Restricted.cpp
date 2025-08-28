@@ -149,9 +149,9 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		epsilons = eigensolver.eigenvalues();
 		C = Z * eigensolver.eigenvectors();
 		const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
+
 		const int nocc = std::round(Dprime.diagonal().sum());
 		const int nbasis = Dprime.rows();
-
 		EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
 		for ( int o = 0; o < nocc; o++ ){
 			for ( int v = nocc; v < nbasis; v++ ){

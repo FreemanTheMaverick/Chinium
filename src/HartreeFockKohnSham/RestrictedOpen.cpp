@@ -25,7 +25,11 @@
 #define S (int2c1e.Overlap)
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
 
-template <typename FuncType, bool exact_hess>
+#define DummyFunc [](EigenMatrix v){ return v; }
+#define lbfgs_t 114514
+#define newton_t 1919
+#define arh_t 810
+template <int scf_t>
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		int nd, int ns,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
@@ -38,12 +42,12 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 
 	// ARH hessian related
 	AugmentedRoothaanHall arh;
-	if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc> ) arh.Init(20, 1);
+	if constexpr ( scf_t == arh_t ) arh.Init(20, 1);
 
 	Maniverse::Flag flag(Cprime);
 	flag.setBlockParameters({nd, ns});
 	Maniverse::Iterate M({flag.Clone()}, 1);
-	FuncType dfunc_newton = [&](std::vector<EigenMatrix> Cprimes_, int order){
+	Maniverse::PreconFunc dfunc_newton = [&](std::vector<EigenMatrix> Cprimes_, int order){
 		const EigenMatrix Cprime_ = Cprimes_[0];
 		const EigenMatrix Cdprime_ = Cprime_.leftCols(nd);
 		const EigenMatrix Csprime_ = Cprime_.rightCols(ns);
@@ -61,7 +65,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		const EigenMatrix Fsprime_ = Z.transpose() * Fs_ * Z;
 
 		// ARH hessian related
-		if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc>){
+		if constexpr ( scf_t == arh_t ){
 			EigenMatrix Dprime_ = EigenZero(Ddprime_.rows(), 2 * Ddprime_.cols());
 			Dprime_ << Ddprime_, Dsprime_;
 			EigenMatrix Fprime_ = EigenZero(Fdprime_.rows(), 2 * Fdprime_.cols());
@@ -78,15 +82,17 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 			+ Exc_;
 		EigenMatrix Grad = EigenZero(Cprime_.rows(), nd + ns);
 		Grad << 4 * Fdprime_ * Cdprime_, 4 * Fsprime_ * Csprime_;
-		if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconFirstFunc>){
+		if constexpr ( scf_t == lbfgs_t ){
 			return std::make_tuple(
 					E_,
-					std::vector<EigenMatrix>{Grad}
+					std::vector<EigenMatrix>{Grad},
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{DummyFunc},
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{DummyFunc}
 			);
-		}else if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc>){
+		}else{
 			std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
 			if ( order == 2 ){
-				if constexpr ( exact_hess ) He = [nd, ns, Z, Fdprime_, Fsprime_, Cdprime_, Csprime_, &int4c2e, nthreads](EigenMatrix vprime){
+				if constexpr ( scf_t == newton_t ) He = [nd, ns, Z, Fdprime_, Fsprime_, Cdprime_, Csprime_, &int4c2e, nthreads](EigenMatrix vprime){
 					EigenMatrix vdprime = vprime.leftCols(nd);
 					EigenMatrix vsprime = vprime.rightCols(ns);
 					EigenMatrix Ddprime = Cdprime_ * vdprime.transpose();
@@ -129,20 +135,21 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 			return std::make_tuple(
 					E_,
 					std::vector<EigenMatrix>{Grad},
-					std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{He},
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{DummyFunc}
 			);
 		}
 	};
 
 	const std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
-	if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconFirstFunc>){
+	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
 					dfunc_newton, tol,
 					20, 300, E, M, output
 		) ) throw std::runtime_error("Convergence failed!");
-	}else if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc>){
+	}else{
 		double ratio = 0;
-		if constexpr ( exact_hess ) ratio = 0.001;
+		if constexpr ( scf_t == newton_t ) ratio = 0.001;
 		else ratio = 0.01;
 		Maniverse::TrustRegionSetting tr_setting;
 		if ( ! Maniverse::TrustRegion(
@@ -158,7 +165,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenLBFGS(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix Cprime, EigenMatrix Z,
 		int output, int nthreads){
-	return RestrictedOpenRiemann<Maniverse::UnpreconFirstFunc, 0>(nd, ns, int2c1e, int4c2e, Cprime, Z, output, nthreads);
+	return RestrictedOpenRiemann<lbfgs_t>(nd, ns, int2c1e, int4c2e, Cprime, Z, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenNewton(
@@ -166,7 +173,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenNewton(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix Cprime, EigenMatrix Z,
 		int output, int nthreads){
-	return RestrictedOpenRiemann<Maniverse::UnpreconSecondFunc, 1>(nd, ns, int2c1e, int4c2e, Cprime, Z, output, nthreads);
+	return RestrictedOpenRiemann<newton_t>(nd, ns, int2c1e, int4c2e, Cprime, Z, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenARH(
@@ -174,5 +181,5 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenARH(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix Cprime, EigenMatrix Z,
 		int output, int nthreads){
-	return RestrictedOpenRiemann<Maniverse::UnpreconSecondFunc, 0>(nd, ns, int2c1e, int4c2e, Cprime, Z, output, nthreads);
+	return RestrictedOpenRiemann<arh_t>(nd, ns, int2c1e, int4c2e, Cprime, Z, output, nthreads);
 }

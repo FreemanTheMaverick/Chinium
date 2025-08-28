@@ -126,7 +126,12 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 	return std::make_tuple(E, epsa, epsb, occa, occb, Ca, Cb);
 }
 
-template <typename FuncType, bool exact_hess>
+#define DummyFunc [](EigenMatrix v){ return EigenZero(v.rows(), v.cols()).eval(); }
+#define IdentityFunc [](EigenMatrix v){ return v; }
+#define lbfgs_t 114514
+#define newton_t 1919
+#define arh_t 810
+template <int scf_t>
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		EigenMatrix D1prime, EigenMatrix D2prime,
@@ -141,10 +146,10 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 
 	// ARH hessian related
 	AugmentedRoothaanHall arh;
-	if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc> ) arh.Init(20, 1);
+	if constexpr ( scf_t == arh_t ) arh.Init(20, 1);
 	EigenMatrix v = EigenZero(D1prime.rows(), 2 * D1prime.cols());
 	EigenMatrix Hv = EigenZero(D1prime.rows(), 2 * D1prime.cols());
-	if constexpr ( exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc> ){
+	if constexpr ( scf_t == newton_t ){
 		v.resize(0, 0);
 		Hv.resize(0, 0);
 	}
@@ -152,13 +157,13 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	// Exact hessian related
 	EigenMatrix Vtmp1 = EigenZero(Z1.rows(), Z1.rows());
 	EigenMatrix Gtmp2 = EigenZero(Z1.rows(), Z1.rows());
-	if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconFirstFunc> ){
+	if constexpr ( scf_t == lbfgs_t || scf_t == arh_t ){
 		Vtmp1.resize(0, 0);
 		Gtmp2.resize(0, 0);
 	}
 
 	Maniverse::Iterate M({Maniverse::Grassmann(D1prime).Clone(), Maniverse::Grassmann(D2prime).Clone()}, 1);
-	FuncType dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int order){
+	Maniverse::PreconFunc dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int order){
 		const EigenMatrix D1prime_ = Dprimes_[0];
 		const EigenMatrix D2prime_ = Dprimes_[1];
 		const EigenMatrix D1_ = Z1 * D1prime_ * Z1.transpose();
@@ -172,7 +177,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		const EigenMatrix F2prime_ = Z2.transpose() * F2_ * Z2; // Euclidean gradient
 
 		// ARH hessian related
-		if constexpr ( ! exact_hess && std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc> ){
+		if constexpr ( scf_t == arh_t ){
 			EigenMatrix Dprime_ = EigenZero(D1prime_.rows(), 2 * D1prime_.cols());
 			Dprime_ << D1prime_, D2prime_;
 			EigenMatrix Fprime_ = EigenZero(F1prime_.rows(), 2 * F1prime_.cols());
@@ -187,15 +192,68 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		epsilon2s = eigensolver.eigenvalues();
 		C2 = Z2 * eigensolver.eigenvectors();
 		const double E_ = 0.5 * ( Dot(D1_, Hcore + F1_) + Dot(D2_, Hcore + F2_) );
-		if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconFirstFunc>){
+
+		const int nocc = std::round(D1prime.diagonal().sum());
+		const int nbasis = D1prime.rows();
+		EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
+		for ( int o = 0; o < nocc; o++ ){
+			for ( int v = nocc; v < nbasis; v++ ){
+				A(o, v) = A(v, o) = 2 * ( epsilon1s(v) - epsilon1s(o) );
+			}
+		}
+		EigenMatrix B = EigenMatrix::Ones(nbasis, nbasis);
+		for ( int o = 0; o < nocc; o++ ){
+			for ( int v = nocc; v < nbasis; v++ ){
+				B(o, v) = B(v, o) = 2 * ( epsilon2s(v) - epsilon2s(o) );
+			}
+		}
+		if constexpr ( scf_t == lbfgs_t ){
+			const EigenMatrix Asqrt = A.cwiseSqrt();
+			const EigenMatrix Asqrtinv = Asqrt.cwiseInverse();
+			const EigenMatrix Bsqrt = B.cwiseSqrt();
+			const EigenMatrix Bsqrtinv = Bsqrt.cwiseInverse();
+			std::function<EigenMatrix (EigenMatrix)> PAsqrt = [D1prime_, Asqrtinv](EigenMatrix Z){
+				EigenMatrix W = D1prime_ * Z - Z * D1prime_;
+				W = W.cwiseProduct(Asqrtinv);
+				return ( D1prime_ * W - W * D1prime_ ).eval();
+			};
+			std::function<EigenMatrix (EigenMatrix)> PAsqrtinv = [D1prime_, Asqrt](EigenMatrix Z){
+				EigenMatrix W = D1prime_ * Z - Z * D1prime_;
+				W = W.cwiseProduct(Asqrt);
+				return ( D1prime_ * W - W * D1prime_ ).eval();
+			};
+			std::function<EigenMatrix (EigenMatrix)> PBsqrt = [D2prime_, Bsqrtinv](EigenMatrix Z){
+				EigenMatrix W = D2prime_ * Z - Z * D2prime_;
+				W = W.cwiseProduct(Bsqrtinv);
+				return ( D2prime_ * W - W * D2prime_ ).eval();
+			};
+			std::function<EigenMatrix (EigenMatrix)> PBsqrtinv = [D2prime_, Bsqrt](EigenMatrix Z){
+				EigenMatrix W = D2prime_ * Z - Z * D2prime_;
+				W = W.cwiseProduct(Bsqrt);
+				return ( D2prime_ * W - W * D2prime_ ).eval();
+			};
 			return std::make_tuple(
 					E_,
-					std::vector<EigenMatrix>{F1prime_, F2prime_}
+					std::vector<EigenMatrix>{F1prime_, F2prime_},
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{PAsqrt, DummyFunc, DummyFunc, PBsqrt},
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{PAsqrtinv, DummyFunc, DummyFunc, PBsqrtinv}
 			);
-		}else if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc>){
+		}else{
 			std::vector<std::function<EigenMatrix (EigenMatrix)>> He;
+			const EigenMatrix Ainv = A.cwiseInverse();
+			const EigenMatrix Binv = B.cwiseInverse();
+			std::function<EigenMatrix (EigenMatrix)> PA = [D1prime_, Ainv](EigenMatrix Z){
+				EigenMatrix W = D1prime_ * Z - Z * D1prime_;
+				W = W.cwiseProduct(Ainv);
+				return ( D1prime_ * W - W * D1prime_ ).eval();
+			};
+			std::function<EigenMatrix (EigenMatrix)> PB = [D2prime_, Binv](EigenMatrix Z){
+				EigenMatrix W = D2prime_ * Z - Z * D2prime_;
+				W = W.cwiseProduct(Binv);
+				return ( D2prime_ * W - W * D2prime_ ).eval();
+			};
 			if ( order == 2 ){
-				if constexpr ( exact_hess ){
+				if constexpr ( scf_t == newton_t ){
 					He.push_back([&Vtmp1](EigenMatrix v1prime){
 						Vtmp1 = v1prime;
 						return EigenZero(v1prime.rows(), v1prime.cols());
@@ -235,20 +293,21 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 			return std::make_tuple(
 					E_,
 					std::vector<EigenMatrix>{F1prime_, F2prime_},
-					He
+					He,
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{PA, DummyFunc, DummyFunc, PB}
 			);
 		}
 	};
 
 	const std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
-	if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconFirstFunc>){
+	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
 					dfunc_newton, tol,
 					20, 300, E, M, output
 		) ) throw std::runtime_error("Convergence failed!");
-	}else if constexpr (std::is_same_v<FuncType, Maniverse::UnpreconSecondFunc>){
+	}else{
 		double ratio = 0;
-		if constexpr ( exact_hess ) ratio = 0.001;
+		if constexpr ( scf_t == newton_t ) ratio = 0.001;
 		else ratio = 0.01;
 		Maniverse::TrustRegionSetting tr_setting;
 		if ( ! Maniverse::TrustRegion(
@@ -264,7 +323,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
 		int output, int nthreads){
-	return UnrestrictedRiemann<Maniverse::UnpreconFirstFunc, 0>(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
+	return UnrestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedNewton(
@@ -272,7 +331,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
 		int output, int nthreads){
-	return UnrestrictedRiemann<Maniverse::UnpreconSecondFunc, 1>(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
+	return UnrestrictedRiemann<newton_t>(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedARH(
@@ -280,7 +339,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
 		int output, int nthreads){
-	return UnrestrictedRiemann<Maniverse::UnpreconSecondFunc, 0>(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
+	return UnrestrictedRiemann<arh_t>(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH_villain(
