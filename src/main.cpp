@@ -127,8 +127,8 @@ int main(int /*argc*/, char* argv[]){
 			if ( mwfn.Wfntype == 0 ){
 				mwfn.Orbitals.resize(mwfn.getNumBasis());
 				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
-				for ( int i = 0; i < na; i++ ) occ(i) = 2;
-				mwfn.setOccupation(occ);
+				for ( int i = 0; i < na; i++ ) occ(i) = 1;
+				mwfn.setOccupation(occ, 1);
 			}else if ( mwfn.Wfntype == 1 ){
 				mwfn.Orbitals.resize(mwfn.getNumBasis() * 2);
 				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
@@ -146,7 +146,7 @@ int main(int /*argc*/, char* argv[]){
 				}
 				mwfn.setOccupation(occ);
 			}
-			GuessSCF(mwfn, env, int2c1e, grid, guess, 1);
+			GuessSCF(mwfn, int2c1e, grid, guess, 1);
 		}
 		const double E_scf = HartreeFockKohnSham(mwfn, env, int2c1e, int4c2e, xc, grid, scf, 4, nthreads);
 		E_tot += E_scf;

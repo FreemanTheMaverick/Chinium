@@ -163,7 +163,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	}
 
 	Maniverse::Iterate M({Maniverse::Grassmann(D1prime).Clone(), Maniverse::Grassmann(D2prime).Clone()}, 1);
-	Maniverse::PreconFunc dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int order){
+	Maniverse::PreconFunc dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int /*order*/){
 		const EigenMatrix D1prime_ = Dprimes_[0];
 		const EigenMatrix D2prime_ = Dprimes_[1];
 		const EigenMatrix D1_ = Z1 * D1prime_ * Z1.transpose();
@@ -253,43 +253,41 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 				W = W.cwiseProduct(Binv);
 				return ( D2prime_ * W - W * D2prime_ ).eval();
 			};
-			if ( order == 2 ){
-				if constexpr ( scf_t == newton_t ){
-					He.push_back([&Vtmp1](EigenMatrix v1prime){
-						Vtmp1 = v1prime;
-						return EigenZero(v1prime.rows(), v1prime.cols());
-					});
-					He.push_back([Z1, Z2, &Vtmp1, &int4c2e, &Gtmp2, nthreads](EigenMatrix v2prime){
-						const EigenMatrix v1 = Z1 * Vtmp1 * Z1.transpose();
-						const EigenMatrix v2 = Z2 * v2prime * Z2.transpose();
-						auto [Gtmp1_, Gtmp2_] = int4c2e.ContractInts(v1, v2, nthreads, 0);
-						Gtmp2 = Gtmp2_;
-						return (EigenMatrix)(Z2.transpose() * Gtmp1_ * Z2);
-					});
-					He.push_back([Z1, &Gtmp2](EigenMatrix /*v1prime*/){
-						return (EigenMatrix)(Z1.transpose() * Gtmp2 * Z1);
-					});
-					He.push_back([](EigenMatrix v2prime){
-						return EigenZero(v2prime.rows(), v2prime.cols());
-					});
-				}else{
-					const int nbasis = D1prime_.cols();
-					He.push_back([&v, nbasis](EigenMatrix v1){
-						v.leftCols(nbasis) = v1;
-						return EigenZero(nbasis, nbasis);
-					});
-					He.push_back([&Hv, &v, &arh, nbasis](EigenMatrix v2){
-						v.rightCols(nbasis) = v2;
-						Hv = arh.Hessian(v);
-						return Hv.leftCols(nbasis);
-					});
-					He.push_back([&Hv, nbasis](EigenMatrix /*v1*/){
-						return Hv.rightCols(nbasis);
-					});
-					He.push_back([nbasis](EigenMatrix /*v2*/){
-						return EigenZero(nbasis, nbasis);
-					});
-				}
+			if constexpr ( scf_t == newton_t ){
+				He.push_back([&Vtmp1](EigenMatrix v1prime){
+					Vtmp1 = v1prime;
+					return EigenZero(v1prime.rows(), v1prime.cols());
+				});
+				He.push_back([Z1, Z2, &Vtmp1, &int4c2e, &Gtmp2, nthreads](EigenMatrix v2prime){
+					const EigenMatrix v1 = Z1 * Vtmp1 * Z1.transpose();
+					const EigenMatrix v2 = Z2 * v2prime * Z2.transpose();
+					auto [Gtmp1_, Gtmp2_] = int4c2e.ContractInts(v1, v2, nthreads, 0);
+					Gtmp2 = Gtmp2_;
+					return (EigenMatrix)(Z2.transpose() * Gtmp1_ * Z2);
+				});
+				He.push_back([Z1, &Gtmp2](EigenMatrix /*v1prime*/){
+					return (EigenMatrix)(Z1.transpose() * Gtmp2 * Z1);
+				});
+				He.push_back([](EigenMatrix v2prime){
+					return EigenZero(v2prime.rows(), v2prime.cols());
+				});
+			}else{
+				const int nbasis = D1prime_.cols();
+				He.push_back([&v, nbasis](EigenMatrix v1){
+					v.leftCols(nbasis) = v1;
+					return EigenZero(nbasis, nbasis);
+				});
+				He.push_back([&Hv, &v, &arh, nbasis](EigenMatrix v2){
+					v.rightCols(nbasis) = v2;
+					Hv = arh.Hessian(v);
+					return Hv.leftCols(nbasis);
+				});
+				He.push_back([&Hv, nbasis](EigenMatrix /*v1*/){
+					return Hv.rightCols(nbasis);
+				});
+				He.push_back([nbasis](EigenMatrix /*v2*/){
+					return EigenZero(nbasis, nbasis);
+				});
 			}
 			return std::make_tuple(
 					E_,

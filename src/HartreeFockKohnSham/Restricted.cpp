@@ -29,17 +29,16 @@
 #define S (int2c1e.Overlap)
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
-		double T, double Mu,
+std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
+		int nocc,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix F, EigenVector Occ, EigenMatrix Z,
+		EigenMatrix F, EigenMatrix Z,
 		int output, int nthreads){
 	double oldE = 0;
 	double E = 0;
 	const int nbasis = F.cols();
 	EigenVector epsilons = EigenZero(Z.cols(), 1);
-	EigenVector occupations = Occ;
 	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 
@@ -57,17 +56,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		C = Z * eigensolver.eigenvectors();
 		oldE = E;
 		E = 0;
-		if ( T ){
-			const EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
-			occupations = (EigenVector)ns;
-			E += 2 * (
-					T * (
-						ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log()
-					).sum()
-					- Mu * ns.sum()
-			);
-		}
-		const EigenMatrix D_ = C * occupations.asDiagonal() * C.transpose();
+		const EigenMatrix D_ = C.leftCols(nocc) * C.leftCols(nocc).transpose();
 		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
@@ -81,8 +70,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 		const EigenMatrix Fnew_ = Fhf_ + Gxc_;
 		E += (D_ * ( Hcore + Fhf_ )).trace() + Exc_;
 		if (output>0){
-			if ( T == 0 ) std::printf("Electronic energy = %.10f\n", E);
-			else std::printf("Electronic grand potential = %.10f\n", E);
+			std::printf("Electronic energy = %.10f\n", E);
 			std::printf("Changed by %E from the last step\n", E - oldE);
 		}
 		EigenMatrix G_ = Fnew_ * D_ * S - S * D_ * Fnew_;
@@ -97,12 +85,11 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
 	};
 	std::vector<EigenMatrix> Fs = {F};
 	ADIIS adiis(&update_func, 1, 20, 1e-1, 100, output>0 ? 2 : 0);
-	if ( T == 0 ) if ( !adiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
+	if ( !adiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
 	CDIIS cdiis(&update_func, 1, 20, 1e-8, 100, output>0 ? 2 : 0);
-	if ( T > 0 ) cdiis.Damps.push_back(std::make_tuple(0.1, 100, 0.75));
 	cdiis.Steal(adiis);
 	if ( !cdiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
-	return std::make_tuple(E, epsilons, occupations, C);
+	return std::make_tuple(E, epsilons, C);
 }
 
 #define lbfgs_t 114514
@@ -125,7 +112,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 
 	Maniverse::Grassmann grassmann(Dprime);
 	Maniverse::Iterate M({grassmann.Clone()}, 1);
-	Maniverse::PreconFunc dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int order){
+	Maniverse::PreconFunc dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int /*order*/){
 		const EigenMatrix Dprime_ = Dprimes_[0];
 		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
 		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
@@ -139,7 +126,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 			Gxc_ = grid.getFock();
 		}
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
-		const EigenMatrix F_ = Fhf_+ Gxc_;
+		const EigenMatrix F_ = Fhf_ + Gxc_;
 		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
 
 		// ARH hessian related
@@ -148,7 +135,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		eigensolver.compute(Fprime_);
 		epsilons = eigensolver.eigenvalues();
 		C = Z * eigensolver.eigenvectors();
-		const double E_ = 0.5 * (( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
+		const double E_ = 0.5 * ( ( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
 
 		const int nocc = std::round(Dprime.diagonal().sum());
 		const int nbasis = Dprime.rows();
@@ -185,22 +172,20 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 				W = W.cwiseProduct(Ainv);
 				return ( Dprime_ * W - W * Dprime_ ).eval();
 			};
-			if ( order == 2 ){
-				if constexpr ( scf_t == newton_t ) He = [Z, &int4c2e, &grid, &xc, nthreads](EigenMatrix vprime){
-					const EigenMatrix v = Z * vprime * Z.transpose();
-					const EigenMatrix FhfU = int4c2e.ContractInts(v, nthreads, 0);
-					EigenMatrix FxcU = EigenZero(vprime.rows(), vprime.cols());
-					if (xc){
-						std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
-						std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
-						grid.getDensityU({2*v}, RhoUss, Rho1Uss, SigmaUss);
-						FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
-					}
-					const EigenMatrix FU = FhfU + FxcU;
-					return (Z.transpose() * FU * Z).eval();
-				};
-				else He = [&arh](EigenMatrix vprime){ return arh.Hessian(vprime); };
-			}
+			if constexpr ( scf_t == newton_t ) He = [Z, &int4c2e, &grid, &xc, nthreads](EigenMatrix vprime){
+				const EigenMatrix v = Z * vprime * Z.transpose();
+				const EigenMatrix FhfU = int4c2e.ContractInts(v, nthreads, 0);
+				EigenMatrix FxcU = EigenZero(vprime.rows(), vprime.cols());
+				if (xc){
+					std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
+					std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
+					grid.getDensityU({2*v}, RhoUss, Rho1Uss, SigmaUss);
+					FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
+				}
+				const EigenMatrix FU = FhfU + FxcU;
+				return (Z.transpose() * FU * Z).eval();
+			};
+			else He = [&arh](EigenMatrix vprime){ return arh.Hessian(vprime); };
 			return std::make_tuple(
 					E_,
 					std::vector<EigenMatrix>{Fprime_},
@@ -251,100 +236,4 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedARH(
 		EigenMatrix Dprime, EigenMatrix Z,
 		int output, int nthreads){
 	return RestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
-}
-
-std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFock(
-		double T, double Mu,
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix Fprime, EigenVector Occ, EigenMatrix Z,
-		int output, int nthreads){
-	double E = 0;
-	EigenVector occupations = Occ;
-	EigenVector epsilons = EigenZero(Z.cols(), 1);
-	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
-	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-
-	Maniverse::RealSymmetric rs(Fprime);
-	Maniverse::Iterate M({rs.Clone()}, 1);
-	std::function<
-		std::tuple<
-			double,
-			std::vector<EigenMatrix>,
-			std::vector<std::function<EigenMatrix (EigenMatrix)>>
-		> (std::vector<EigenMatrix>, int)
-	> ffunc_newton = [&](std::vector<EigenMatrix> Fprimes_, int order){
-		const EigenMatrix Fprime_ = Fprimes_[0];
-		eigensolver.compute(Fprime_);
-		epsilons = eigensolver.eigenvalues();
-		const EigenMatrix Cprime = eigensolver.eigenvectors();
-		C = Z * Cprime;
-		EigenMatrix K = EigenZero(Z.cols(), Z.cols());
-		if ( T ){
-			const EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
-			occupations = (EigenVector)ns;
-			K.diagonal() = (EigenVector)(ns * ( ns - 1 ) / T);
-		}
-		for ( int i = 0; i < Z.cols(); i++ ) for ( int j = 0; j < i; j++ ){
-			K(i, j) = K(j, i) = ( occupations(i) - occupations(j) ) / ( epsilons(i) - epsilons(j) );
-		}
-		const EigenMatrix Dprime_ = Cprime * occupations.asDiagonal() * Cprime.transpose();
-		const EigenMatrix D_ = C * occupations.asDiagonal() * C.transpose();
-		const EigenMatrix Ghf_tilde_ = int4c2e.ContractInts(D_, nthreads, 1);
-		double Exc_ = 0;
-		EigenMatrix Gxc_tilde_ = EigenZero(Ghf_tilde_.rows(), Ghf_tilde_.cols());
-		if (xc){
-			grid.getDensity(2 * D_);
-			xc.Evaluate("ev", grid);
-			xc.Evaluate("f", grid);
-			Exc_ = grid.getEnergy();
-			Gxc_tilde_ = grid.getFock();
-		}
-		const EigenMatrix Fhf_tilde_ = Hcore + Ghf_tilde_;
-		const EigenMatrix F_tilde_ = Fhf_tilde_ + Gxc_tilde_;
-		const EigenMatrix Fprime_tilde_ = Z.transpose() * F_tilde_ * Z;
-		double E_ = 0.5 * D_.cwiseProduct( Hcore + Fhf_tilde_ ).sum() + Exc_;
-		if ( T ){
-			EigenArray ns = occupations.array();
-			E_ += (
-					T * (
-						ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log()
-					).sum()
-					- Mu * ns.sum()
-			);
-		}
-		const EigenMatrix Fao_bar = T ? ( Fprime_tilde_ - Fprime_ ) : Fprime_tilde_;
-		const EigenMatrix Fmo_bar = Cprime.transpose() * Fao_bar * Cprime;
-		const EigenMatrix Ge = Cprime * Fmo_bar.cwiseProduct(K) * Cprime.transpose();
-		std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-		if ( order == 2 ) He = [Z, Cprime, K, T, &int4c2e, &grid, &xc, nthreads](EigenMatrix delta){
-			const EigenMatrix square = Cprime.transpose() * delta * Cprime;
-			const EigenMatrix pentagon = Cprime * K.cwiseProduct(square) * Cprime.transpose();
-			const EigenMatrix v = Z * pentagon * Z.transpose();
-			const EigenMatrix FhfU = int4c2e.ContractInts(v, nthreads, 0);
-			EigenMatrix FxcU = EigenZero(FhfU.rows(), FhfU.cols());
-			if (xc){
-				std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
-				std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
-				grid.getDensityU({2*v}, RhoUss, Rho1Uss, SigmaUss);
-				FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
-			}
-			const EigenMatrix hexagon = Z.transpose() * (FhfU + FxcU) * Z;
-			const EigenMatrix octagon = Cprime.transpose() * hexagon * Cprime;
-			const EigenMatrix Hdelta = T ? ( Cprime * K.cwiseProduct(octagon - square) * Cprime.transpose() ).eval() : ( Cprime * K.cwiseProduct(octagon) * Cprime.transpose() ).eval();
-			return Hdelta;
-		};
-		return std::make_tuple(
-				E_,
-				std::vector<EigenMatrix>{Ge},
-				std::vector<std::function<EigenMatrix (EigenMatrix)>>{He}
-		);
-	};
-	Maniverse::TrustRegionSetting tr_setting;
-	tr_setting.R0 = 1;
-	if ( ! Maniverse::TrustRegion(
-			ffunc_newton, tr_setting, {1.e-8, 1.e-5, 1.e-1},
-			0.001, 1, 100, E, M, output
-	) ) throw std::runtime_error("Convergence failed!");
-	return std::make_tuple(E, epsilons, occupations, C);
 }

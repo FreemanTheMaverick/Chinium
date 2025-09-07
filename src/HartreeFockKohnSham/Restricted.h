@@ -1,8 +1,8 @@
-std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedDIIS(
-		double T, double Mu,
+std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
+		int nocc,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix F, EigenVector Occ, EigenMatrix Z,
+		EigenMatrix F, EigenMatrix Z,
 		int output, int nthreads
 );
 

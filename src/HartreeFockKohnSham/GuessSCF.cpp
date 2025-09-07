@@ -39,7 +39,7 @@ EigenMatrix SuperpositionAtomicPotential(std::vector<MwfnCenter>& centers, Grid&
 	return grid.getFock(0); // Pretending LDA.
 }
 
-void GuessSCF(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Grid& grid, std::string guess, const bool output){
+void GuessSCF(Mwfn& mwfn, Int2C1E& int2c1e, Grid& grid, std::string guess, const bool output){
 	EigenMatrix V = EigenZero(mwfn.getNumBasis(), mwfn.getNumBasis());
 	bool potential = 0;
 	if ( guess == "SAP" ){
@@ -59,11 +59,6 @@ void GuessSCF(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Grid& grid, std::s
 			const EigenMatrix eps = solver.eigenvalues();
 			mwfn.setCoefficientMatrix(C, spin);
 			mwfn.setEnergy(eps, spin);
-			if ( env.Temperature > 0 ){
-				const EigenArray n = 1. / ( 1. + ( ( eps.array() - env.ChemicalPotential ) / env.Temperature ).exp() );
-				if ( spin == 0 ) mwfn.setOccupation(2 * n, 0);
-				else mwfn.setOccupation(n, spin);
-			}
 		}
 	}
 }
