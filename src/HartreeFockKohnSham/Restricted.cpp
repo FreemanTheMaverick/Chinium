@@ -92,10 +92,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 	return std::make_tuple(E, epsilons, C);
 }
 
-#define lbfgs_t 114514
-#define newton_t 1919
-#define arh_t 810
-template <int scf_t>
+enum SCF_t{ lbfgs_t, newton_t, arh_t };
+template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,

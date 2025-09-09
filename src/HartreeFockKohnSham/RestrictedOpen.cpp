@@ -26,10 +26,9 @@
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
 
 #define DummyFunc [](EigenMatrix v){ return v; }
-#define lbfgs_t 114514
-#define newton_t 1919
-#define arh_t 810
-template <int scf_t>
+
+enum SCF_t{ lbfgs_t, newton_t, arh_t };
+template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		int nd, int ns,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,

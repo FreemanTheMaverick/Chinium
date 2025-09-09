@@ -10,11 +10,11 @@
 #include <chrono>
 #include <cstdio>
 #include <memory>
-#include <Maniverse/Manifold/RealSymmetric.h>
 #include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Manifold/Euclidean.h>
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/Optimizer/TrustRegion.h>
+#include <Maniverse/Optimizer/Anderson.h>
 #include <libmwfn.h>
 
 #include "../Macro.h"
@@ -107,10 +107,8 @@ EigenVector FermiDirac(EigenVector epsilons, double T, double Mu, int order){
 #define IdentityFunc [](EigenMatrix v){ return v; }
 #define DummyFunc(_size_) [_size_](EigenMatrix /*v*/){ return EigenZero(_size_, _size_); }
 
-#define lbfgs_t 114514
-#define newton_t 1919
-#define arh_t 810
-template <int scf_t>
+enum SCF_t{ lbfgs_t, newton_t, arh_t };
+template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRiemann(
 		double T, double Mu,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
@@ -190,6 +188,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		const EigenMatrix GradOcc1 = 2 * CtFC(Eigen::seqN(ni, na));
 		const EigenMatrix GradOcc2 = ( - 2 * T * ( 1. / ns - 1. ).log() - 2 * Mu ).matrix();
 
+		// Preconditioner
+		// https://doi.org/10.1016/j.cpc.2016.06.023
 		EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
 		for ( int i = 0; i < nbasis; i++ ){
 			for ( int j = i; j < nbasis; j++ ){
