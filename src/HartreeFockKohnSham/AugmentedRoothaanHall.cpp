@@ -32,7 +32,7 @@ void AugmentedRoothaanHall::Append(EigenMatrix P, EigenMatrix G){
 			T(i, j) = T(j, i) = Pdiffs[i].cwiseProduct(Pdiffs[j]).sum();
 		}
 	}
-	this->Tinv = T.inverse();
+	this->Tinv = T.ldlt().solve(EigenOne(size, size));
 	if ( size == this->MaxSize ){
 		this->Ps.pop_front();
 		this->Gs.pop_front();
