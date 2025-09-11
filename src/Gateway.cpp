@@ -76,13 +76,18 @@ std::string ReadBasisSet(std::string inp){
 	return basis;
 }
 
-std::tuple<int, int> ReadNumElectrons(std::string inp){
+bool isInt(double x){
+	const double n = (double)std::round(x);
+	return std::abs( n - x ) < 1e-6;
+}
+
+std::tuple<double, double> ReadNumElectrons(std::string inp){
 	std::ifstream file(inp);
 	std::vector<std::vector<double>> atoms = ReadXYZ(inp);
-	int ne = 0;
+	double ne = 0;
 	for ( std::vector<double>& atom : atoms )
-		ne += std::round(atom[0]);
-	int charge = 0;
+		ne += (double)std::round(atom[0]);
+	double charge = 0;
 	int spin = 0;
 	std::string thisline;
 	bool found = 0;
@@ -109,11 +114,18 @@ std::tuple<int, int> ReadNumElectrons(std::string inp){
 		}
 	}
 	ne -= charge;
-	if ( spin == 0 && ne % 2 == 0 ) spin = 1;
-	else if ( spin == 0 && ne % 2 == 1 ) spin = 2;
-	if ( ( ne + spin ) % 2 == 0 ) throw std::runtime_error("Incompatible number of electrons and spin multiplicity!");
-	int na = ( ne + ( spin - 1 ) ) / 2;
-	int nb = ( ne - ( spin - 1 ) ) / 2;
+
+	double na = 0; double nb = 0;
+	if ( isInt(ne) ){
+		const int ne_int = std::round(ne);
+		if ( spin == 0 && ne_int % 2 == 0 ) spin = 1;
+		else if ( spin == 0 && ne_int % 2 == 1 ) spin = 2;
+		if ( ( ne_int + spin ) % 2 == 0 ) throw std::runtime_error("Incompatible number of electrons and spin multiplicity!");
+		na = ( ne_int + ( spin - 1 ) ) / 2;
+		nb = ( ne_int - ( spin - 1 ) ) / 2;
+	}else{
+		na = nb = ne / 2;
+	}
 	if ( na < 0 || nb < 0 ) throw std::runtime_error("Negative number of electrons!");
 	return std::make_tuple(na, nb);
 }

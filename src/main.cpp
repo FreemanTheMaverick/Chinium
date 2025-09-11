@@ -17,6 +17,8 @@
 #include "HartreeFockKohnSham/HartreeFockKohnSham.h"
 #include "Localization/Localize.h"
 
+#define Round(x) (int)( isInt(x) ? std::round(x) : std::floor(x) )
+
 int main(int /*argc*/, char* argv[]){
 	std::printf("*** Chinium started ***\n");
 
@@ -87,6 +89,7 @@ int main(int /*argc*/, char* argv[]){
 		}
 	}
 	if ( env.Temperature > 0 && mwfn.Wfntype == 2 ) throw std::runtime_error("FT-DFT cannot be used with spin-restricted open-shell wavefunctions!");
+	if ( env.Temperature == 0 && !isInt(na) && !isInt(nb) ) throw std::runtime_error("Non-integral guess of charge is only allowed in FT-DFT!");
 
 	// Initializing E and its derivatives
 	double E_tot = 0;
@@ -127,12 +130,13 @@ int main(int /*argc*/, char* argv[]){
 			if ( mwfn.Wfntype == 0 ){
 				mwfn.Orbitals.resize(mwfn.getNumBasis());
 				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
-				for ( int i = 0; i < na; i++ ) occ(i) = 1;
+				for ( int i = 0; i < Round(na); i++ ) occ(i) = 1;
+				occ( Round(na) ) = na - Round(na);
 				mwfn.setOccupation(occ, 1);
 			}else if ( mwfn.Wfntype == 1 ){
 				mwfn.Orbitals.resize(mwfn.getNumBasis() * 2);
 				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
-				for ( int i = 0; i < na; i++ ) occ(i) = 1;
+				for ( int i = 0; i < Round(na); i++ ) occ(i) = 1;
 				mwfn.setOccupation(occ, 1);
 				occ.setZero();
 				for ( int i = 0; i < nb; i++ ) occ(i) = 1;
@@ -140,8 +144,10 @@ int main(int /*argc*/, char* argv[]){
 			}else if ( mwfn.Wfntype == 2 ){
 				mwfn.Orbitals.resize(mwfn.getNumBasis());
 				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
-				for ( int i = 0; i < ( ( na > nb ) ? na : nb ); i++ ){
-					if ( i >= na || i >= nb ) occ(i) = 1;
+				const int na_int = std::round(na);
+				const int nb_int = std::round(nb);
+				for ( int i = 0; i < ( ( na_int > nb_int ) ? na_int : nb_int ); i++ ){
+					if ( i >= na_int || i >= nb_int ) occ(i) = 1;
 					else occ(i) = 2;
 				}
 				mwfn.setOccupation(occ);
