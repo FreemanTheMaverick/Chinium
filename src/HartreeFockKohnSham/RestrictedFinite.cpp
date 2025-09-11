@@ -323,6 +323,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		}
 	};
 
+	std::tuple<double, double, double> tol = {1.e-3, 1.e-2, 1.e-2};
+
 	label:
 	Maniverse::Flag flag(Cprime);
 	std::vector<int> spaces;
@@ -339,7 +341,6 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 	Maniverse::Iterate M(ms, 1);
 	std::tuple<int, int, int> n_old = n;
 
-	const std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
 	try{
 		if constexpr ( scf_t == lbfgs_t ){
 			if ( ! Maniverse::LBFGS(
@@ -362,10 +363,15 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 	}
 	EigenVector all_occ_new = ( FermiDirac(epsilons, T, Mu, 0) + all_occ ) / 2;
 	n = Regularize(all_occ_new, 1e-6);
-	if ( n_old != n){
+	if ( n_old != n ){
 		all_occ = all_occ_new;
 		Cprime = Z.inverse() * C;
 		if (output) std::printf("Switching manifold due to inconsistent orbital energy and occupation!\n");
+		goto label;
+	}
+	if ( tol != std::make_tuple(1e-8, 1e-5, 1e-5) ){
+		if (output) std::printf("Switching to higher convergence precision!\n");
+		tol = {1e-8, 1e-5, 1e-5};
 		goto label;
 	}
 
