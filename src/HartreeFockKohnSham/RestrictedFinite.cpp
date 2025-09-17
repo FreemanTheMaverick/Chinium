@@ -168,11 +168,16 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 			for ( int i = 0; i < na; i++ ) std::printf(" %f", Occ(i, 0));
 			std::printf("\n");
 		}
-		if ( na != 0 ) all_occ(Eigen::seqN(ni, na)) = Occ;
-
-		for ( int i = 0; i < na; i++ )
-			if ( Occ(i) > 1. - 1e-6 || Occ(i) < 1e-6 )
+		for ( int i = 0; i < na; i++ ) if ( Occ(i) > 1. - 1e-6 ){
+				all_occ(ni + i) = 1;
 				throw SwitchingManifold();
+		}
+		for ( int i = na - 1; i >= 0; i-- ) if ( Occ(i) < 1e-6 ){
+				all_occ(ni + i) = 0;
+				throw SwitchingManifold();
+		}
+
+		if ( na != 0 ) all_occ(Eigen::seqN(ni, na)) = Occ;
 
 		const EigenMatrix Dprime_ = Cprime * all_occ.asDiagonal() * Cprime.transpose();
 		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
@@ -365,7 +370,6 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 	n = Regularize(all_occ_new, 1e-6);
 	if ( n_old != n ){
 		all_occ = all_occ_new;
-		Cprime = Z.inverse() * C;
 		if (output) std::printf("Switching manifold due to inconsistent orbital energy and occupation!\n");
 		goto label;
 	}
