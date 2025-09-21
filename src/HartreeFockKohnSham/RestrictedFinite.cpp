@@ -41,6 +41,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 	EigenVector occupations = Occ;
 	EigenMatrix C = EigenOne(Z.rows(), Z.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+	bool first_iter = 1;
 
 	std::function<std::tuple<
 			std::vector<EigenMatrix>,
@@ -55,8 +56,11 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 		epsilons = eigensolver.eigenvalues();
 		C = Z * eigensolver.eigenvectors();
 		oldE = E;
-		const EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
-		occupations = (EigenVector)ns;
+		EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
+		if (first_iter){
+			first_iter = 0;
+			ns = occupations.array();
+		}else occupations = ns.matrix();
 		E = 2 * (
 				T * (
 					ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log()
