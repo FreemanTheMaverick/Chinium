@@ -61,6 +61,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 			first_iter = 0;
 			ns = occupations.array();
 		}else occupations = ns.matrix();
+		if (output>0) std::printf("Total number of electrons = %.10f\n", 2 * ns.sum());
 		E = 2 * (
 				T * (
 					ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log()
@@ -182,6 +183,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		}
 
 		if ( na != 0 ) all_occ(Eigen::seqN(ni, na)) = Occ;
+		if (output>0) std::printf("Total number of electrons = %.10f\n", 2 * all_occ.sum());
 
 		const EigenMatrix Dprime_ = Cprime * all_occ.asDiagonal() * Cprime.transpose();
 		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
