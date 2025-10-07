@@ -167,7 +167,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 
 	Maniverse::PreconFunc cfunc_newton = [&](std::vector<EigenMatrix> Xs, int /*order*/){
 		Cprime = Xs[0];
-		const EigenMatrix Cprime_thin = Cprime(Eigen::all, Eigen::seqN(ni, na));
+		const EigenMatrix Cprime_thin = Cprime(Eigen::placeholders::all, Eigen::seqN(ni, na));
 		const EigenMatrix Occ = na != 0 ? Xs[1] : EigenZero(1, 1);
 		if (output>0){
 			std::printf("Fractional occupation:");
