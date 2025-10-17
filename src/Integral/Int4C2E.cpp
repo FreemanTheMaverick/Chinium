@@ -598,16 +598,27 @@ std::vector<long int> getThreadPointers(long int nitems, int nthreads){
 	return heads;
 }
 
-EigenMatrix Grhf(
+std::tuple<EigenMatrix, EigenMatrix, EigenMatrix> Gunified(
 		short int* is, short int* js, short int* ks, short int* ls,
 		double* ints, long int length,
-		EigenMatrix D, double kscale, int nthreads){
+		EigenMatrix Dd, EigenMatrix Da, EigenMatrix Db,
+		double kscale, int nthreads){
 	Eigen::setNbThreads(1);
 	std::vector<long int> heads = getThreadPointers(length, nthreads);
-	EigenMatrix rawJ = EigenZero(D.rows(), D.cols());
-	EigenMatrix rawK = EigenZero(D.rows(), D.cols());
+	const bool d = Dd.size() > 0;
+	const bool a = Da.size() > 0;
+	const bool b = Db.size() > 0;
+	const int nbasis = d ? Dd.rows() : a ? Da.rows() : Db.rows();
+	EigenMatrix Dtot = EigenZero(nbasis, nbasis);
+	if (d) Dtot += 2 * Dd;
+	if (a) Dtot += Da;
+	if (b) Dtot += Db;
+	EigenMatrix rawJ = EigenZero(nbasis, nbasis);
+	EigenMatrix rawKd = EigenZero(nbasis, nbasis);
+	EigenMatrix rawKa = EigenZero(nbasis, nbasis);
+	EigenMatrix rawKb = EigenZero(nbasis, nbasis);
 	#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
-	#pragma omp parallel for reduction(EigenMatrixSum: rawJ, rawK) num_threads(nthreads)
+	#pragma omp parallel for reduction(EigenMatrixSum: rawJ, rawKd, rawKa, rawKb) num_threads(nthreads)
 	for ( int ithread = 0; ithread < nthreads; ithread++ ){
 		const long int head = heads[ithread];
 		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
@@ -622,30 +633,50 @@ EigenMatrix Grhf(
 			const short int k = *(kranger++);
 			const short int l = *(lranger++);
 			const double repulsion = *(repulsionranger++);
-			rawJ(i, j) += D(k, l) * repulsion;
-			rawJ(k, l) += D(i, j) * repulsion;
+			rawJ(i, j) += Dtot(k, l) * repulsion;
+			rawJ(k, l) += Dtot(i, j) * repulsion;
 			if ( kscale > 0. ){
-				rawK(i, k) += D(j, l) * repulsion;
-				rawK(j, l) += D(i, k) * repulsion;
-				rawK(i, l) += D(j, k) * repulsion;
-				rawK(j, k) += D(i, l) * repulsion;
+				if (d){
+					rawKd(i, k) += Dd(j, l) * repulsion;
+					rawKd(j, l) += Dd(i, k) * repulsion;
+					rawKd(i, l) += Dd(j, k) * repulsion;
+					rawKd(j, k) += Dd(i, l) * repulsion;
+				}
+				if (a){
+					rawKa(i, k) += Da(j, l) * repulsion;
+					rawKa(j, l) += Da(i, k) * repulsion;
+					rawKa(i, l) += Da(j, k) * repulsion;
+					rawKa(j, k) += Da(i, l) * repulsion;
+				}
+				if (b){
+					rawKb(i, k) += Db(j, l) * repulsion;
+					rawKb(j, l) += Db(i, k) * repulsion;
+					rawKb(i, l) += Db(j, k) * repulsion;
+					rawKb(j, k) += Db(i, l) * repulsion;
+				}
 			}
 		}
 	}
 	Eigen::setNbThreads(nthreads);
-	const EigenMatrix J = 0.5 * ( rawJ + rawJ.transpose() );
-	const EigenMatrix K = 0.25 * ( rawK + rawK.transpose() );
-	return J - 0.5 * kscale * K;
+	const EigenMatrix J = 0.25 * ( rawJ + rawJ.transpose() );
+	const EigenMatrix Kd = 0.125 * ( rawKd + rawKd.transpose() );
+	const EigenMatrix Ka = 0.125 * ( rawKa + rawKa.transpose() );
+	const EigenMatrix Kb = 0.125 * ( rawKb + rawKb.transpose() );
+	return std::make_tuple(
+			J - kscale * ( Kd + 0.5 * ( Ka + Kb ) ),
+			J - kscale * ( Kd + Ka ),
+			J - kscale * ( Kd + Kb )
+	);
 }
 
-EigenMatrix Int4C2E::ContractInts(EigenMatrix D, int nthreads, int output){ // RHF
+std::tuple<EigenMatrix, EigenMatrix, EigenMatrix> Int4C2E::ContractInts(EigenMatrix Dd, EigenMatrix Da, EigenMatrix Db, int nthreads, int output){
 	if (output>0) std::printf("Contracting 4c-2e repulsion integrals with 1 matrix ... ");
 	const auto start = __now__;
-	const EigenMatrix G = Grhf(
+	const std::tuple<EigenMatrix, EigenMatrix, EigenMatrix> G = Gunified(
 		this->BasisIs.data(), this->BasisJs.data(),
 		this->BasisKs.data(), this->BasisLs.data(),
 		this->RepulsionInts.data(), this->RepulsionLength,
-		D, this->EXX, nthreads);
+		Dd, Da, Db, this->EXX, nthreads);
 	if (output>0) std::printf("Done in %f s\n", __duration__(start, __now__));
 	return G;
 }
@@ -710,124 +741,6 @@ std::vector<EigenMatrix> Int4C2E::ContractInts(std::vector<EigenMatrix>& Ds, int
 		Ds, this->EXX, nthreads);
 	if (output>0) std::printf("Done in %f s\n", __duration__(start, __now__));
 	return Gs;
-}
-
-std::tuple<EigenMatrix, EigenMatrix, EigenMatrix, EigenMatrix> Guhf(
-		short int* is, short int* js, short int* ks, short int* ls,
-		double* ints, long int length,
-		EigenMatrix Da, EigenMatrix Db, double kscale, int nthreads){
-	Eigen::setNbThreads(1);
-	std::vector<long int> heads = getThreadPointers(length, nthreads);
-	EigenMatrix rawJa = EigenZero(Da.rows(), Da.cols());
-	EigenMatrix rawJb = EigenZero(Da.rows(), Da.cols());
-	EigenMatrix rawKa = EigenZero(Da.rows(), Da.cols());
-	EigenMatrix rawKb = EigenZero(Da.rows(), Da.cols());
-	#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
-	#pragma omp parallel for reduction(EigenMatrixSum: rawJa, rawJb, rawKa, rawKb) num_threads(nthreads)
-	for ( int ithread = 0; ithread < nthreads; ithread++ ){
-		const long int head = heads[ithread];
-		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
-		short int* iranger = is + head;
-		short int* jranger = js + head;
-		short int* kranger = ks + head;
-		short int* lranger = ls + head;
-		double* repulsionranger = ints + head;
-		for ( long int iint = 0; iint < nints; iint++ ){
-			const short int i = *(iranger++);
-			const short int j = *(jranger++);
-			const short int k = *(kranger++);
-			const short int l = *(lranger++);
-			const double repulsion = *(repulsionranger++);
-			rawJa(i, j) += Da(k, l) * repulsion;
-			rawJa(k, l) += Da(i, j) * repulsion;
-			rawJb(i, j) += Db(k, l) * repulsion;
-			rawJb(k, l) += Db(i, j) * repulsion;
-			if ( kscale > 0. ){
-				rawKa(i, k) += Da(j, l) * repulsion;
-				rawKa(j, l) += Da(i, k) * repulsion;
-				rawKa(i, l) += Da(j, k) * repulsion;
-				rawKa(j, k) += Da(i, l) * repulsion;
-				rawKb(i, k) += Db(j, l) * repulsion;
-				rawKb(j, l) += Db(i, k) * repulsion;
-				rawKb(i, l) += Db(j, k) * repulsion;
-				rawKb(j, k) += Db(i, l) * repulsion;
-			}
-		}
-	}
-	Eigen::setNbThreads(nthreads);
-	const EigenMatrix Ja = 0.25 * ( rawJa + rawJa.transpose() );
-	const EigenMatrix Jb = 0.25 * ( rawJb + rawJb.transpose() );
-	const EigenMatrix Ka = 0.125 * ( rawKa + rawKa.transpose() );
-	const EigenMatrix Kb = 0.125 * ( rawKb + rawKb.transpose() );
-	return std::make_tuple(Ja, Jb, Ka, Kb);
-}
-
-std::tuple<EigenMatrix, EigenMatrix> Int4C2E::ContractInts(EigenMatrix Da, EigenMatrix Db, int nthreads, int output){ // UHF
-	if (output>0) std::printf("Contracting 4c-2e repulsion integrals with 1 matrix ... ");
-	const auto start = __now__;
-	__Make_Basis_Set__(this->MWFN)
-	auto [Ja, Jb, Ka, Kb] = Guhf(
-		this->BasisIs.data(), this->BasisJs.data(),
-		this->BasisKs.data(), this->BasisLs.data(),
-		this->RepulsionInts.data(), this->RepulsionLength,
-		Da, Db, this->EXX, nthreads);
-	if (output>0) std::printf("Done in %f s\n", __duration__(start, __now__));
-	return std::make_tuple(Ja + Jb - Ka, Ja + Jb - Kb);
-}
-
-std::tuple<EigenMatrix, EigenMatrix> Guhf(
-		short int* is, short int* js, short int* ks, short int* ls,
-		double* ints, long int length,
-		EigenMatrix Da, double kscale, int nthreads){
-	Eigen::setNbThreads(1);
-	std::vector<long int> heads = getThreadPointers(length, nthreads);
-	EigenMatrix rawJa = EigenZero(Da.rows(), Da.cols());
-	EigenMatrix rawJb = EigenZero(Da.rows(), Da.cols());
-	EigenMatrix rawKa = EigenZero(Da.rows(), Da.cols());
-	EigenMatrix rawKb = EigenZero(Da.rows(), Da.cols());
-	#pragma omp declare reduction(EigenMatrixSum: EigenMatrix: omp_out += omp_in) initializer(omp_priv = omp_orig)
-	#pragma omp parallel for reduction(EigenMatrixSum: rawJa, rawJb, rawKa, rawKb) num_threads(nthreads)
-	for ( int ithread = 0; ithread < nthreads; ithread++ ){
-		const long int head = heads[ithread];
-		const long int nints = ( (ithread == nthreads - 1) ? length : heads[ithread + 1] ) - head;
-		short int* iranger = is + head;
-		short int* jranger = js + head;
-		short int* kranger = ks + head;
-		short int* lranger = ls + head;
-		double* repulsionranger = ints + head;
-		for ( long int iint = 0; iint < nints; iint++ ){
-			const short int i = *(iranger++);
-			const short int j = *(jranger++);
-			const short int k = *(kranger++);
-			const short int l = *(lranger++);
-			const double repulsion = *(repulsionranger++);
-			rawJa(i, j) += Da(k, l) * repulsion;
-			rawJa(k, l) += Da(i, j) * repulsion;
-			if ( kscale > 0. ){
-				rawKa(i, k) += Da(j, l) * repulsion;
-				rawKa(j, l) += Da(i, k) * repulsion;
-				rawKa(i, l) += Da(j, k) * repulsion;
-				rawKa(j, k) += Da(i, l) * repulsion;
-			}
-		}
-	}
-	Eigen::setNbThreads(nthreads);
-	const EigenMatrix Ja = 0.25 * ( rawJa + rawJa.transpose() );
-	const EigenMatrix Ka = 0.125 * ( rawKa + rawKa.transpose() );
-	return std::make_tuple(Ja, Ka);
-}
-
-std::tuple<EigenMatrix, EigenMatrix> Int4C2E::ContractInts2(EigenMatrix Da, int nthreads, int output){ // UHF
-	if (output>0) std::printf("Contracting 4c-2e repulsion integrals with 1 matrix ... ");
-	const auto start = __now__;
-	__Make_Basis_Set__(this->MWFN)
-	auto [Ja, Ka] = Guhf(
-		this->BasisIs.data(), this->BasisJs.data(),
-		this->BasisKs.data(), this->BasisLs.data(),
-		this->RepulsionInts.data(), this->RepulsionLength,
-		Da, this->EXX, nthreads);
-	if (output>0) std::printf("Done in %f s\n", __duration__(start, __now__));
-	return std::make_tuple(Ja, Ka);
 }
 
 std::vector<double> Int4C2E::ContractGrads(EigenMatrix D1, EigenMatrix D2, int output){

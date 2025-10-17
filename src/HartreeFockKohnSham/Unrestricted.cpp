@@ -88,7 +88,7 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		}
 		const EigenMatrix Da_ = Ca * occa.asDiagonal() * Ca.transpose();
 		const EigenMatrix Db_ = Cb * occb.asDiagonal() * Cb.transpose();
-		auto [Ghfa_, Ghfb_] = int4c2e.ContractInts(Da_, Db_, nthreads, 1);
+		const auto [_, Ghfa_, Ghfb_] = int4c2e.ContractInts(EigenZero(0, 0), Da_, Db_, nthreads, 1);
 		const EigenMatrix Fhfa_ = Hcore + Ghfa_;
 		const EigenMatrix Fhfb_ = Hcore + Ghfb_;
 		const EigenMatrix Fnewa_ = Fhfa_;
@@ -167,7 +167,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		const EigenMatrix D2prime_ = Dprimes_[1];
 		const EigenMatrix D1_ = Z1 * D1prime_ * Z1.transpose();
 		const EigenMatrix D2_ = Z2 * D2prime_ * Z2.transpose();
-		auto [Ghf1_, Ghf2_] = int4c2e.ContractInts(D1_, D2_, nthreads, 1);
+		const auto [_, Ghf1_, Ghf2_] = int4c2e.ContractInts(EigenZero(0, 0), D1_, D2_, nthreads, 1);
 		const EigenMatrix Fhf1_ = Hcore + Ghf1_;
 		const EigenMatrix Fhf2_ = Hcore + Ghf2_;
 		const EigenMatrix F1_ = Fhf1_;
@@ -260,7 +260,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 				He.push_back([Z1, Z2, &Vtmp1, &int4c2e, &Gtmp2, nthreads](EigenMatrix v2prime){
 					const EigenMatrix v1 = Z1 * Vtmp1 * Z1.transpose();
 					const EigenMatrix v2 = Z2 * v2prime * Z2.transpose();
-					auto [Gtmp1_, Gtmp2_] = int4c2e.ContractInts(v1, v2, nthreads, 0);
+					const auto [_, Gtmp1_, Gtmp2_] = int4c2e.ContractInts(EigenZero(0, 0), v1, v2, nthreads, 0);
 					Gtmp2 = Gtmp2_;
 					return (EigenMatrix)(Z2.transpose() * Gtmp1_ * Z2);
 				});
@@ -371,7 +371,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		const EigenMatrix D2prime_ = Dprimes_[1];
 		const EigenMatrix D1_ = Z1 * D1prime_ * Z1.transpose();
 		const EigenMatrix D2_ = Z2 * D2prime_ * Z2.transpose();
-		auto [Ghf1_, Ghf2_] = int4c2e.ContractInts(D1_, D2_, nthreads, 1);
+		const auto [_, Ghf1_, Ghf2_] = int4c2e.ContractInts(EigenZero(0, 0), D1_, D2_, nthreads, 1);
 		const EigenMatrix Fhf1_ = Hcore + Ghf1_;
 		const EigenMatrix Fhf2_ = Hcore + Ghf2_;
 		const EigenMatrix F1_ = Fhf1_;

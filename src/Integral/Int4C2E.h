@@ -30,10 +30,8 @@ class Int4C2E{ public:
 	void getRepulsionIndices(int output);
 	void getThreadPointers(int nthreads, int output);
 	void CalculateIntegrals(int order, int output);
-	EigenMatrix ContractInts(EigenMatrix D, int nthreads, int output);
-	std::tuple<EigenMatrix, EigenMatrix> ContractInts2(EigenMatrix Da, int nthreads, int output);
+	std::tuple<EigenMatrix, EigenMatrix, EigenMatrix> ContractInts(EigenMatrix Dd, EigenMatrix Da, EigenMatrix Db, int nthreads, int output);
 	std::vector<EigenMatrix> ContractInts(std::vector<EigenMatrix>& Ds, int nthreads, int output);
-	std::tuple<EigenMatrix, EigenMatrix> ContractInts(EigenMatrix Da, EigenMatrix Db, int nthreads, int output);
 	std::vector<EigenMatrix> ContractGrads(EigenMatrix D, int output);
 	std::vector<double> ContractGrads(EigenMatrix D1, EigenMatrix D2, int output);
 	std::vector<std::vector<double>> ContractGrads(std::vector<EigenMatrix>& D1s, EigenMatrix D2, int output);

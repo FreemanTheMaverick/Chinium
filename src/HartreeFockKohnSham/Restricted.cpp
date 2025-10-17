@@ -57,7 +57,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 		oldE = E;
 		E = 0;
 		const EigenMatrix D_ = C.leftCols(nocc) * C.leftCols(nocc).transpose();
-		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
+		const auto [Ghf_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
 		if (xc){
@@ -113,7 +113,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	Maniverse::PreconFunc dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int /*order*/){
 		const EigenMatrix Dprime_ = Dprimes_[0];
 		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
-		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
+		const auto [Ghf_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(Ghf_.rows(), Ghf_.cols());
 		if (xc){
@@ -172,7 +172,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 			};
 			if constexpr ( scf_t == newton_t ) He = [Z, &int4c2e, &grid, &xc, nthreads](EigenMatrix vprime){
 				const EigenMatrix v = Z * vprime * Z.transpose();
-				const EigenMatrix FhfU = int4c2e.ContractInts(v, nthreads, 0);
+				const auto [FhfU, _, __] = int4c2e.ContractInts(v, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
 				EigenMatrix FxcU = EigenZero(vprime.rows(), vprime.cols());
 				if (xc){
 					std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;

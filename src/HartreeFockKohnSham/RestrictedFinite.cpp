@@ -69,7 +69,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 				- Mu * ns.sum()
 		);
 		const EigenMatrix D_ = C * occupations.asDiagonal() * C.transpose();
-		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
+		const auto [Ghf_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
 		if (xc){
@@ -150,8 +150,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 	if constexpr ( scf_t == arh_t ) arh.Init(20, 1);
 
 	// Exact hessian related
-	EigenMatrix FoverC = EigenZero(1, 1);
-	EigenMatrix FoverOcc = EigenZero(1, 1);
+	EigenMatrix FoverC = EigenZero(0, 0);
+	EigenMatrix FoverOcc = EigenZero(0, 0);
 	if constexpr ( scf_t == newton_t ){
 		FoverC.resize(nbasis, nbasis);
 		FoverOcc.resize(nbasis, nbasis);
@@ -168,7 +168,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 	Maniverse::PreconFunc cfunc_newton = [&](std::vector<EigenMatrix> Xs, int /*order*/){
 		Cprime = Xs[0];
 		const EigenMatrix Cprime_thin = Cprime(Eigen::placeholders::all, Eigen::seqN(ni, na));
-		const EigenMatrix Occ = na != 0 ? Xs[1] : EigenZero(1, 1);
+		const EigenMatrix Occ = na != 0 ? Xs[1] : EigenZero(0, 0);
 		if (output>0){
 			std::printf("Fractional occupation:");
 			for ( int i = 0; i < na; i++ ) std::printf(" %f", Occ(i, 0));
@@ -188,7 +188,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 
 		const EigenMatrix Dprime_ = Cprime * all_occ.asDiagonal() * Cprime.transpose();
 		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
-		const EigenMatrix Ghf_ = int4c2e.ContractInts(D_, nthreads, 1);
+		const auto [Ghf_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(D_.rows(), D_.cols());
 		if (xc){
@@ -261,7 +261,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 					Dprime += Dprime.transpose().eval();
 					if constexpr ( scf_t == newton_t ){
 						const EigenMatrix D = Z * Dprime * Z.transpose();
-						const EigenMatrix FhfU = int4c2e.ContractInts(D, nthreads, 0);
+						const auto [FhfU, _, __] = int4c2e.ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
 						EigenMatrix FxcU = EigenZero(D.rows(), D.cols());
 						if (xc){
 							std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
@@ -284,7 +284,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 					const EigenMatrix Dprime = Cprime_thin * gamma.asDiagonal() * Cprime_thin.transpose();
 					if constexpr ( scf_t == newton_t ){
 						const EigenMatrix D = Z * Dprime * Z.transpose();
-						const EigenMatrix FhfU = int4c2e.ContractInts(D, nthreads, 0);
+						const auto [FhfU, _, __] = int4c2e.ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
 						EigenMatrix FxcU = EigenZero(D.rows(), D.cols());
 						if (xc){
 							std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;

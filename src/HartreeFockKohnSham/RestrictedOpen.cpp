@@ -54,10 +54,9 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		const EigenMatrix Dsprime_ = Csprime_ * Csprime_.transpose();
 		const EigenMatrix Dd_ = Z * Ddprime_ * Z.transpose();
 		const EigenMatrix Ds_ = Z * Dsprime_ * Z.transpose();
-		auto [Jd, Kd] = int4c2e.ContractInts2(Dd_, nthreads, 1);
-		auto [Js, Ks] = int4c2e.ContractInts2(Ds_, nthreads, 1);
-		const EigenMatrix Fd_ = Hcore + 2 * Jd + Js - Kd - 0.5 * Ks;
-		const EigenMatrix Fs_ = 0.5 * ( Hcore + 2 * Jd + Js - Kd - Ks );
+		const auto [Gd_, Gs_, _] = int4c2e.ContractInts(Dd_, Ds_, EigenZero(0, 0), nthreads, 1);
+		const EigenMatrix Fd_ = Hcore + Gd_;
+		const EigenMatrix Fs_ = Hcore + Gs_;
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(Fd_.rows(), Fd_.cols());
 		const EigenMatrix Fdprime_ = Z.transpose() * Fd_ * Z;
@@ -68,19 +67,19 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 			EigenMatrix Dprime_ = EigenZero(Ddprime_.rows(), 2 * Ddprime_.cols());
 			Dprime_ << Ddprime_, Dsprime_;
 			EigenMatrix Fprime_ = EigenZero(Fdprime_.rows(), 2 * Fdprime_.cols());
-			Fprime_ << Fdprime_, Fsprime_;
+			Fprime_ << Fdprime_, 0.5 * Fsprime_;
 			arh.Append(Dprime_, Fprime_);
 		}
 
 		//eigensolver.compute(Fprime_);
 		//epsilons = eigensolver.eigenvalues();
 		//C = Z * eigensolver.eigenvectors();
-		const double E_ = Hcore.cwiseProduct( 2 * Dd_ + Ds_ ).sum()
-			+ ( 2 * Jd - Kd ).cwiseProduct( Dd_ + Ds_ ).sum()
-			+ 0.5 * ( Js - Ks ).cwiseProduct( Ds_ ).sum()
+		const double E_ = 0.5 * Hcore.cwiseProduct( 2 * Dd_ + Ds_ ).sum()
+			+ Fd_.cwiseProduct(Dd_).sum()
+			+ 0.5 * Fs_.cwiseProduct(Ds_).sum()
 			+ Exc_;
 		EigenMatrix Grad = EigenZero(Cprime_.rows(), nd + ns);
-		Grad << 4 * Fdprime_ * Cdprime_, 4 * Fsprime_ * Csprime_;
+		Grad << 4 * Fdprime_ * Cdprime_, 2 * Fsprime_ * Csprime_;
 		if constexpr ( scf_t == lbfgs_t ){
 			return std::make_tuple(
 					E_,
@@ -90,43 +89,32 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 			);
 		}else{
 			std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-			if constexpr ( scf_t == newton_t ) He = [nd, ns, Z, Fdprime_, Fsprime_, Cdprime_, Csprime_, &int4c2e, nthreads](EigenMatrix vprime){
+			if constexpr ( scf_t == newton_t || scf_t == arh_t ) He = [nd, ns, Z, Fdprime_, Fsprime_, Cdprime_, Csprime_, &int4c2e, nthreads, &arh](EigenMatrix vprime){
 				EigenMatrix vdprime = vprime.leftCols(nd);
 				EigenMatrix vsprime = vprime.rightCols(ns);
 				EigenMatrix Ddprime = Cdprime_ * vdprime.transpose();
 				EigenMatrix Dsprime = Csprime_ * vsprime.transpose();
 				Ddprime += Ddprime.transpose().eval();
 				Dsprime += Dsprime.transpose().eval();
-				const EigenMatrix Dd = Z * Ddprime * Z.transpose();
-				const EigenMatrix Ds = Z * Dsprime * Z.transpose();
-				auto [Jd, Kd] = int4c2e.ContractInts2(Dd, nthreads, 0);
-				auto [Js, Ks] = int4c2e.ContractInts2(Ds, nthreads, 0);
-				const EigenMatrix Jdprime = Z.transpose() * Jd * Z;
-				const EigenMatrix Jsprime = Z.transpose() * Js * Z;
-				const EigenMatrix Kdprime = Z.transpose() * Kd * Z;
-				const EigenMatrix Ksprime = Z.transpose() * Ks * Z;
-				EigenMatrix Hvd = ( 2 * Jdprime + Jsprime - Kdprime - 0.5 * Ksprime ) * Cdprime_ + Fdprime_ * vdprime;
-				EigenMatrix Hvs = 0.5 * ( 2 * Jdprime + Jsprime - Kdprime - Ksprime ) * Csprime_ + Fsprime_ * vsprime;
-				EigenMatrix Hv = EigenZero(vprime.rows(), vprime.cols());
-				Hv << 4 * Hvd, 4 * Hvs;
-				return Hv;
-			};
-			else He = [nd, ns, Cdprime_, Csprime_, Fdprime_, Fsprime_, &arh, nthreads](EigenMatrix vprime){
-				EigenMatrix vdprime = vprime.leftCols(nd);
-				EigenMatrix vsprime = vprime.rightCols(ns);
-				EigenMatrix Ddprime = Cdprime_ * vdprime.transpose();
-				EigenMatrix Dsprime = Csprime_ * vsprime.transpose();
-				Ddprime += Ddprime.transpose().eval();
-				Dsprime += Dsprime.transpose().eval();
-				EigenMatrix Dprime = EigenZero(Ddprime.rows(), 2 * Ddprime.cols());
-				Dprime << Ddprime, Dsprime;
-				EigenMatrix HD = arh.Hessian(Dprime);
-				EigenMatrix HDd = HD.leftCols(Ddprime.cols());
-				EigenMatrix HDs = HD.rightCols(Dsprime.cols());
+				EigenMatrix HDd = Ddprime * 0;
+				EigenMatrix HDs = Ddprime * 0;
+				if constexpr ( scf_t == newton_t ){
+					const EigenMatrix Dd = Z * Ddprime * Z.transpose();
+					const EigenMatrix Ds = Z * Dsprime * Z.transpose();
+					const auto [Gd_, Gs_, _] = int4c2e.ContractInts(Dd, Ds, EigenZero(0, 0), nthreads, 0);
+					HDd = Z.transpose() * Gd_ * Z;
+					HDs = Z.transpose() * Gs_ * Z;
+				}else{
+					EigenMatrix Dprime = EigenZero(Ddprime.rows(), 2 * Ddprime.cols());
+					Dprime << Ddprime, Dsprime;
+					const EigenMatrix HD = arh.Hessian(Dprime);
+					HDd = HD.leftCols(Ddprime.cols());
+					HDs = HD.rightCols(Dsprime.cols());
+				}
 				EigenMatrix Hvd = HDd * Cdprime_ + Fdprime_ * vdprime;
 				EigenMatrix Hvs = HDs * Csprime_ + Fsprime_ * vsprime;
 				EigenMatrix Hv = EigenZero(vprime.rows(), vprime.cols());
-				Hv << 4 * Hvd, 4 * Hvs;
+				Hv << 4 * Hvd, 2 * Hvs;
 				return Hv;
 			};
 			return std::make_tuple(
