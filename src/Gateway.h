@@ -4,7 +4,7 @@ std::string ReadBasisSet(std::string inp);
 
 bool isInt(double x);
 
-std::tuple<double, double> ReadNumElectrons(std::string inp);
+std::tuple<double, double, double> ReadNumElectrons(std::string inp);
 
 int ReadWfnType(std::string inp);
 

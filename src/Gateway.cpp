@@ -81,14 +81,15 @@ bool isInt(double x){
 	return std::abs( n - x ) < 1e-6;
 }
 
-std::tuple<double, double> ReadNumElectrons(std::string inp){
+std::tuple<double, double, double> ReadNumElectrons(std::string inp){
 	std::ifstream file(inp);
 	std::vector<std::vector<double>> atoms = ReadXYZ(inp);
 	double ne = 0;
 	for ( std::vector<double>& atom : atoms )
-		ne += (double)std::round(atom[0]);
+		ne += (double)std::lround(atom[0]);
 	double charge = 0;
-	int spin = 0;
+	int spin1 = 0;
+	int spin2 = 0;
 	std::string thisline;
 	bool found = 0;
 	while ( std::getline(file, thisline) && ! found ){
@@ -110,24 +111,36 @@ std::tuple<double, double> ReadNumElectrons(std::string inp){
 			std::getline(file, thisline);
 			if ( thisline.length() == 0 ) throw std::runtime_error("Missing spin!");
 			std::stringstream ss(thisline);
-			ss >> spin;
+			ss >> spin1;
+			ss >> spin2;
 		}
 	}
 	ne -= charge;
 
-	double na = 0; double nb = 0;
-	if ( isInt(ne) ){
-		const int ne_int = std::round(ne);
-		if ( spin == 0 && ne_int % 2 == 0 ) spin = 1;
-		else if ( spin == 0 && ne_int % 2 == 1 ) spin = 2;
-		if ( ( ne_int + spin ) % 2 == 0 ) throw std::runtime_error("Incompatible number of electrons and spin multiplicity!");
-		na = ( ne_int + ( spin - 1 ) ) / 2;
-		nb = ( ne_int - ( spin - 1 ) ) / 2;
-	}else{
-		na = nb = ne / 2;
+	double na = 0; double nb = 0; double nd = 0;
+	const int ne_int = std::lround(ne);
+	if ( spin2 == 0 ){
+		if ( isInt(ne) ){
+			if ( spin1 == 0 && ne_int % 2 == 0 ) spin1 = 1;
+			else if ( spin1 == 0 && ne_int % 2 == 1 ) spin1 = 2;
+			if ( ( ne_int + spin1 ) % 2 == 0 ) throw std::runtime_error("Incompatible number of electrons and spin multiplicity!");
+			na = ( ne_int + ( spin1 - 1 ) ) / 2;
+			nb = ( ne_int - ( spin1 - 1 ) ) / 2;
+		}else na = nb = ne / 2;
+	}else{ // spin2 > 0
+		if ( isInt(ne) ){
+			na = spin1 - 1;
+			nb = spin2 - 1;
+			nd = ne_int - na - nb;
+			if ( std::lround(nd) % 2 == 0 ){
+				nd /= 2;
+				na += nd;
+				nb += nd;
+			}else throw std::runtime_error("Incompatible number of electrons and spin multiplicity!");
+		}else throw std::runtime_error("Fractional occupation cannot be applied to spin-restricted open-shell wavefunctions in Chinium!");
 	}
 	if ( na < 0 || nb < 0 ) throw std::runtime_error("Negative number of electrons!");
-	return std::make_tuple(na, nb);
+	return std::make_tuple(na, nb, nd);
 }
 
 int ReadWfnType(std::string inp){

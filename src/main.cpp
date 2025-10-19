@@ -32,7 +32,7 @@ int main(int /*argc*/, char* argv[]){
 	// Reading input file
 	const std::vector<std::vector<double>> atoms = ReadXYZ(inp);
 	const std::string basis = ReadBasisSet(inp);
-	auto [na, nb] = ReadNumElectrons(inp);
+	auto [na, nb, nd] = ReadNumElectrons(inp);
 	const int wfntype = ReadWfnType(inp);
 	const int nthreads = ReadNumThreads(inp);
 	const std::string jobtype = ReadJobType(inp);
@@ -84,10 +84,15 @@ int main(int /*argc*/, char* argv[]){
 	if ( guess != "READ" ){
 		mwfn.Wfntype = wfntype;
 		if ( wfntype == -1 ){
-			if ( na == nb ) mwfn.Wfntype = 0;
-			else mwfn.Wfntype = 1;
+			if ( nd == 0 ){
+				if ( na == nb ) mwfn.Wfntype = 0;
+				else mwfn.Wfntype = 1;
+			}else mwfn.Wfntype = 2;
 		}
 	}
+
+	if ( mwfn.Wfntype == 2 && nd == 0 ) nd = nb;
+
 	if ( env.Temperature > 0 && mwfn.Wfntype == 2 ) throw std::runtime_error("FT-DFT cannot be used with spin-restricted open-shell wavefunctions!");
 	if ( env.Temperature == 0 && !isInt(na) && !isInt(nb) ) throw std::runtime_error("Non-integral guess of charge is only allowed in FT-DFT!");
 
@@ -143,14 +148,20 @@ int main(int /*argc*/, char* argv[]){
 				mwfn.setOccupation(occ, 2);
 			}else if ( mwfn.Wfntype == 2 ){
 				mwfn.Orbitals.resize(mwfn.getNumBasis());
-				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
-				const int na_int = std::round(na);
-				const int nb_int = std::round(nb);
-				for ( int i = 0; i < ( ( na_int > nb_int ) ? na_int : nb_int ); i++ ){
-					if ( i >= na_int || i >= nb_int ) occ(i) = 1;
-					else occ(i) = 2;
+				const int nd_int = std::lround(nd);
+				const int na_int = std::lround(na);
+				const int nb_int = std::lround(nb);
+				for ( int i = 0; i < na_int + nb_int - nd_int; i++ ){
+					auto& orbital_i = mwfn.Orbitals[i];
+					if ( i < nd_int ){
+						orbital_i.Occ = 2;
+						orbital_i.Type = 0;
+					}else{
+						orbital_i.Occ = 1;
+						if ( i < na_int ) orbital_i.Type = 1;
+						else orbital_i.Type = 2;
+					}
 				}
-				mwfn.setOccupation(occ);
 			}
 			GuessSCF(mwfn, int2c1e, grid, guess, 1);
 		}
