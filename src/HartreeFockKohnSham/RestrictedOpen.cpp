@@ -143,7 +143,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 				EigenMatrix Hvb = SafeLowSpin(HDb * Cbprime_ + Fbprime_ * vbprime);
 				EigenMatrix Hv = EigenZero(vprime.rows(), vprime.cols());
 				if (low_spin) Hv << 4 * Hvd, 2 * Hva, 2 * Hvb;
-				Hv << 4 * Hvd, 2 * Hva;
+				else Hv << 4 * Hvd, 2 * Hva;
 				return Hv;
 			};
 			return std::make_tuple(

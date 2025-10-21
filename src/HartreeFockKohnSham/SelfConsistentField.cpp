@@ -128,10 +128,16 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			mwfn.setCoefficientMatrix(C1, 1);
 			mwfn.setCoefficientMatrix(C2, 2);
 		}else if ( mwfn.Wfntype == 2 ){
-			int nd = mwfn.getNumElec(2);
-			int ns = mwfn.getNumElec(1) - nd;
-			EigenMatrix Cprime = EigenOne(Z.rows(), ns + nd);
-			auto [E, epsilons, C] = RestrictedOpenLBFGS(nd, ns, 0, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			int nd = 0; int na = 0; int nb = 0;
+			for ( auto& orbital : mwfn.Orbitals ){
+				if ( orbital.Occ > 0 ) switch (orbital.Type){
+					case 0: nd++; break;
+					case 1: na++; break;
+					case 2: nb++; break;
+				}
+			}
+			EigenMatrix Cprime = EigenOne(Z.rows(), nd + na + nb);
+			auto [E, epsilons, C] = RestrictedOpenLBFGS(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
 			E_scf = E;
 		}
 	}else if ( scf == "NEWTON" ){
@@ -167,10 +173,16 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			mwfn.setCoefficientMatrix(C1, 1);
 			mwfn.setCoefficientMatrix(C2, 2);
 		}else if ( mwfn.Wfntype == 2 ){
-			int nd = mwfn.getNumElec(2);
-			int ns = mwfn.getNumElec(1) - nd;
-			EigenMatrix Cprime = EigenOne(Z.rows(), ns + nd);
-			auto [E, epsilons, C] = RestrictedOpenNewton(nd, ns, 0, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			int nd = 0; int na = 0; int nb = 0;
+			for ( auto& orbital : mwfn.Orbitals ){
+				if ( orbital.Occ > 0 ) switch (orbital.Type){
+					case 0: nd++; break;
+					case 1: na++; break;
+					case 2: nb++; break;
+				}
+			}
+			EigenMatrix Cprime = EigenOne(Z.rows(), nd + na + nb);
+			auto [E, epsilons, C] = RestrictedOpenNewton(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
 			E_scf = E;
 		}
 	}else if ( scf == "ARH" ){
@@ -206,10 +218,16 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			mwfn.setCoefficientMatrix(C1, 1);
 			mwfn.setCoefficientMatrix(C2, 2);
 		}else if ( mwfn.Wfntype == 2 ){
-			int nd = mwfn.getNumElec(2);
-			int ns = mwfn.getNumElec(1) - nd;
-			EigenMatrix Cprime = EigenOne(Z.rows(), ns + nd);
-			auto [E, epsilons, C] = RestrictedOpenARH(nd, ns, 0, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			int nd = 0; int na = 0; int nb = 0;
+			for ( auto& orbital : mwfn.Orbitals ){
+				if ( orbital.Occ > 0 ) switch (orbital.Type){
+					case 0: nd++; break;
+					case 1: na++; break;
+					case 2: nb++; break;
+				}
+			}
+			EigenMatrix Cprime = EigenOne(Z.rows(), nd + na + nb);
+			auto [E, epsilons, C] = RestrictedOpenARH(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
 			E_scf = E;
 		}
 	}
