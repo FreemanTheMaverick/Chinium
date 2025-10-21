@@ -24,7 +24,7 @@ int SphericalGridNumber(std::string path, std::vector<MwfnCenter>& centers){
 	for ( MwfnCenter& center : centers ){
 		int ngroups;
 		std::ifstream gridfile( path + "/" + Z2Name[center.Index] + ".grid" );
-		assert("Missing element grid file in folder!" && gridfile.good());
+		if ( !gridfile.good() ) throw std::runtime_error("Missing element grid file in folder!");
 		std::string thisline;
 		std::getline(gridfile, thisline);
 		std::stringstream ss_(thisline);
@@ -74,7 +74,7 @@ void SphericalGrid(
 	__Z_2_Name__
 	for ( MwfnCenter& centera : centers ){
 		std::ifstream gridfile(path + "/" + Z2Name[centera.Index] + ".grid");
-		assert("Missing element grid file in folder!" && gridfile.good());
+		if ( !gridfile.good() ) throw std::runtime_error("Missing element grid file in folder!");
 		std::string thisline;
 		std::getline(gridfile, thisline);
 		std::stringstream ss_(thisline);
@@ -109,7 +109,7 @@ void SphericalGrid(
 				const double ii = i + 1;
 				return 2 * std::pow(R, 3) * ( nshells_total + 1 ) * std::pow(ii, 5) / std::pow(nshells_total + 1 - ii, 7);
 			};
-		}else assert("Unrecognized radial formula!" && 0);
+		}else throw std::runtime_error("Unrecognized radial formula!");
 		int ishell_total = 0;
 		for ( int igroup = 0; igroup < ngroups; igroup++ ){
 			std::getline(gridfile, thisline);

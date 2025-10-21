@@ -122,6 +122,7 @@ int main(int /*argc*/, char* argv[]){
 		int4c2e.getThreadPointers(nthreads, 1);
 		int4c2e.CalculateIntegrals(0, 1);
 		if ( method != "HF" || guess == "SAP" ){
+			if ( grid.NumGrids == 0 ) throw std::runtime_error("For DFT or SAP, you must specify the grid!");
 			if ( method != "HF" ){
 				xc.Read(method, 1);
 				grid.Type = xc.Family == "LDA" ? 0 : xc.Family == "GGA" ? 1 : 2;

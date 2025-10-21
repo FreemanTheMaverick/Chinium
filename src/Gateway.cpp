@@ -217,7 +217,7 @@ std::string ReadSCF(std::string inp){
 			ss >> scf;
 		}
 	}
-	if ( scf != "DIIS" && scf != "NEWTON" && scf != "ARH" && scf != "LBFGS" ) throw std::runtime_error("Invalid SCF type!");
+	if ( scf != "DIIS" && scf != "NEWTON" && scf != "ARH" && scf != "LBFGS" && scf != "DRY" ) throw std::runtime_error("Invalid SCF type!");
 	return scf;
 }
 

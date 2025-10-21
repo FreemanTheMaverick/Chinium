@@ -192,7 +192,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		C2 = Z2 * eigensolver.eigenvectors();
 		const double E_ = 0.5 * ( Dot(D1_, Hcore + F1_) + Dot(D2_, Hcore + F2_) );
 
-		int nocc = std::round(D1prime.diagonal().sum());
+		int nocc = std::lround(D1prime.diagonal().sum());
 		const int nbasis = D1prime.rows();
 		EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
 		for ( int o = 0; o < nocc; o++ ){
@@ -200,7 +200,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 				A(o, v) = A(v, o) = 2 * ( epsilon1s(v) - epsilon1s(o) );
 			}
 		}
-		nocc = std::round(D2prime.diagonal().sum());
+		nocc = std::lround(D2prime.diagonal().sum());
 		EigenMatrix B = EigenMatrix::Ones(nbasis, nbasis);
 		for ( int o = 0; o < nocc; o++ ){
 			for ( int v = nocc; v < nbasis; v++ ){
