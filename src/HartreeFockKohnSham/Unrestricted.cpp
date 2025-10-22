@@ -127,7 +127,14 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 }
 
 #define DummyFunc [](EigenMatrix v){ return EigenZero(v.rows(), v.cols()).eval(); }
-#define IdentityFunc [](EigenMatrix v){ return v; }
+
+static std::function<EigenMatrix (EigenMatrix)> Preconditioner(EigenMatrix D, EigenMatrix A){
+	return [D, A](EigenMatrix Z){
+		EigenMatrix W = D * Z - Z * D;
+		W = W.cwiseProduct(A);
+		return ( D * W - W * D ).eval();
+	};
+}
 
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
@@ -212,26 +219,10 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 			const EigenMatrix Asqrtinv = Asqrt.cwiseInverse();
 			const EigenMatrix Bsqrt = B.cwiseSqrt();
 			const EigenMatrix Bsqrtinv = Bsqrt.cwiseInverse();
-			std::function<EigenMatrix (EigenMatrix)> PAsqrt = [D1prime_, Asqrtinv](EigenMatrix Z){
-				EigenMatrix W = D1prime_ * Z - Z * D1prime_;
-				W = W.cwiseProduct(Asqrtinv);
-				return ( D1prime_ * W - W * D1prime_ ).eval();
-			};
-			std::function<EigenMatrix (EigenMatrix)> PAsqrtinv = [D1prime_, Asqrt](EigenMatrix Z){
-				EigenMatrix W = D1prime_ * Z - Z * D1prime_;
-				W = W.cwiseProduct(Asqrt);
-				return ( D1prime_ * W - W * D1prime_ ).eval();
-			};
-			std::function<EigenMatrix (EigenMatrix)> PBsqrt = [D2prime_, Bsqrtinv](EigenMatrix Z){
-				EigenMatrix W = D2prime_ * Z - Z * D2prime_;
-				W = W.cwiseProduct(Bsqrtinv);
-				return ( D2prime_ * W - W * D2prime_ ).eval();
-			};
-			std::function<EigenMatrix (EigenMatrix)> PBsqrtinv = [D2prime_, Bsqrt](EigenMatrix Z){
-				EigenMatrix W = D2prime_ * Z - Z * D2prime_;
-				W = W.cwiseProduct(Bsqrt);
-				return ( D2prime_ * W - W * D2prime_ ).eval();
-			};
+			const std::function<EigenMatrix (EigenMatrix)> PAsqrt = Preconditioner(D1prime_, Asqrtinv);
+			const std::function<EigenMatrix (EigenMatrix)> PAsqrtinv = Preconditioner(D1prime_, Asqrt);
+			const std::function<EigenMatrix (EigenMatrix)> PBsqrt = Preconditioner(D2prime_, Bsqrtinv);
+			const std::function<EigenMatrix (EigenMatrix)> PBsqrtinv = Preconditioner(D2prime_, Bsqrt);
 			return std::make_tuple(
 					E_,
 					std::vector<EigenMatrix>{F1prime_, F2prime_},
@@ -240,18 +231,6 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 			);
 		}else{
 			std::vector<std::function<EigenMatrix (EigenMatrix)>> He;
-			const EigenMatrix Ainv = A.cwiseInverse();
-			const EigenMatrix Binv = B.cwiseInverse();
-			std::function<EigenMatrix (EigenMatrix)> PA = [D1prime_, Ainv](EigenMatrix Z){
-				EigenMatrix W = D1prime_ * Z - Z * D1prime_;
-				W = W.cwiseProduct(Ainv);
-				return ( D1prime_ * W - W * D1prime_ ).eval();
-			};
-			std::function<EigenMatrix (EigenMatrix)> PB = [D2prime_, Binv](EigenMatrix Z){
-				EigenMatrix W = D2prime_ * Z - Z * D2prime_;
-				W = W.cwiseProduct(Binv);
-				return ( D2prime_ * W - W * D2prime_ ).eval();
-			};
 			if constexpr ( scf_t == newton_t ){
 				He.push_back([&Vtmp1](EigenMatrix v1prime){
 					Vtmp1 = v1prime;
@@ -288,6 +267,10 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 					return EigenZero(nbasis, nbasis);
 				});
 			}
+			const EigenMatrix Ainv = A.cwiseInverse();
+			const EigenMatrix Binv = B.cwiseInverse();
+			const std::function<EigenMatrix (EigenMatrix)> PA = Preconditioner(D1prime_, Ainv);
+			const std::function<EigenMatrix (EigenMatrix)> PB = Preconditioner(D2prime_, Binv);
 			return std::make_tuple(
 					E_,
 					std::vector<EigenMatrix>{F1prime_, F2prime_},

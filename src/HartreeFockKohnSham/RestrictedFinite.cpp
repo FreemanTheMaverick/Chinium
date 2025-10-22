@@ -132,6 +132,14 @@ static std::tuple<int, int, int> Regularize(EigenVector& occ, double threshold){
 
 #define IdentityFunc [](EigenMatrix v){ return v; }
 
+static std::function<EigenMatrix (EigenMatrix)> Preconditioner(EigenMatrix C, EigenMatrix A){
+	return [C, A](EigenMatrix Z){
+		EigenMatrix Omega = C.transpose() * Z;
+		Omega = Omega.cwiseProduct(A);
+		return ( C * Omega ).eval();
+	};
+}
+
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRiemann(
@@ -236,16 +244,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		if constexpr ( scf_t == lbfgs_t ){
 			const EigenMatrix Asqrt = A.cwiseSqrt();
 			const EigenMatrix Asqrtinv = Asqrt.cwiseInverse();
-			std::function<EigenMatrix (EigenMatrix)> Psqrt = [Cprime, Asqrtinv](EigenMatrix Z){
-				EigenMatrix Omega = Cprime.transpose() * Z;
-				Omega = Omega.cwiseProduct(Asqrtinv);
-				return ( Cprime * Omega ).eval();
-			};
-			std::function<EigenMatrix (EigenMatrix)> Psqrtinv = [Cprime, Asqrt](EigenMatrix Z){
-				EigenMatrix Omega = Cprime.transpose() * Z;
-				Omega = Omega.cwiseProduct(Asqrt);
-				return ( Cprime * Omega ).eval();
-			};
+			const std::function<EigenMatrix (EigenMatrix)> Psqrt = Preconditioner(Cprime, Asqrtinv);
+			const std::function<EigenMatrix (EigenMatrix)> Psqrtinv = Preconditioner(Cprime, Asqrt);
 			std::vector<std::function<EigenMatrix (EigenMatrix)>> precon = {Psqrt};
 			std::vector<std::function<EigenMatrix (EigenMatrix)>> inv_precon = {Psqrtinv};
 			if ( na != 0 ){
@@ -320,11 +320,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 					return res;
 			});
 			const EigenMatrix Ainv = A.cwiseInverse();
-			const std::function<EigenMatrix (EigenMatrix)> Pr = [Cprime, Ainv](EigenMatrix Z){
-				EigenMatrix Omega = Cprime.transpose() * Z;
-				Omega = Omega.cwiseProduct(Ainv);
-				return ( Cprime * Omega ).eval();
-			};
+			const std::function<EigenMatrix (EigenMatrix)> Pr = Preconditioner(Cprime, Ainv);
 			std::vector<std::function<EigenMatrix (EigenMatrix)>> precon = {Pr};
 			if ( na != 0 ){
 				precon.push_back(DummyC);

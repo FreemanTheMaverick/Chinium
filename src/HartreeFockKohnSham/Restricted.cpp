@@ -92,6 +92,14 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 	return std::make_tuple(E, epsilons, C);
 }
 
+static std::function<EigenMatrix (EigenMatrix)> Preconditioner(EigenMatrix D, EigenMatrix A){
+	return [D, A](EigenMatrix Z){
+		EigenMatrix W = D * Z - Z * D;
+		W = W.cwiseProduct(A);
+		return ( D * W - W * D ).eval();
+	};
+}
+
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
@@ -146,16 +154,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		if constexpr ( scf_t == lbfgs_t ){
 			const EigenMatrix Asqrt = A.cwiseSqrt();
 			const EigenMatrix Asqrtinv = Asqrt.cwiseInverse();
-			std::function<EigenMatrix (EigenMatrix)> Psqrt = [Dprime_, Asqrtinv](EigenMatrix Z){
-				EigenMatrix W = Dprime_ * Z - Z * Dprime_;
-				W = W.cwiseProduct(Asqrtinv);
-				return ( Dprime_ * W - W * Dprime_ ).eval();
-			};
-			std::function<EigenMatrix (EigenMatrix)> Psqrtinv = [Dprime_, Asqrt](EigenMatrix Z){
-				EigenMatrix W = Dprime_ * Z - Z * Dprime_;
-				W = W.cwiseProduct(Asqrt);
-				return ( Dprime_ * W - W * Dprime_ ).eval();
-			};
+			const std::function<EigenMatrix (EigenMatrix)> Psqrt = Preconditioner(Dprime_, Asqrtinv);
+			const std::function<EigenMatrix (EigenMatrix)> Psqrtinv = Preconditioner(Dprime_, Asqrt);
 			return std::make_tuple(
 				E_,
 				std::vector<EigenMatrix>{Fprime_},
@@ -164,12 +164,6 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 			);
 		}else if constexpr ( scf_t == newton_t || scf_t == arh_t){
 			std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-			const EigenMatrix Ainv = A.cwiseInverse();
-			std::function<EigenMatrix (EigenMatrix)> Pr = [Dprime_, Ainv](EigenMatrix Z){
-				EigenMatrix W = Dprime_ * Z - Z * Dprime_;
-				W = W.cwiseProduct(Ainv);
-				return ( Dprime_ * W - W * Dprime_ ).eval();
-			};
 			if constexpr ( scf_t == newton_t ) He = [Z, &int4c2e, &grid, &xc, nthreads](EigenMatrix vprime){
 				const EigenMatrix v = Z * vprime * Z.transpose();
 				const auto [FhfU, _, __] = int4c2e.ContractInts(v, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
@@ -184,6 +178,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 				return (Z.transpose() * FU * Z).eval();
 			};
 			else He = [&arh](EigenMatrix vprime){ return arh.Hessian(vprime); };
+			const EigenMatrix Ainv = A.cwiseInverse();
+			const std::function<EigenMatrix (EigenMatrix)> Pr = Preconditioner(Dprime_, Ainv);
 			return std::make_tuple(
 					E_,
 					std::vector<EigenMatrix>{Fprime_},

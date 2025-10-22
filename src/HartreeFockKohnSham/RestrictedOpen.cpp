@@ -25,8 +25,6 @@
 #define S (int2c1e.Overlap)
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
 
-#define DummyFunc [](EigenMatrix v){ return v; }
-
 #define SafeLowSpin(mat) ( low_spin ? (mat).eval() : EigenZero(0, 0) )
 
 static std::function<EigenMatrix (EigenMatrix)> Preconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix B, EigenMatrix C){
