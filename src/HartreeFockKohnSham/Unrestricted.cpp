@@ -117,9 +117,9 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 	EigenMatrix F = EigenZero(Fa.rows(), Fa.cols() * 2);
 	F << Fa, Fb;
 	std::vector<EigenMatrix> Fs = {F};
-	ADIIS adiis(&update_func, 1, 20, 1e-1, 100, output>0 ? 2 : 0);
+	ADIIS adiis(&update_func, 1, 20, 1e-1, 300, output>0 ? 2 : 0);
 	if ( T == 0 ) if ( !adiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
-	CDIIS cdiis(&update_func, 1, 20, 1e-8, 100, output>0 ? 2 : 0);
+	CDIIS cdiis(&update_func, 1, 20, 1e-8, 300, output>0 ? 2 : 0);
 	if ( T > 0 ) cdiis.Damps.push_back(std::make_tuple(0.1, 100, 0.75));
 	cdiis.Steal(adiis);
 	if ( !cdiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");

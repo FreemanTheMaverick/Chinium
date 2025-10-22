@@ -96,7 +96,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 		);
 	};
 	std::vector<EigenMatrix> Fs = {F};
-	CDIIS cdiis(&update_func, 1, 20, 1e-8, 100, output>0 ? 2 : 0);
+	CDIIS cdiis(&update_func, 1, 20, 1e-8, 300, output>0 ? 2 : 0);
 	cdiis.Damps.push_back(std::make_tuple(0.1, 100, 0.75));
 	if ( !cdiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilons, occupations, C);
