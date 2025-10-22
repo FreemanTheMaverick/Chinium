@@ -29,6 +29,16 @@
 
 #define SafeLowSpin(mat) ( low_spin ? (mat).eval() : EigenZero(0, 0) )
 
+static std::function<EigenMatrix (EigenMatrix)> Preconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix B, EigenMatrix C){
+	return [U, Uperp, B, C](EigenMatrix Z){
+		EigenMatrix Omega = U.transpose() * Z;
+		Omega = Omega.cwiseProduct(B);
+		EigenMatrix Kappa = Uperp.transpose() * Z;
+		Kappa = Kappa.cwiseProduct(C);
+		return ( U * Omega + Uperp * Kappa ).eval();
+	};
+}
+
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
@@ -45,6 +55,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 	AugmentedRoothaanHall arh;
 	if constexpr ( scf_t == arh_t ) arh.Init(20, 1);
 
+	const int nbasis = Z.rows();
 	Maniverse::Flag flag(Cprime);
 	std::vector<int> space = {nd, na};
 	bool low_spin = nb > 0;
@@ -100,12 +111,48 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		EigenMatrix Grad = EigenZero(Cprime_.rows(), nd + na + nb);
 		if (low_spin) Grad << 4 * Fdprime_ * Cdprime_, 2 * Faprime_ * Caprime_, 2 * Fbprime_ * Cbprime_;
 		else Grad << 4 * Fdprime_ * Cdprime_, 2 * Faprime_ * Caprime_;
+
+		EigenMatrix Call = EigenOne(nbasis, nbasis);
+		Call.leftCols(nd + na + nb) = Cprime_;
+		Eigen::HouseholderQR<EigenMatrix> qr(Call);
+		Call = qr.householderQ();
+		const EigenMatrix Cperp = Call.rightCols(nbasis - nd - na - nb);
+		std::vector<EigenMatrix> Fmos = { Call.transpose() * Fdprime_ * Call, Call.transpose() * Faprime_ * Call, SafeLowSpin(Call.transpose() * Fbprime_ * Call), EigenZero(nbasis, nbasis)};
+		EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
+		for ( int i = 0; i < nbasis; i++ ){
+			int I = 0; int Iscale = 4;
+			if ( i < nd ){ I = 0; Iscale = 4; }
+			else if ( i < nd + na ){ I = 1; Iscale = 2; }
+			else if ( i < nd + na + nb ) { I = 2; Iscale = 2; }
+			else { I = 3; Iscale = 0; };
+			for ( int j = 0; j < nbasis; j++ ){
+				int J = 0; int Jscale = 4;
+				if ( j < nd ){ J = 0; Jscale = 4; }
+				else if ( j < nd + na ){ J = 1; Jscale = 2; }
+				else if ( j < nd + na + nb ){ J = 2; Jscale = 2; }
+				else{ J = 3; Jscale = 0; }
+				const double FIi = Fmos[I](i, i) * Iscale;
+				const double FIj = Fmos[I](j, j) * Iscale;
+				const double FJi = Fmos[J](i, i) * Jscale;
+				const double FJj = Fmos[J](j, j) * Jscale;
+				A(i, j) = std::abs(FIj + FJi - FIi - FJj);
+				if ( A(i, j) < 0.1 ) A(i, j) = 0.1;
+			}
+		}
+		const EigenMatrix B = A.block(0, 0, nd + na + nb, nd + na + nb);
+		const EigenMatrix C = A.block(nd + na + nb, 0, nbasis - nd - na - nb, nd + na + nb);
 		if constexpr ( scf_t == lbfgs_t ){
+			const EigenMatrix Bsqrt = B.cwiseSqrt();
+			const EigenMatrix Bsqrtinv = Bsqrt.cwiseInverse();
+			const EigenMatrix Csqrt = C.cwiseSqrt();
+			const EigenMatrix Csqrtinv = Csqrt.cwiseInverse();
+			const std::function<EigenMatrix (EigenMatrix)> Psqrt = Preconditioner(Cprime_, Cperp, Bsqrtinv, Csqrtinv);
+			const std::function<EigenMatrix (EigenMatrix)> Psqrtinv = Preconditioner(Cprime_, Cperp, Bsqrt, Csqrt);
 			return std::make_tuple(
 					E_,
 					std::vector<EigenMatrix>{Grad},
-					std::vector<std::function<EigenMatrix (EigenMatrix)>>{DummyFunc},
-					std::vector<std::function<EigenMatrix (EigenMatrix)>>{DummyFunc}
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{Psqrt},
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{Psqrtinv}
 			);
 		}else if constexpr ( scf_t == newton_t || scf_t == arh_t ){
 			std::function<EigenMatrix (EigenMatrix)> He = [low_spin, BlockParameters, Z, Fdprime_, Faprime_, Fbprime_, Cdprime_, Caprime_, Cbprime_, &int4c2e, nthreads, &arh](EigenMatrix vprime){
@@ -146,11 +193,14 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 				else Hv << 4 * Hvd, 2 * Hva;
 				return Hv;
 			};
+			const EigenMatrix Binv = B.cwiseInverse();
+			const EigenMatrix Cinv = C.cwiseInverse();
+			const std::function<EigenMatrix (EigenMatrix)> Pr = Preconditioner(Cprime_, Cperp, Binv, Cinv);
 			return std::make_tuple(
 					E_,
 					std::vector<EigenMatrix>{Grad},
 					std::vector<std::function<EigenMatrix (EigenMatrix)>>{He},
-					std::vector<std::function<EigenMatrix (EigenMatrix)>>{DummyFunc}
+					std::vector<std::function<EigenMatrix (EigenMatrix)>>{Pr}
 			);
 		}
 	};
