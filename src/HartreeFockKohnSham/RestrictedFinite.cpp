@@ -217,7 +217,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		// ARH hessian related
 		if constexpr ( scf_t == arh_t ) arh.Append(Dprime_, Fprime);
 
-		const EigenArray ns = Occ.array();
+		const EigenArray ns = na != 0 ? Occ.array() : EigenArray{0};
 		const double E_ =
 			( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_
 			+ 2 * T * ( ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log() ).sum()
