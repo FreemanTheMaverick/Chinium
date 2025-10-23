@@ -114,6 +114,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		Call.leftCols(nd + na + nb) = Cprime_;
 		Eigen::HouseholderQR<EigenMatrix> qr(Call);
 		Call = qr.householderQ();
+		C = Z * Call;
 		const EigenMatrix Cperp = Call.rightCols(nbasis - nd - na - nb);
 		std::vector<EigenMatrix> Fmos = { Call.transpose() * Fdprime_ * Call, Call.transpose() * Faprime_ * Call, SafeLowSpin(Call.transpose() * Fbprime_ * Call), EigenZero(nbasis, nbasis)};
 		EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);

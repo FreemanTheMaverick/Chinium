@@ -10,9 +10,6 @@
 #include <chrono>
 #include <cstdio>
 #include <memory>
-#include <Maniverse/Manifold/Grassmann.h>
-#include <Maniverse/Manifold/RealSymmetric.h>
-#include <Maniverse/Optimizer/TrustRegion.h>
 #include <libmwfn.h>
 
 #include "../Macro.h"
@@ -139,6 +136,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			EigenMatrix Cprime = EigenOne(Z.rows(), nd + na + nb);
 			auto [E, epsilons, C] = RestrictedOpenLBFGS(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
 			E_scf = E;
+			mwfn.setCoefficientMatrix(C, 1);
 		}
 	}else if ( scf == "NEWTON" ){
 		if ( mwfn.Wfntype == 0 ){
@@ -184,6 +182,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			EigenMatrix Cprime = EigenOne(Z.rows(), nd + na + nb);
 			auto [E, epsilons, C] = RestrictedOpenNewton(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
 			E_scf = E;
+			mwfn.setCoefficientMatrix(C, 1);
 		}
 	}else if ( scf == "ARH" ){
 		if ( mwfn.Wfntype == 0 ){
@@ -229,6 +228,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			EigenMatrix Cprime = EigenOne(Z.rows(), nd + na + nb);
 			auto [E, epsilons, C] = RestrictedOpenARH(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
 			E_scf = E;
+			mwfn.setCoefficientMatrix(C, 1);
 		}
 	}
 	return E_scf;
