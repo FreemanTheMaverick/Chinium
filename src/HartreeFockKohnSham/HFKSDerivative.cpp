@@ -62,8 +62,8 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 		for ( int jbasis = 0; jbasis < mwfn.Centers[iatom].getNumBasis(); jbasis++, kbasis++ )
 			bf2atom[kbasis] = iatom;
 
-	const EigenMatrix D = mwfn.getDensity() / 2;
-	const EigenMatrix W = mwfn.getEnergyDensity() / 2;
+	const EigenMatrix D = mwfn.getDensity(1);
+	const EigenMatrix W = mwfn.getEnergyDensity(1);
 	std::vector<EigenMatrix> Fskeletons(3 * natoms, EigenMatrix(nbasis, nbasis));
 
 	// HF gradient
@@ -158,8 +158,8 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 		if (output) std::printf("Non-Idempotent coupled-perturbed self-consistent-field ...\n");
 		auto start = __now__;
 		auto [Us, dDs, dEs, dWs, dFs] = NonIdempotent( // std::vector<EigenMatrix>
-				mwfn.getCoefficientMatrix(),
-				mwfn.getEnergy(),
+				mwfn.getCoefficientMatrix(1),
+				mwfn.getEnergy(1),
 				mwfn.getOccupation() / 2.,
 				int2c1e.OverlapGrads, Fskeletons,
 				int4c2e, grid,
@@ -185,8 +185,8 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 				if (output) std::printf("Occupation-fluctuation coupled-perturbed self-consistent-field ...\n");
 				start = __now__;
 				Dns = OccupationFluctuation(
-						mwfn.getCoefficientMatrix(),
-						mwfn.getEnergy(),
+						mwfn.getCoefficientMatrix(1),
+						mwfn.getEnergy(1),
 						mwfn.getOccupation() / 2.,
 						frac_indeces,
 						int4c2e, grid,
@@ -200,8 +200,8 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 			const EigenArray ns = mwfn.getOccupation().array() / 2;
 			const EigenVector Nes = (ns * ( ns - 1. )) / env.Temperature;
 			const std::vector<EigenVector> dNs = OccupationGradient(
-					mwfn.getCoefficientMatrix(),
-					mwfn.getEnergy(),
+					mwfn.getCoefficientMatrix(1),
+					mwfn.getEnergy(1),
 					Dns, Nes,
 					int2c1e.OverlapGrads, dFs,
 					int4c2e, grid,

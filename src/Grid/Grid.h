@@ -1,6 +1,6 @@
 class Grid{ public:
 	Mwfn* MWFN;
-	int Type = 0; // 0 - LDA, 1 - GGA, 2 - mGGA
+	int Type = -1; // 0 - LDA, 1 - GGA, 2 - mGGA
 	int NumGrids = 0;
 	std::vector<double> Xs;
 	std::vector<double> Ys;
@@ -62,7 +62,7 @@ class Grid{ public:
 	std::vector<double> getEnergyGrad();
 	std::vector<std::vector<double>> getEnergyHess();
 
-	EigenMatrix getFock(int type = -1);
+	EigenMatrix getFock();
 	std::vector<EigenMatrix> getFockSkeleton();
 	std::vector<EigenMatrix> getFockU();
 	std::vector<EigenMatrix> getFockU(

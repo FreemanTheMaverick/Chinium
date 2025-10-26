@@ -9,22 +9,21 @@
 #include "Tensor.h"
 #include "Grid.h"
 
-EigenMatrix Grid::getFock(int type){ // Default type = -1
-	if ( type == -1 ) type = this->Type;
+EigenMatrix Grid::getFock(){
 	const Eigen::Tensor<double, 1>& Ws = Weights;
 	const int nbasis = this->MWFN->getNumBasis();
 	Eigen::Tensor<double, 2> F(nbasis, nbasis); F.setZero();
-	if ( type >= 0 ){
+	if ( this->Type >= 0 ){
 		Eigen::Tensor<double, 2> F0(nbasis, nbasis); F0.setZero();
 		#include "FockEinSum/Ws_g...E1Rhos_g...AOs_g,mu...AOs_g,nu---F0_mu,nu.hpp"
 		F += 0.5 * F0;
 	}
-	if ( type >= 1 ){
+	if ( this->Type >= 1 ){
 		Eigen::Tensor<double, 2> F1(nbasis, nbasis); F1.setZero();
 		#include "FockEinSum/Ws_g...E1Sigmas_g...Rho1s_g,r...AO1s_g,mu,r...AOs_g,nu---F1_mu,nu.hpp"
 		F += 2. * F1;
 	}
-	if ( type >= 2 ){
+	if ( this->Type >= 2 ){
 		Eigen::Tensor<double, 2> F2(nbasis, nbasis); F2.setZero();
 		Eigen::Tensor<double, 1> V = 0.5 * E1Taus + 2 * E1Lapls;
 		#include "FockEinSum/Ws_g...V_g...AO1s_g,mu,r...AO1s_g,nu,r---F2_mu,nu.hpp"

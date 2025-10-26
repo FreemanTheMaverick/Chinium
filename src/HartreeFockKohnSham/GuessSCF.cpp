@@ -14,7 +14,10 @@
 #include "SAP.h"
 
 EigenMatrix SuperpositionAtomicPotential(std::vector<MwfnCenter>& centers, Grid& grid){
-	int ngrids = grid.NumGrids;
+	const int ngrids = grid.NumGrids;
+	const int old_type = grid.Type;
+	const Eigen::Tensor<double, 1> old_E1Rhos = grid.E1Rhos;
+	grid.Type = 0; // Pretending LDA
 	grid.E1Rhos.resize(ngrids); grid.E1Rhos.setZero();
 	for ( MwfnCenter& center : centers ){
 		const double atomx = center.Coordinates[0];
@@ -36,7 +39,10 @@ EigenMatrix SuperpositionAtomicPotential(std::vector<MwfnCenter>& centers, Grid&
 			grid.E1Rhos(igrid) += bestvap;
 		}
 	}
-	return grid.getFock(0); // Pretending LDA.
+	const EigenMatrix Fsap = grid.getFock();
+	grid.Type = old_type; // Recoverying grid data
+	grid.E1Rhos = old_E1Rhos;
+	return Fsap;
 }
 
 void GuessSCF(Mwfn& mwfn, Int2C1E& int2c1e, Grid& grid, std::string guess, const bool output){

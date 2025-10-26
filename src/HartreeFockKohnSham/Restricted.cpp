@@ -188,7 +188,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 			);
 		}
 	};
-	
+
 	const std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(

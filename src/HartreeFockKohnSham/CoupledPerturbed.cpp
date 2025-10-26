@@ -127,11 +127,14 @@ std::tuple<
 		if (output) std::printf("Constructing U gradients of Fock matrix ...");
 		auto fock_start = __now__;
 		std::vector<EigenMatrix> undoneFU1s = int4c2e.ContractInts(undoneDs, nthreads, 1);
-		std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
-		std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
-		for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
-		grid.getDensityU(undoneDs, RhoUss, Rho1Uss, SigmaUss);
-		std::vector<EigenMatrix> undoneFU2s = grid.getFockU(RhoUss, Rho1Uss, SigmaUss);
+		std::vector<EigenMatrix> undoneFU2s(undoneDs.size(), EigenZero(nbasis, nbasis));
+		if ( grid.Type >= 0 ){
+			std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
+			std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
+			for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
+			grid.getDensityU(undoneDs, RhoUss, Rho1Uss, SigmaUss);
+			undoneFU2s = grid.getFockU(RhoUss, Rho1Uss, SigmaUss);
+		}
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			const EigenMatrix FU = undoneFU1s[jundone] + undoneFU2s[jundone];
 			Fs[imatrix] = Fskeletons[imatrix] + FU;
@@ -212,11 +215,14 @@ std::vector<EigenVector> OccupationGradient(
 			undoneDs[jundone++] = Ds[imatrix];
 		}
 		std::vector<EigenMatrix> undoneFUs = int4c2e.ContractInts(undoneDs, nthreads, 1);
-		std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
-		std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
-		for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
-		grid.getDensityU(undoneDs, RhoUss, Rho1Uss, SigmaUss);
-		std::vector<EigenMatrix> undoneFU2s = grid.getFockU(RhoUss, Rho1Uss, SigmaUss);
+		std::vector<EigenMatrix> undoneFU2s(undoneDs.size(), EigenZero(nbasis, nbasis));
+		if ( grid.Type >= 0 ){
+			std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
+			std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
+			for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
+			grid.getDensityU(undoneDs, RhoUss, Rho1Uss, SigmaUss);
+			undoneFU2s = grid.getFockU(RhoUss, Rho1Uss, SigmaUss);
+		}
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			undoneFUs[jundone] += undoneFU2s[jundone];
 			newFs_[imatrix] = Fskeletons[imatrix] + undoneFUs[jundone++];
@@ -271,11 +277,14 @@ std::map<int, EigenMatrix> OccupationFluctuation(
 		if (output) std::printf("Constructing gradients of Fock matrix ...");
 		auto fock_start = __now__;
 		std::vector<EigenMatrix> undoneGs = int4c2e.ContractInts(undoneDs, nthreads, 1);
-		std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
-		std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
-		for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
-		grid.getDensityU(undoneDs, RhoUss, Rho1Uss, SigmaUss);
-		std::vector<EigenMatrix> undoneFU2s = grid.getFockU(RhoUss, Rho1Uss, SigmaUss);
+		std::vector<EigenMatrix> undoneFU2s(undoneDs.size(), EigenZero(nbasis, nbasis));
+		if ( grid.Type >= 0 ){
+			std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
+			std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
+			for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
+			grid.getDensityU(undoneDs, RhoUss, Rho1Uss, SigmaUss);
+			undoneFU2s = grid.getFockU(RhoUss, Rho1Uss, SigmaUss);
+		}
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			Gs[imatrix] = undoneGs[jundone] + undoneFU2s[jundone];
 			jundone++;
