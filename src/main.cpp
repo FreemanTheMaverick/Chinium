@@ -17,7 +17,7 @@
 #include "HartreeFockKohnSham/HartreeFockKohnSham.h"
 #include "Localization/Localize.h"
 
-#define Round(x) (int)( isInt(x) ? std::round(x) : std::floor(x) )
+#define Round(x) (int)( isInt(x) ? std::lround(x) : std::floor(x) )
 
 int main(int /*argc*/, char* argv[]){
 	std::printf("*** Chinium started ***\n");
@@ -128,7 +128,11 @@ int main(int /*argc*/, char* argv[]){
 				grid.Type = xc.Family == "LDA" ? 0 : xc.Family == "GGA" ? 1 : 2;
 				grid.getAO(0, 1); // Prepared for SCF and CPSCF only, which use the AO values more than once. Higher-order derivatives that will be used only once will be computed in batches in HartreeFockKohnSham/HFKSDerivative.cpp to save memory.
 				int4c2e.EXX = xc.EXX;
-			}else grid.getAO(0, 1); // For SAP initial guess.
+			}else{
+				grid.Type = 0;
+				grid.getAO(0, 1); // For SAP initial guess.
+				grid.Type = -1;
+			}
 		}
 		if ( guess == "READ" ){ // Orthogonalizing the orbitals read from mwfn.
 			mwfn.Orthogonalize("Lowdin");
