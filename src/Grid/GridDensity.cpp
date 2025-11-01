@@ -14,190 +14,179 @@
 #include "Tensor.h"
 #include "Grid.h"
 
-void Grid::getDensity(EigenMatrix D_){
-	const int ngrids = this->NumGrids;
-	const int nbasis = (int)D_.cols();
-	Eigen::Tensor<double, 2> D = Eigen::TensorMap<Eigen::Tensor<double, 2>>(D_.data(), nbasis, nbasis);
+void SubGrid::getDensity(EigenMatrix& D_){
+	const EigenMatrix Dblock = D_(this->BasisList, this->BasisList);
+	const Eigen::TensorMap<Eigen::Tensor<double, 2>> D(Dblock.data(), this->getNumBasis(), this->getNumBasis());
+	const int ngrids = this->getNumGrids();
 	if ( this->Type >= 0 ){
-		Rhos.resize(ngrids); Rhos.setZero();
-		#include "DensityEinSum/D_mu,nu...AOs_g,mu...AOs_g,nu---Rhos_g.hpp"
+		Rho.resize(ngrids); Rho.setZero();
+		#include "DensityEinSum/D_mu,nu...AO_g,mu...AO_g,nu---Rho_g.hpp"
 	}
 	if ( this->Type >= 1 ){
-		Rho1s.resize(ngrids, 3); Rho1s.setZero();
-		#include "DensityEinSum/D_mu,nu...AO1s_g,mu,r...AOs_g,nu---Rho1s_g,r.hpp"
-		ScaleTensor(Rho1s, 2);
-		Sigmas.resize(ngrids); Sigmas.setZero();
-		#include "DensityEinSum/Rho1s_g,r...Rho1s_g,r---Sigmas_g.hpp"
+		Rho1.resize(ngrids, 3); Rho1.setZero();
+		#include "DensityEinSum/D_mu,nu...AO1_g,mu,r...AO_g,nu---Rho1_g,r.hpp"
+		ScaleTensor(Rho1, 2);
+		Sigma.resize(ngrids); Sigma.setZero();
+		#include "DensityEinSum/Rho1_g,r...Rho1_g,r---Sigma_g.hpp"
 	}
 	if ( this->Type >= 2 ){
-		Taus.resize(ngrids); Taus.setZero();
-		#include "DensityEinSum/D_mu,nu...AO1s_g,mu,r...AO1s_g,nu,r---Taus_g.hpp"
-		ScaleTensor(Taus, 0.5);
-		Lapls = 4. * Taus;
-		#include "DensityEinSum/D_mu,nu...AOs_g,mu...AO2Ls_g,nu---Lapls_g.hpp"
-		#include "DensityEinSum/D_mu,nu...AO2Ls_g,mu...AOs_g,nu---Lapls_g.hpp"
+		Tau.resize(ngrids); Tau.setZero();
+		#include "DensityEinSum/D_mu,nu...AO1_g,mu,r...AO1_g,nu,r---Tau_g.hpp"
+		ScaleTensor(Tau, 0.5);
+		Lapl = 4. * Tau;
+		#include "DensityEinSum/D_mu,nu...AO_g,mu...AO2L_g,nu---Lapl_g.hpp"
+		#include "DensityEinSum/D_mu,nu...AO2L_g,mu...AO_g,nu---Lapl_g.hpp"
 	}
 }
 
-void Grid::getDensityU(
-		std::vector<EigenMatrix> DUs_,
-		std::vector<Eigen::Tensor<double, 1>>& RhoUss,
-		std::vector<Eigen::Tensor<double, 2>>& Rho1Uss,
-		std::vector<Eigen::Tensor<double, 1>>& SigmaUss){
-	const int ngrids = this->NumGrids;
-	const int nbasis = (int)DUs_[0].cols();
-	const int nmats = (int)DUs_.size();
-	Eigen::Tensor<double, 1> dummy1;
-	Eigen::Tensor<double, 2> dummy2;
-	if ( this->Type >= 0 ){
-		RhoUss.resize(nmats);
-	}
-	if ( this->Type >= 1 ){
-		Rho1Uss.resize(nmats);
-		SigmaUss.resize(nmats);
-	}
-	for ( int imat = 0; imat < nmats; imat++ ){
-		Eigen::Tensor<double, 1>& RhoUs = Type >= 0 ? RhoUss[imat] : dummy1;
-		Eigen::Tensor<double, 2>& Rho1Us = Type >= 1 ? Rho1Uss[imat] : dummy2;
-		Eigen::Tensor<double, 1>& SigmaUs = Type >= 1 ? SigmaUss[imat] : dummy1;
-		Eigen::Tensor<double, 2> DU = Eigen::TensorMap<Eigen::Tensor<double, 2>>(DUs_[imat].data(), nbasis, nbasis);
-		if ( this->Type >= 0 ){
-			RhoUs.resize(ngrids); RhoUs.setZero();
-			#include "DensityEinSum/DU_mu,nu...AOs_g,mu...AOs_g,nu---RhoUs_g.hpp"
-		}
-		if ( this->Type >= 1 ){
-			Rho1Us.resize(ngrids, 3); Rho1Us.setZero();
-			#include "DensityEinSum/DU_mu,nu...AO1s_g,mu,r...AOs_g,nu---Rho1Us_g,r.hpp"
-			ScaleTensor(Rho1Us, 2);
-			SigmaUs.resize(ngrids); SigmaUs.setZero();
-			#include "DensityEinSum/Rho1Us_g,r...Rho1s_g,r---SigmaUs_g.hpp"
-			ScaleTensor(SigmaUs, 2);
-		}
-	}
-}
-
-double Grid::getNumElectrons(){
-	assert( this->NumGrids == Weights.dimension(0) );
-	assert( this->NumGrids == Rhos.dimension(0) );
-	const Eigen::Tensor<double, 0> n = (Weights * Rhos).sum();
+double SubGrid::getNumElectrons(){
+	assert( this->NumGrids == W.dimension(0) );
+	assert( this->NumGrids == Rho.dimension(0) );
+	const Eigen::Tensor<double, 0> n = (W * Rho).sum();
 	return n();
 }
 
-void Grid::getDensitySkeleton(EigenMatrix D_){
+void SubGrid::getDensityU(std::vector<EigenMatrix>& D_s){
 	const int ngrids = this->NumGrids;
-	const int nbasis = this->MWFN->getNumBasis();
-	const int natoms = this->MWFN->getNumCenters();
-	const std::vector<int> atom2bf = this->MWFN->Atom2Basis();
-	Eigen::Tensor<double, 2> D = Eigen::TensorMap<Eigen::Tensor<double, 2>>(D_.data(), nbasis, nbasis);
+	const int nmats = (int)D_s.size();
+	const int nbasis = this->getNumBasis();
+	Eigen::Tensor<double, 3> D(nbasis, nbasis, nmats);
+	for ( int imat = 0; imat < nmats; imat++ ){
+		for ( int jbasis = 0; jbasis < nbasis; jbasis++ ){
+			for ( int kbasis = jbasis; kbasis < nbasis; kbasis++ ){
+				D(jbasis, kbasis, imat) = D(kbasis, jbasis, imat) = D_s[imat](this->BasisList[jbasis], this->BasisList[kbasis]);
+			}
+		}
+	}
+	if ( this->Type >= 0 ){
+		RhoU.resize(ngrids, nmats); RhoU.setZero();
+		#include "DensityEinSum/D_mu,nu,mat...AO_g,mu...AO_g,nu---RhoU_g,mat.hpp"
+	}
+	if ( this->Type >= 1 ){
+		Rho1U.resize(ngrids, 3, nmats); Rho1U.setZero();
+		#include "DensityEinSum/D_mu,nu,mat...AO1_g,mu,r...AO_g,nu---Rho1U_g,r,mat.hpp"
+		ScaleTensor(Rho1U, 2);
+		SigmaU.resize(ngrids, nmats); SigmaU.setZero();
+		#include "DensityEinSum/Rho1U_g,r,mat...Rho1_g,r---SigmaU_g,mat.hpp"
+		ScaleTensor(SigmaU, 2);
+	}
+}
+
+void SubGrid::getDensitySkeleton(EigenMatrix& D_){
+	const int nbasis = this->getNumBasis();
+	const int ngrids = this->NumGrids;
+	const int natoms = this->getNumAtoms();
+	const EigenMatrix Dblock = D_(this->BasisList, this->BasisList);
+	const Eigen::TensorMap<Eigen::Tensor<double, 2>> D(D_.data(), nbasis, nbasis);
 	if ( this->Type >= 0 ){
 		RhoGrads.resize(ngrids, 3, natoms); RhoGrads.setZero();
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
-			const int head = atom2bf[iatom];
-			const int length = this->MWFN->Centers[iatom].getNumBasis();
+			const int head = this->AtomHeads[iatom];
+			const int length = this->AtomLengths[iatom];
 			const Eigen::Tensor<double, 2> Da = SliceTensor(D, {head, 0}, {length, nbasis});
-			const Eigen::Tensor<double, 3> AO1sa = SliceTensor(AO1s, {0, head, 0}, {ngrids, length, 3});
-			Eigen::Tensor<double, 2> RhoGradsa(ngrids, 3);
-			RhoGradsa.setZero();
-			#include "DensityEinSum/Da_mu,nu...AO1sa_g,mu,t...AOs_g,nu---RhoGradsa_g,t.hpp"
-			RhoGrads.chip(iatom, 2) = RhoGradsa;
+			const Eigen::Tensor<double, 3> AO1a = SliceTensor(AO1, {0, head, 0}, {ngrids, length, 3});
+			Eigen::Tensor<double, 2> RhoGrada(ngrids, 3);
+			RhoGrada.setZero();
+			#include "DensityEinSum/Da_mu,nu...AO1a_g,mu,t...AO_g,nu---RhoGrada_g,t.hpp"
+			RhoGrad.chip(iatom, 2) = RhoGrada;
 		}
-		ScaleTensor(RhoGrads, -2);
+		ScaleTensor(RhoGrad, -2);
 	}
 	if ( this->Type >= 1 ){
-		Rho1Grads.resize(ngrids, 3, 3, natoms); Rho1Grads.setZero();
-		SigmaGrads.resize(ngrids, 3, natoms); SigmaGrads.setZero();
+		Rho1Grad.resize(ngrids, 3, 3, natoms); Rho1Grad.setZero();
+		SigmaGrad.resize(ngrids, 3, natoms); SigmaGrad.setZero();
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
-			const int head = atom2bf[iatom];
-			const int length = this->MWFN->Centers[iatom].getNumBasis();
-			Eigen::Tensor<double, 2> Da = SliceTensor(D, {head, 0}, {length, nbasis});
-			const Eigen::Tensor<double, 3> AO2sa = SliceTensor(AO2s, {0, head, 0}, {ngrids, length, 6});
-			Eigen::Tensor<double, 3> Rho1Gradsa(ngrids, 3, 3);
-			Rho1Gradsa.setZero();
-			#include "DensityEinSum/Da_mu,nu...AO2sa_g,mu,r,t...AOs_g,nu---Rho1Gradsa_g,r,t.hpp"
-			const Eigen::Tensor<double, 3> AO1sa = SliceTensor(AO1s, {0, head, 0}, {ngrids, length, 3});
-			#include "DensityEinSum/Da_mu,nu...AO1sa_g,mu,t...AO1s_g,nu,r---Rho1Gradsa_g,r,t.hpp"
-			ScaleTensor(Rho1Gradsa, -2);
-			Rho1Grads.chip(iatom, 3) = Rho1Gradsa;
-			Eigen::Tensor<double, 2> SigmaGradsa(ngrids, 3);
-			SigmaGradsa.setZero();
-			#include "DensityEinSum/Rho1s_g,r...Rho1Gradsa_g,r,t---SigmaGradsa_g,t.hpp"
-			SigmaGrads.chip(iatom, 2) = 2 * SigmaGradsa;
+			const int head = this->AtomHeads[iatom];
+			const int length = this->AtomLengths[iatom];
+			const Eigen::Tensor<double, 2> Da = SliceTensor(D, {head, 0}, {length, nbasis});
+			const Eigen::Tensor<double, 3> AO2a = SliceTensor(AO2, {0, head, 0}, {ngrids, length, 6});
+			Eigen::Tensor<double, 3> Rho1Grada(ngrids, 3, 3);
+			Rho1Grada.setZero();
+			#include "DensityEinSum/Da_mu,nu...AO2a_g,mu,r,t...AO_g,nu---Rho1Grada_g,r,t.hpp"
+			const Eigen::Tensor<double, 3> AO1a = SliceTensor(AO1, {0, head, 0}, {ngrids, length, 3});
+			#include "DensityEinSum/Da_mu,nu...AO1a_g,mu,t...AO1_g,nu,r---Rho1Grada_g,r,t.hpp"
+			ScaleTensor(Rho1Grada, -2);
+			Rho1Grad.chip(iatom, 3) = Rho1Grada;
+			Eigen::Tensor<double, 2> SigmaGrada(ngrids, 3);
+			SigmaGrada.setZero();
+			#include "DensityEinSum/Rho1_g,r...Rho1Grada_g,r,t---SigmaGrada_g,t.hpp"
+			SigmaGrad.chip(iatom, 2) = 2 * SigmaGrada;
 		}
 	}
 }
 
 void Grid::getDensitySkeleton2(EigenMatrix D_){
+	const int nbasis = this->getNumBasis();
 	const int ngrids = this->NumGrids;
-	const int nbasis = (int)D_.cols();
-	const int natoms = this->MWFN->getNumCenters();
-	const std::vector<int> atom2bf = this->MWFN->Atom2Basis();
-	Eigen::Tensor<double, 2> D = Eigen::TensorMap<Eigen::Tensor<double, 2>>(D_.data(), nbasis, nbasis);
+	const int natoms = this->getNumAtoms();
+	const EigenMatrix Dblock = D_(this->BasisList, this->BasisList);
+	const Eigen::TensorMap<Eigen::Tensor<double, 2>> D(D_.data(), nbasis, nbasis);
 	if ( this->Type >= 0 ){
-		RhoHesss.resize(ngrids, 3, natoms, 3, natoms); RhoHesss.setZero();
+		RhoHess.resize(ngrids, 3, natoms, 3, natoms); RhoHess.setZero();
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
-			const int ihead = atom2bf[iatom];
-			const int ilength = this->MWFN->Centers[iatom].getNumBasis();
+			const int ihead = this->AtomHeads[iatom];
+			const int ilength = this->AtomLengths[iatom];
 			const Eigen::Tensor<double, 2> Da = SliceTensor(D, {ihead, 0}, {ilength, nbasis});
-			const Eigen::Tensor<double, 3> AO2sa = SliceTensor(AO2s, {0, ihead, 0}, {ngrids, ilength, 6});
-			Eigen::Tensor<double, 3> RhoHesssaa(ngrids, 3, 3);
-			RhoHesssaa.setZero();
-			#include "DensityEinSum/Da_mu,nu...AO2sa_g,mu,t,s...AOs_g,nu---RhoHesssaa_g,t,s.hpp"
+			const Eigen::Tensor<double, 3> AO2a = SliceTensor(AO2, {0, ihead, 0}, {ngrids, ilength, 6});
+			Eigen::Tensor<double, 3> RhoHessaa(ngrids, 3, 3);
+			RhoHessaa.setZero();
+			#include "DensityEinSum/Da_mu,nu...AO2a_g,mu,t,s...AO_g,nu---RhoHessaa_g,t,s.hpp"
 			const Eigen::Tensor<double, 2> Daa = SliceTensor(D, {ihead, ihead}, {ilength, ilength});
-			const Eigen::Tensor<double, 3> AO1sa = SliceTensor(AO1s, {0, ihead, 0}, {ngrids, ilength, 3});
-			#include "DensityEinSum/Daa_mu,nu...AO1sa_g,mu,t...AO1sa_g,nu,s---RhoHesssaa_g,t,s.hpp"
-			RhoHesss.chip(iatom, 4).chip(iatom, 2) = RhoHesssaa;
-			RhoHesssaa.resize(0, 0, 0);
+			const Eigen::Tensor<double, 3> AO1a = SliceTensor(AO1, {0, ihead, 0}, {ngrids, ilength, 3});
+			#include "DensityEinSum/Daa_mu,nu...AO1a_g,mu,t...AO1a_g,nu,s---RhoHessaa_g,t,s.hpp"
+			RhoHess.chip(iatom, 4).chip(iatom, 2) = RhoHessaa;
+			RhoHessaa.resize(0, 0, 0);
 			for ( int jatom = 0; jatom < iatom; jatom++ ){
-				const int jhead = atom2bf[jatom];
-				const int jlength = this->MWFN->Centers[jatom].getNumBasis();
+				const int jhead = this->AtomHeads[jatom];
+				const int jlength = this->AtomLengths[jatom];
 				const Eigen::Tensor<double, 2> Dab = SliceTensor(D, {ihead, jhead}, {ilength, jlength});
-				const Eigen::Tensor<double, 3> AO1sb = SliceTensor(AO1s, {0, jhead, 0}, {ngrids, jlength, 3});
-				Eigen::Tensor<double, 3> RhoHesssab(ngrids, 3, 3);
-				RhoHesssab.setZero();
-				#include "DensityEinSum/Dab_mu,nu...AO1sa_g,mu,t...AO1sb_g,nu,s---RhoHesssab_g,t,s.hpp"
-				RhoHesss.chip(jatom, 4).chip(iatom, 2) = RhoHesssab;
-				RhoHesss.chip(iatom, 4).chip(jatom, 2) = RhoHesssab.shuffle(Eigen::array<int, 3>{0, 2, 1});
+				const Eigen::Tensor<double, 3> AO1b = SliceTensor(AO1, {0, jhead, 0}, {ngrids, jlength, 3});
+				const Eigen::Tensor<double, 3> RhoHessab(ngrids, 3, 3);
+				RhoHessab.setZero();
+				#include "DensityEinSum/Dab_mu,nu...AO1a_g,mu,t...AO1b_g,nu,s---RhoHessab_g,t,s.hpp"
+				RhoHess.chip(jatom, 4).chip(iatom, 2) = RhoHessab;
+				RhoHess.chip(iatom, 4).chip(jatom, 2) = RhoHessab.shuffle(Eigen::array<int, 3>{0, 2, 1});
 			}
 		}
-		ScaleTensor(RhoHesss, 2);
+		ScaleTensor(RhoHess, 2);
 	}
 	if ( this->Type >= 1 ){
-		Rho1Hesss.resize(ngrids, 3, 3, natoms, 3, natoms); Rho1Hesss.setZero();
+		Rho1Hess.resize(ngrids, 3, 3, natoms, 3, natoms); Rho1Hess.setZero();
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
-			const int ihead = atom2bf[iatom];
-			const int ilength = this->MWFN->Centers[iatom].getNumBasis();
-			Eigen::Tensor<double, 4> Rho1Hesssaa(ngrids, 3, 3, 3);
-			Rho1Hesssaa.setZero();
-			Eigen::Tensor<double, 2> Daa = SliceTensor(D, {ihead, ihead}, {ilength, ilength});
-			const Eigen::Tensor<double, 3> AO1sa = SliceTensor(AO1s, {0, ihead, 0}, {ngrids, ilength, 3});
-			const Eigen::Tensor<double, 3> AO2sa = SliceTensor(AO2s, {0, ihead, 0}, {ngrids, ilength, 6});
-			#include "DensityEinSum/Daa_mu,nu...AO2sa_g,mu,r,t...AO1sa_g,nu,s---Rho1Hesssaa_g,r,t,s.hpp" // 2, 4
-			Rho1Hesss.chip(iatom, 5).chip(iatom, 3) = Rho1Hesssaa + Rho1Hesssaa.shuffle(Eigen::array<int, 4>{0, 1, 3, 2});
-			Rho1Hesssaa.setZero();
-			Eigen::Tensor<double, 2> Da = SliceTensor(D, {ihead, 0}, {ilength, nbasis});
-			const Eigen::Tensor<double, 3> AO3sa = SliceTensor(AO3s, {0, ihead, 0}, {ngrids, ilength, 10});
-			#include "DensityEinSum/Da_mu,nu...AO3sa_g,mu,r,t,s...AOs_g,nu---Rho1Hesssaa_g,r,t,s.hpp" // 1
-			#include "DensityEinSum/Da_mu,nu...AO2sa_g,mu,t,s...AO1s_g,nu,r---Rho1Hesssaa_g,r,t,s.hpp" // 3
-			Rho1Hesss.chip(iatom, 5).chip(iatom, 3) += Rho1Hesssaa;
-			Rho1Hesssaa.resize(0, 0, 0, 0);
+			const int ihead = this->AtomHeads[iatom];
+			const int ilength = this->AtomLengths[iatom];
+			Eigen::Tensor<double, 4> Rho1Hessaa(ngrids, 3, 3, 3);
+			Rho1Hessaa.setZero();
+			const Eigen::Tensor<double, 2> Daa = SliceTensor(D, {ihead, ihead}, {ilength, ilength});
+			const Eigen::Tensor<double, 3> AO1a = SliceTensor(AO1, {0, ihead, 0}, {ngrids, ilength, 3});
+			const Eigen::Tensor<double, 3> AO2a = SliceTensor(AO2, {0, ihead, 0}, {ngrids, ilength, 6});
+			#include "DensityEinSum/Daa_mu,nu...AO2a_g,mu,r,t...AO1a_g,nu,s---Rho1Hessaa_g,r,t,s.hpp" // 2, 4
+			Rho1Hess.chip(iatom, 5).chip(iatom, 3) = Rho1Hessaa + Rho1Hessaa.shuffle(Eigen::array<int, 4>{0, 1, 3, 2});
+			Rho1Hessaa.setZero();
+			const Eigen::Tensor<double, 2> Da = SliceTensor(D, {ihead, 0}, {ilength, nbasis});
+			const Eigen::Tensor<double, 3> AO3a = SliceTensor(AO3, {0, ihead, 0}, {ngrids, ilength, 10});
+			#include "DensityEinSum/Da_mu,nu...AO3a_g,mu,r,t,s...AO_g,nu---Rho1Hessaa_g,r,t,s.hpp" // 1
+			#include "DensityEinSum/Da_mu,nu...AO2a_g,mu,t,s...AO1_g,nu,r---Rho1Hessaa_g,r,t,s.hpp" // 3
+			Rho1Hess.chip(iatom, 5).chip(iatom, 3) += Rho1Hessaa;
+			Rho1Hessaa.resize(0, 0, 0, 0);
 			for ( int jatom = 0; jatom < iatom; jatom++ ){
-				const int jhead = atom2bf[jatom];
-				const int jlength = this->MWFN->Centers[jatom].getNumBasis();
-				Eigen::Tensor<double, 4> Rho1Hesssab(ngrids, 3, 3, 3);
-				Rho1Hesssab.setZero();
-				Eigen::Tensor<double, 2> Dab = SliceTensor(D, {ihead, jhead}, {ilength, jlength});
-				const Eigen::Tensor<double, 3> AO1sb = SliceTensor(AO1s, {0, jhead, 0}, {ngrids, jlength, 3});
-				#include "DensityEinSum/Dab_mu,nu...AO2sa_g,mu,r,t...AO1sb_g,nu,s---Rho1Hesssab_g,r,t,s.hpp" // 2
-				const Eigen::Tensor<double, 3> AO2sb = SliceTensor(AO2s, {0, jhead, 0}, {ngrids, jlength, 6});
-				#include "DensityEinSum/Dab_mu,nu...AO1sa_g,mu,t...AO2sb_g,nu,r,s---Rho1Hesssab_g,r,t,s.hpp" // 4
-				Rho1Hesss.chip(jatom, 5).chip(iatom, 3) = Rho1Hesssab;
-				Rho1Hesss.chip(iatom, 5).chip(jatom, 3) = Rho1Hesssab.shuffle(Eigen::array<int, 4>{0, 1, 3, 2});
+				const int jhead = this->AtomHeads[jatom];
+				const int jlength = this->AtomLengths[jatom];
+				Eigen::Tensor<double, 4> Rho1Hessab(ngrids, 3, 3, 3);
+				Rho1Hessab.setZero();
+				const Eigen::Tensor<double, 2> Dab = SliceTensor(D, {ihead, jhead}, {ilength, jlength});
+				const Eigen::Tensor<double, 3> AO1b = SliceTensor(AO1, {0, jhead, 0}, {ngrids, jlength, 3});
+				#include "DensityEinSum/Dab_mu,nu...AO2a_g,mu,r,t...AO1b_g,nu,s---Rho1Hessab_g,r,t,s.hpp" // 2
+				const Eigen::Tensor<double, 3> AO2b = SliceTensor(AO2, {0, jhead, 0}, {ngrids, jlength, 6});
+				#include "DensityEinSum/Dab_mu,nu...AO1a_g,mu,t...AO2b_g,nu,r,s---Rho1Hessab_g,r,t,s.hpp" // 4
+				Rho1Hess.chip(jatom, 5).chip(iatom, 3) = Rho1Hessab;
+				Rho1Hess.chip(iatom, 5).chip(jatom, 3) = Rho1Hessab.shuffle(Eigen::array<int, 4>{0, 1, 3, 2});
 			}
 		}
-		ScaleTensor(Rho1Hesss, 2);
-		SigmaHesss.resize(ngrids, 3, natoms, 3, natoms); SigmaHesss.setZero();
-		#include "DensityEinSum/Rho1Hesss_g,r,t,a,s,b...Rho1s_g,r---SigmaHesss_g,t,a,s,b.hpp"
-		#include "DensityEinSum/Rho1Grads_g,r,t,a...Rho1Grads_g,r,s,b---SigmaHesss_g,t,a,s,b.hpp"
-		ScaleTensor(SigmaHesss, 2);
+		ScaleTensor(Rho1Hess, 2);
+		SigmaHess.resize(ngrids, 3, natoms, 3, natoms); SigmaHess.setZero();
+		#include "DensityEinSum/Rho1Hess_g,r,t,a,s,b...Rho1_g,r---SigmaHess_g,t,a,s,b.hpp"
+		#include "DensityEinSum/Rho1Grad_g,r,t,a...Rho1Grad_g,r,s,b---SigmaHess_g,t,a,s,b.hpp"
+		ScaleTensor(SigmaHess, 2);
 	}
 }

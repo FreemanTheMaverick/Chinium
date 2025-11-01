@@ -1,5 +1,7 @@
 #include <Eigen/Core>
 #include <unsupported/Eigen/CXX11/Tensor>
+#include <Maniverse/Manifold/Stiefel.h>
+#include <Maniverse/Optimizer/TrustRegion.h>
 #include <cmath>
 #include <vector>
 #include <chrono>
@@ -9,6 +11,8 @@
 #include <iostream>
 #include <string>
 #include <map>
+#include <array>
+#include <tuple>
 #include <functional>
 #include <cassert>
 #include <libmwfn.h>
@@ -17,6 +21,8 @@
 #include "Tensor.h"
 #include "Grid.h"
 #include "sphere_lebedev_rule.hpp"
+
+#define max_size 4
 
 int SphericalGridNumber(std::string path, std::vector<MwfnCenter>& centers){
 	int ngrids = 0;
@@ -66,11 +72,7 @@ double s_p_mu(
 
 void SphericalGrid(
 		std::string path, std::vector<MwfnCenter>& centers,
-		double* xs, double* ys, double* zs, double* ws){
-	double* x_ranger = xs;
-	double* y_ranger = ys;
-	double* z_ranger = zs;
-	double* w_ranger = ws;
+		double* data){
 	__Z_2_Name__
 	for ( MwfnCenter& centera : centers ){
 		std::ifstream gridfile(path + "/" + Z2Name[centera.Index] + ".grid");
@@ -101,11 +103,11 @@ void SphericalGrid(
 		}else if ( radialformula == "em" ){
 			double token1; ss__ >> token1;
 			const double R = token1;
-			ri_func = [=](double i){
+			ri_func = [R, nshells_total](double i){
 				const double ii = i + 1;
 				return R * std::pow( ii / ( nshells_total + 1 - ii ), 2);
 			};
-			radial_weight_func = [=](double i){
+			radial_weight_func = [R, nshells_total](double i){
 				const double ii = i + 1;
 				return 2 * std::pow(R, 3) * ( nshells_total + 1 ) * std::pow(ii, 5) / std::pow(nshells_total + 1 - ii, 7);
 			};
@@ -149,185 +151,152 @@ void SphericalGrid(
 					}
 					const double becke_w = unnorm_becke_w / unnorm_becke_w_total;
 					const double w = radial_w * lebedev_w * becke_w;
-					*(x_ranger++) = x;
-					*(y_ranger++) = y;
-					*(z_ranger++) = z;
-					*(w_ranger++) = w;
+					*(data++) = x;
+					*(data++) = y;
+					*(data++) = z;
+					*(data++) = w;
 				}
 			}
 		}
 	}
 }
 
-/*
-#define __Uniform_Box_Grid_Number__\
-	__Libint2_Atoms__\
-	const libint2::BasisSet obs(basisset,libint2atoms);\
-	double xu=-10000;\
-	double yu=-10000;\
-	double zu=-10000;\
-	double xl=10000;\
-	double yl=10000;\
-	double zl=10000;\
-	for (const auto& shell:obs){\
-		const double x=shell.O[0];\
-		const double y=shell.O[1];\
-		const double z=shell.O[2];\
-		xu=xu>x?xu:x;\
-		yu=yu>y?yu:y;\
-		zu=zu>z?zu:z;\
-		xl=xl<x?xl:x;\
-		yl=yl<y?yl:y;\
-		zl=zl<z?zl:z;\
-	}\
-	xu+=overheadlength;\
-	yu+=overheadlength;\
-	zu+=overheadlength;\
-	xl-=overheadlength;\
-	yl-=overheadlength;\
-	zl-=overheadlength;\
-	const double xlength=xu-xl;\
-	const double ylength=yu-yl;\
-	const double zlength=zu-zl;\
-	const int nx=int(xlength/spacing);\
-	const int ny=int(ylength/spacing);\
-	const int nz=int(zlength/spacing);
+std::tuple<EigenMatrix, EigenMatrix> Cut(EigenMatrix P){
+	EigenMatrix Pcentered = P.topRows(3);
+	std::array<double, 3> center = {0, 0, 0};
+	for ( int i = 0; i < 3; i++ ){
+		center[i] = P.row(i).mean();
+		Pcentered.row(i).array() -= center[i];
+	}
+	const EigenMatrix P2 = Pcentered * Pcentered.transpose();
+	Maniverse::Stiefel stiefel(EigenMatrix::Ones(3, 1) / std::sqrt(3));
+	Maniverse::Iterate M({stiefel.Clone()}, 1);
+	Maniverse::UnpreconSecondFunc func = [P2](std::vector<EigenMatrix> Ws, int){
+		const EigenMatrix W = Ws[0];
+		const double L = - ( W.transpose() * P2 * W ).sum();
+		const EigenMatrix G = - 2 * P2 * W;
+		const std::function<EigenMatrix (EigenMatrix)> H = [P2](EigenMatrix v){
+			return ( - 2 * P2 * v ).eval();
+		};
+		return std::make_tuple(L, std::vector<EigenMatrix>{G}, std::vector<std::function<EigenMatrix (EigenMatrix)>>{H});
+	};
+	const std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
+	Maniverse::TrustRegionSetting tr_setting;
+	double L = 0;
+	if ( ! Maniverse::TrustRegion(
+			func, tr_setting, tol,
+			0.001, 1, 300, L, M, 1
+	) ) throw std::runtime_error("Convergence failed!");
 
-long int UniformBoxGridNumber(const int natoms,double * atoms,const char * basisset,double overheadlength,double spacing){
-	__Uniform_Box_Grid_Number__
-	return (long int)nx*(long int)ny*(long int)nz;
+	const double A = M.Point(0);
+	const double B = M.Point(1);
+	const double C = M.Point(2);
+	const double D = - A * center[0] - B * center[1] - C * center[2];
+	auto* points = reinterpret_cast<std::array<double, 4>*>(P.data());
+	std::partition(points, points + P.rows(), [A, B, C, D](const auto& X){
+		return A * X[0] + B * X[1] + C * X[2] + D > 0;
+	});
+	return std::make_tuple(P.leftCols(P.cols() / 2).eval(), P.rightCols(P.cols() - P.cols() / 2).eval());
 }
 
-void UniformBoxGrid(const int natoms,double * atoms,const char * basisset,double overheadlength,double spacing,double * xs,double * ys,double * zs){
-	__Uniform_Box_Grid_Number__
-	double * x_ranger=xs;
-	double * y_ranger=ys;
-	double * z_ranger=zs;
-	double x,y,z;
-	for (int ix=0;ix<nx;ix++){
-		x=xl+ix*spacing;
-		for (int iy=0;iy<ny;iy++){
-			y=yl+iy*spacing;
-			for (int iz=0;iz<nz;iz++){
-				z=zl+iz*spacing;
-				*(x_ranger++)=x;
-				*(y_ranger++)=y;
-				*(z_ranger++)=z;
-			}
-		}
+void RecursiveCut(EigenMatrix parent, std::vector<EigenMatrix>& all_batches){
+	if ( parent.cols() <= max_size ) all_batches.push_back(parent);
+	else{
+		auto [child1, child2] = Cut(parent);
+		RecursiveCut(child1, all_batches);
+		RecursiveCut(child2, all_batches);
 	}
 }
-*/
 
-Grid::Grid(Mwfn* mwfn, std::string grid, int output){
+SubGrid::SubGrid(EigenMatrix P){
+	const int ngrids = P.cols();
+	const int new_ngrids = ( ngrids + 7 ) & ~7;
+	const EigenVector x_vec = P.rows(0);
+	const EigenVector y_vec = P.rows(1);
+	const EigenVector z_vec = P.rows(2);
+	const EigenVector w_vec = P.rows(3);
+	this->X.assign(new_ngrids, 0);
+	this->Y.assign(new_ngrids, 0);
+	this->Z.assign(new_ngrids, 0);
+	this->W.resize(new_ngrids); this->W.setZero();
+	std::memcpy(X.data(), x_vec.data(), ngrids * 8);
+	std::memcpy(Y.data(), y_vec.data(), ngrids * 8);
+	std::memcpy(Z.data(), z_vec.data(), ngrids * 8);
+	std::memcpy(W.data(), w_vec.data(), ngrids * 8);
+}
+
+Grid::Grid(Mwfn* mwfn, std::string grid, int thread, int output){
 	this->MWFN = mwfn;
 	if ( grid.size() == 0 ) return;
 	std::string path = std::getenv("CHINIUM_PATH");
 	path += "/Grids/" + grid + "/";
 	if (output) std::printf("Reading grid files in %s\n", path.c_str());
 
-	this->NumGrids = SphericalGridNumber(path, mwfn->Centers);
-	if (output) std::printf("Number of grid points ... %d\n", this->NumGrids);
+	const int ngrids = SphericalGridNumber(path, mwfn->Centers);
+	if (output) std::printf("Number of grid points ... %d\n", ngrids);
 
 	if (output) std::printf("Generating grid points and weights ... ");
 	auto start = __now__;
-	assert(this->Xs.size() == 0 && "Grid is already generated!");
-	assert(this->Ys.size() == 0 && "Grid is already generated!");
-	assert(this->Zs.size() == 0 && "Grid is already generated!");
-	assert(this->Weights.size() == 0 && "Grid is already generated!");
-	this->Xs.resize(this->NumGrids);
-	this->Ys.resize(this->NumGrids);
-	this->Zs.resize(this->NumGrids);
-	this->Weights = Eigen::Tensor<double, 1>(this->NumGrids);
-	SphericalGrid(
-			path, mwfn->Centers,
-			this->Xs.data(), this->Ys.data(),
-			this->Zs.data(), this->Weights.data()
-	);
+	EigenMatrix P = EigenZero(4, ngrids);
+	SphericalGrid(path, mwfn->Centers, P.data());
 	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
-}
 
-template<int ndim> inline Eigen::Tensor<double, ndim> SliceGrid(
-		const Eigen::Tensor<double, ndim>& tensor,
-		int from, int length){
-	Eigen::array<Eigen::Index, ndim> offsets; offsets[0] = from;
-	Eigen::array<Eigen::Index, ndim> extents; extents[0] = length;
-	for ( int i = 1; i < ndim; i++ ){
-		offsets[i] = 0;
-		extents[i] = tensor.dimension(i);
+	std::vector<EigenMatrix> batches;
+	RecursiveCut(P, batches);
+
+	// First touch allocation of subgrids among OMP threads
+	std::vector<SubGrid> subgrids; subgrids.resize(batches.size());
+	std::vector<int> complexity; complexity.resize(batches.size());
+	int total = 0;
+	for ( int i = 0; i < (int)subgrids.size(); i++ ){
+		SubGrid& subgrid = subgrids[i] = SubGrid(batches[i]);
+		subgrid.MWFN = mwfn;
+		subgrid.NumGrids = batches[i].cols();
+		subgrid.getAO(mwfn, 0, 0);
+		subgrid.BasisList.resize(0);
+		int atom = 0;
+		int length = 0;
+		for ( int mu = 0; mu < mwfn->getNumBasis(); mu++ ){
+			if ( subgrid.AO.chip(mu, 1).abs().maximum().data()[0] > 1e-10 ){
+				subgrid.BasisList.push_back(mu);
+			}
+		}
+		subgrid.AO.resize(0, 0);
+		complexity[i] = subgrid.NumGrids * subgrid.BasisList.size() * subgrid.BasisList.size();
+		total += complexity[i];
+
+		std::vector<int> basis2atom_tot = mwfn->Basis2Atom();
+		std::vector<int> basis2atom; basis2atom.reserve(subgrid.getNumBasis())
+		for ( int basis : subgrid.BasisList ){
+			basis2atom.push_back(basis2atom_tot[basis]);
+		}
+		subgrid.AtomList = basis2atom;
+		auto last_unique = std::unique(subgrid.AtomList.begin(), subgrid.AtomList.end());
+		subgrid.AtomList.erase(last_unique, subgrid.AtomList.end());
+		int nbasis = 0;
+		for ( int atom : subgrid.AtomList ){
+			subgrid.AtomHeads.push_back(nbasis);
+			const int length = std::count(basis2atom.begin(), basis2atom.end(), atom);
+			nbasis += length;
+			subgrid.AtomLengths.push_back(length);
+		}
 	}
-	return tensor.slice(offsets, extents);
-}
 
-#define __Copy_Sliced_Grid__(tensor)\
-	if ( grid.tensor.size() > 0 )\
-		this->tensor = SliceGrid(grid.tensor, from, length);
+	std::vector<std::vector<SubGrid>> bins; bins.resize(nthreads);
+	int kbin = 0;
+	int current_complexity = 0;
+	for ( int i = 0; i < (int)subgrids.size(); i++ ){
+		bins[kbin].push_back(std::move(subgrids[i]));
+		current_complexity += complexity[i];
+		if ( current_complexity > ( kbin + 1 ) * (double)total / (double)nthreads ) kbin++;
+	}
 
-Grid::Grid(Grid& grid, int from, int length, int output){
-	if (output > 0) std::printf("Copying sub-grids %d - %d from grids ...\n", from, from + length - 1);
-	assert(from + length - 1 < grid.NumGrids && "Invalid range!");
-
-	this->MWFN = grid.MWFN;
-	this->Type = grid.Type;
-
-	this->NumGrids = length;
-	this->Xs = std::vector<double>(&grid.Xs[from], &grid.Xs[from + length]);
-	this->Ys = std::vector<double>(&grid.Ys[from], &grid.Ys[from + length]);
-	this->Zs = std::vector<double>(&grid.Zs[from], &grid.Zs[from + length]);
-
-	__Copy_Sliced_Grid__(Weights);
-	__Copy_Sliced_Grid__(AOs);
-	__Copy_Sliced_Grid__(AO1s);
-	__Copy_Sliced_Grid__(AO2Ls);
-	__Copy_Sliced_Grid__(AO2s);
-	__Copy_Sliced_Grid__(AO3s);
-
-	__Copy_Sliced_Grid__(Rhos);
-	__Copy_Sliced_Grid__(Rho1s);
-	__Copy_Sliced_Grid__(Sigmas);
-	__Copy_Sliced_Grid__(Lapls);
-	__Copy_Sliced_Grid__(Taus);
-
-	__Copy_Sliced_Grid__(RhoGrads);
-	__Copy_Sliced_Grid__(Rho1Grads);
-	__Copy_Sliced_Grid__(SigmaGrads);
-
-	__Copy_Sliced_Grid__(RhoHesss);
-	__Copy_Sliced_Grid__(Rho1Hesss);
-	__Copy_Sliced_Grid__(SigmaHesss);
-
-	__Copy_Sliced_Grid__(Es);
-	__Copy_Sliced_Grid__(E1Rhos);
-	__Copy_Sliced_Grid__(E1Sigmas);
-	__Copy_Sliced_Grid__(E1Lapls);
-	__Copy_Sliced_Grid__(E1Taus);
-	__Copy_Sliced_Grid__(E2Rho2s);
-	__Copy_Sliced_Grid__(E2RhoSigmas);
-	__Copy_Sliced_Grid__(E2Sigma2s);
-}
-
-#define Show(member)\
-	std::cout << #member << this->member.dimensions() << std::endl;
-
-void Grid::WhatDoWeHave(){
-	std::cout << "MWFN " << this->MWFN << std::endl;
-
-	if ( this->Type == 0 ) std::cout << "DFT type: LDA" << std::endl;
-	if ( this->Type == 1 ) std::cout << "DFT type: GGA" << std::endl;
-	if ( this->Type == 2 ) std::cout << "DFT type: mGGA" << std::endl;
-
-	std::cout << "Number of grids: " << this->NumGrids << std::endl;
-	std::cout << "Xs " << this->Xs.size() << std::endl;
-	std::cout << "Ys " << this->Ys.size() << std::endl;
-	std::cout << "Zs " << this->Zs.size() << std::endl;
-	Show(Weights);
-
-	Show(AOs); Show(AO1s); Show(AO2Ls); Show(AO2s); Show(AO3s);
-	Show(Rhos); Show(Rho1s); Show(Sigmas); Show(Lapls); Show(Taus);
-	Show(RhoGrads); Show(Rho1Grads); Show(SigmaGrads);
-	Show(RhoHesss); Show(Rho1Hesss); Show(SigmaHesss);
-	Show(Es); Show(E1Rhos); Show(E1Sigmas); Show(E1Lapls); Show(E1Taus);
-	Show(E2Rho2s); Show(E2RhoSigmas); Show(E2Sigma2s);
-	Show(E3Rho3s); Show(E3Rho2Sigmas); Show(E3RhoSigma2s); Show(E3Sigma3s);
-	Show(E4Rho4s); Show(E4Rho3Sigmas); Show(E4Rho2Sigma2s); Show(E4RhoSigma3s); Show(E4Sigma4s);
+	this->SubGridBatches.resize(nthreads);
+	#pragma omp parallel for schedule(static) num_threads(nthreads)
+	for ( int kthread = 0; kthread < nthreads; kthread++ ){
+		this->SubGridBatches[kthread].reserve(bins[kthread].size());
+		for ( SubGrid& subgrid : bins[kthread] ){
+			this->SubGridBatches[kthread].push_back(std::make_unique<SubGrid>(subgrid))
+		}
+	}
 }

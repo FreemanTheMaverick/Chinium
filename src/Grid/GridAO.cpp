@@ -215,67 +215,81 @@ void GetAoValues(
 	}
 }
 
-void Grid::getAO(int derivative, int output){
+void SubGrid::getAO(int derivative, int output){
 	const int order = derivative + this->Type;
 	if (output) std::printf("Generating grids to order %d of basis functions ... ", order);
 	auto start = __now__;
 	const int ngrids = this->NumGrids;
 	const int nbasis = this->MWFN->getNumBasis();
-	double *aos{}, *ao1s{}, *ao2ls{}, *ao2s{}, *ao3s{};
+	const int this_nbasis = (int)this->BasisIndices.size();
+	std::vector<double> ao, ao1, ao2l, ao2, ao3;
 
 	if ( order >= 0 ){
-		this->AOs.resize(ngrids, nbasis);
-		this->AOs.setZero();
-		aos = this->AOs.data();
+		ao.resize(ngrids * nbasis);
+		this->AO.resize(ngrids, this_nbasis);
 	}
 	if ( order >= 1 ){
-		this->AO1s.resize(ngrids, nbasis, 3);
-		this->AO1s.setZero();
-		ao1s = this->AO1s.data();
+		ao1.resize(ngrids * nbasis * 3);
+		this->AO1.resize(ngrids, this_nbasis, 3);
 	}
 	if ( order >= 2 ){
-		this->AO2Ls.resize(ngrids, nbasis);
-		this->AO2Ls.setZero();
-		ao2ls = this->AO2Ls.data();
-		this->AO2s.resize(ngrids, nbasis, 6);
-		this->AO2s.setZero();
-		ao2s = this->AO2s.data();
+		ao2l.resize(ngrids * nbasis);
+		ao2.resize(ngrids * nbasis * 6);
+		this->AO2L.resize(ngrids, nbasis);
+		this->AO2.resize(ngrids, this_nbasis, 6);
 	}
 	if ( order >= 3 ){
-		this->AO3s.resize(ngrids, nbasis, 10);
-		this->AO3s.setZero();
-		ao3s = this->AO3s.data();
+		ao3.resize(ngrids * nbasis * 10);
+		this->AO3.resize(ngrids, this_nbasis, 10);
 	}
 
 	GetAoValues(
 			this->MWFN->Centers,
-			this->Xs.data(), this->Ys.data(), this->Zs.data(),
-			this->NumGrids,
+			this->X.data(), this->Y.data(), this->Z.data(),
+			ngrids,
 
-			aos,
+			ao.data(),
 
-			ao1s + ngrids * nbasis * 0, // x
-			ao1s + ngrids * nbasis * 1, // y
-			ao1s + ngrids * nbasis * 2, // z
+			ao1.data() + ngrids * nbasis * 0, // x
+			ao1.data() + ngrids * nbasis * 1, // y
+			ao1.data() + ngrids * nbasis * 2, // z
 
-			ao2ls,
-			ao2s + ngrids * nbasis * 0, // xx
-		   	ao2s + ngrids * nbasis * 2, // yy
-		   	ao2s + ngrids * nbasis * 5, // zz
-		   	ao2s + ngrids * nbasis * 1, // xy
-		   	ao2s + ngrids * nbasis * 3, // xz
-		   	ao2s + ngrids * nbasis * 4, // yz
+			ao2l.data(),
+			ao2.data() + ngrids * nbasis * 0, // xx
+		   	ao2.data() + ngrids * nbasis * 2, // yy
+		   	ao2.data() + ngrids * nbasis * 5, // zz
+		   	ao2.data() + ngrids * nbasis * 1, // xy
+		   	ao2.data() + ngrids * nbasis * 3, // xz
+		   	ao2.data() + ngrids * nbasis * 4, // yz
 
-		   	ao3s + ngrids * nbasis * 0, // xxx
-		   	ao3s + ngrids * nbasis * 1, // xxy
-		   	ao3s + ngrids * nbasis * 4, // xxz
-		   	ao3s + ngrids * nbasis * 2, // xyy
-		   	ao3s + ngrids * nbasis * 5, // xyz
-		   	ao3s + ngrids * nbasis * 7, // xzz
-		   	ao3s + ngrids * nbasis * 3, // yyy
-		   	ao3s + ngrids * nbasis * 6, // yyz
-		   	ao3s + ngrids * nbasis * 8, // yzz
-		   	ao3s + ngrids * nbasis * 9  // zzz
+		   	ao3.data() + ngrids * nbasis * 0, // xxx
+		   	ao3.data() + ngrids * nbasis * 1, // xxy
+		   	ao3.data() + ngrids * nbasis * 4, // xxz
+		   	ao3.data() + ngrids * nbasis * 2, // xyy
+		   	ao3.data() + ngrids * nbasis * 5, // xyz
+		   	ao3.data() + ngrids * nbasis * 7, // xzz
+		   	ao3.data() + ngrids * nbasis * 3, // yyy
+		   	ao3.data() + ngrids * nbasis * 6, // yyz
+		   	ao3.data() + ngrids * nbasis * 8, // yzz
+		   	ao3.data() + ngrids * nbasis * 9  // zzz
 	);
+
+	for ( int ibasis = 0; ibasis < this_nbasis, ibasis++ ){
+		const int basis = this->BasisIndices[ibasis];
+		if ( order >= 0 ){
+			std::memcpy(this->AO.data() + ibasis * ngrids, ao.data() + basis * ngrids, ngrids * 8);
+		}
+		if ( order >= 1 ){
+			std::memcpy(this->AO1.data() + ibasis * ngrids * 3, ao1.data() + basis * ngrids * 3, ngrids * 3 * 8);
+		}
+		if ( order >= 2 ){
+			std::memcpy(this->AO2L.data() + ibasis * ngrids, ao2l.data() + basis * ngrids, ngrids * 8);
+			std::memcpy(this->AO2.data() + ibasis * ngrids * 6, ao2.data() + basis * ngrids * 6, ngrids * 6 * 8);
+		}
+		if ( order >= 3 ){
+			std::memcpy(this->AO2.data() + ibasis * ngrids * 10, ao2.data() + basis * ngrids * 10, ngrids * 10 * 8);
+		}
+	}
+
 	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 }
