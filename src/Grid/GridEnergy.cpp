@@ -13,13 +13,13 @@ double SubGrid::getEnergy(){
 	assert( this->NumGrids == W.dimension(0) );
 	assert( this->NumGrids == Rho.dimension(0) );
 	assert( this->NumGrids == E.dimension(0) );
-	const Eigen::Tensor<double, 0> e = (W * Rho * E).sum();
+	const EigenTensor<0> e = (W * Rho * E).sum();
 	return e();
 }
 
 void SubGrid::getEnergyGrad(std::vector<double>& e){
 	const int natoms = this->getNumAtoms();
-	Eigen::Tensor<double, 2> G(3, natoms); G.setZero();
+	EigenTensor<2> G(3, natoms); G.setZero();
 	if ( this->Type >= 0 ){
 		#include "EnergyEinSum/W_g...E1Rho_g...RhoGrad_g,t,a---G_t,a.hpp"
 	}
@@ -35,13 +35,13 @@ void SubGrid::getEnergyGrad(std::vector<double>& e){
 
 void Grid::getEnergyHess(std::vector<std::vector<double>>& e){
 	const int natoms = this->getNumAtoms();
-	Eigen::Tensor<double, 4> H(3, natoms, 3, natoms); H.setZero();
+	EigenTensor<4> H(3, natoms, 3, natoms); H.setZero();
 	if ( this->Type >= 0 ){
 		#include "EnergyEinSum/W_g...E2Rho2_g...RhoGrad_g,t,a...RhoGrad_g,s,b---H_t,a,s,b.hpp"
 		#include "EnergyEinSum/W_g...E1Rho_g...RhoHess_g,t,a,s,b---H_t,a,s,b.hpp"
 	}
 	if ( this->Type >= 1 ){
-		Eigen::Tensor<double, 4> H1(3, natoms, 3, natoms); H1.setZero();
+		EigenTensor<4> H1(3, natoms, 3, natoms); H1.setZero();
 		#include "EnergyEinSum/W_g...E2RhoSigma_g...RhoGrad_g,t,a...SigmaGrad_g,s,b---H1_t,a,s,b.hpp"
 		H += H1 + H1.shuffle(Eigen::array<int, 4>{2, 3, 0, 1});
 		#include "EnergyEinSum/W_g...E2Sigma2_g...SigmaGrad_g,t,a...SigmaGrad_g,s,b---H_t,a,s,b.hpp"

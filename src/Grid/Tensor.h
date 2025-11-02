@@ -1,5 +1,8 @@
-template<int ndim> inline Eigen::Tensor<double, ndim> SliceTensor(
-		const Eigen::Tensor<double, ndim>& tensor,
+template<int ndim>
+using EigenTensor = Eigen::Tensor<double, ndim, Eigen::ColMajor, Eigen::DenseIndex, 64>
+
+template<int ndim> inline EigenTensor<ndim> SliceTensor(
+		const EigenTensor<ndim>& tensor,
 		const int (&offsets_)[ndim], const int (&extents_)[ndim]){
 	Eigen::array<Eigen::Index, ndim> offsets;
 	Eigen::array<Eigen::Index, ndim> extents;
@@ -15,8 +18,8 @@ template<int ndim> inline Eigen::Tensor<double, ndim> SliceTensor(
 		tensor.data()[_kgrid_] *= (scalar);\
 }
 
-template<int ndim> inline Eigen::Tensor<double, ndim> PadTensor(
-		const Eigen::Tensor<double, ndim>& tensor,
+template<int ndim> inline EigenTensor<ndim> PadTensor(
+		const EigenTensor<ndim>& tensor,
 		const int (&pairs)[ndim][2]){
 	Eigen::array<std::pair<int, int>, ndim> paddings;
 	for ( int i = 0; i < ndim; i++ ){
