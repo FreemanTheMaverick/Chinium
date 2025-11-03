@@ -21,7 +21,7 @@
 #include "sphere_lebedev_rule.hpp"
 
 #define max_size 128
-#define ao_threshold 1e-24
+#define ao_threshold -10
 
 int SphericalGridNumber(std::string path, std::vector<MwfnCenter>& centers){
 	int ngrids = 0;
@@ -253,7 +253,7 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
 	// First touch allocation of subgrids among OMP threads
 	std::vector<SubGrid> subgrids; subgrids.resize(batches.size());
 	std::vector<int> complexity; complexity.resize(batches.size());
-	int total = 0;
+	double total = 0;
 	for ( int i = 0; i < (int)subgrids.size(); i++ ){
 		SubGrid& subgrid = subgrids[i] = SubGrid(batches[i]);
 		subgrid.MWFN = mwfn;
@@ -290,11 +290,11 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
 
 	std::vector<std::vector<SubGrid>> bins; bins.resize(nthreads);
 	int kbin = 0;
-	int current_complexity = 0;
+	double current_complexity = 0;
 	for ( int i = 0; i < (int)subgrids.size(); i++ ){
 		bins[kbin].push_back(std::move(subgrids[i]));
 		current_complexity += complexity[i];
-		if ( current_complexity > ( kbin + 1 ) * (double)total / (double)nthreads ) kbin++;
+		if ( current_complexity > ( kbin + 1 ) * total / nthreads ) kbin++;
 	}
 
 	this->SubGridBatches.resize(nthreads);
