@@ -32,6 +32,7 @@ CPPFLAGS    = -isystem $(EIGEN3_PATH) \
               -isystem $(LIBMWFN_PATH)/include \
               -isystem $(MANIVERSE_PATH)/include \
               -DEIGEN_INITIALIZE_MATRICES_BY_ZERO \
+              -DEIGEN_MAX_ALIGN_BYTES=64 \
               -MMD -MP # Generate dependency files
 
 CXXFLAGS    = -std=c++2a \
