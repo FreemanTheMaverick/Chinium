@@ -1,8 +1,11 @@
+#include "Tensor.h"
+
 enum D_t{ s_t, u_t };
 
 class SubGrid{ public:
 	Mwfn* MWFN;
 	int NumGrids;
+	int Type;
 	std::vector<double> X;
 	std::vector<double> Y;
 	std::vector<double> Z;
@@ -11,6 +14,7 @@ class SubGrid{ public:
 	std::vector<int> AtomList;
 	std::vector<int> AtomHeads;
 	std::vector<int> AtomLengths;
+	SubGrid(){};
 	SubGrid(EigenMatrix points);
 	int getNumBasis(){ return this->BasisList.size(); };
 	int getNumAtoms(){ return this->AtomList.size(); };
@@ -20,14 +24,14 @@ class SubGrid{ public:
 	EigenTensor<2> AO2L;
 	EigenTensor<3> AO2; // ..., (xx, xy, yy, xz, yz, zz)
 	EigenTensor<3> AO3; // ..., (xxx, xxy, xyy, yyy, xxz, xyz, yyz, xzz, yzz, zzz)
-	void getAO(int derivative, int output);
+	void getAO(int derivative);
 
 	EigenTensor<1> Rho;
 	EigenTensor<2> Rho1;
 	EigenTensor<1> Sigma;
 	EigenTensor<1> Lapl;
 	EigenTensor<1> Tau;
-	void getNumElectrons();
+	void getNumElectrons(double& n);
 	void getDensity(EigenMatrix& D);
 
 	EigenTensor<2> RhoU;
@@ -76,8 +80,9 @@ class Grid{ public:
 	Mwfn* MWFN;
 	int Type = 0; // 0 - LDA, 1 - GGA, 2 - mGGA
 	std::vector<std::vector<std::unique_ptr<SubGrid>>> SubGridBatches;
-	Grid(Mwfn* mwfn, std::string grid, int output);
+	Grid(Mwfn* mwfn, std::string grid, int nthreads, int output);
 	int getNumThreads(){ return (int)this->SubGridBatches.size(); };
+	void setType(int type);
 
 	void getAO(int derivative, int output);
 

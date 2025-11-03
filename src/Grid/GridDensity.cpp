@@ -9,13 +9,12 @@
 #include <libmwfn.h>
 
 #include "../Macro.h"
-#include "Tensor.h"
 #include "Grid.h"
 
 void SubGrid::getDensity(EigenMatrix& D_){
 	const EigenMatrix Dblock = D_(this->BasisList, this->BasisList);
-	const Eigen::TensorMap<EigenTensor<2>> D(Dblock.data(), this->getNumBasis(), this->getNumBasis());
-	const int ngrids = this->getNumGrids();
+	const Eigen::TensorMap<const EigenTensor<2>> D(Dblock.data(), this->getNumBasis(), this->getNumBasis());
+	const int ngrids = this->NumGrids;
 	if ( this->Type >= 0 ){
 		Rho.resize(ngrids); Rho.setZero();
 		#include "DensityEinSum/D_mu,nu...AO_g,mu...AO_g,nu---Rho_g.hpp"
@@ -37,11 +36,11 @@ void SubGrid::getDensity(EigenMatrix& D_){
 	}
 }
 
-double SubGrid::getNumElectrons(){
+void SubGrid::getNumElectrons(double& n){
 	assert( this->NumGrids == W.dimension(0) );
 	assert( this->NumGrids == Rho.dimension(0) );
-	const EigenTensor<0> n = (W * Rho).sum();
-	return n();
+	const EigenTensor<0> n_ = (W * Rho).sum();
+	n += n_();
 }
 
 void SubGrid::getDensityU(std::vector<EigenMatrix>& D_s){
@@ -75,9 +74,9 @@ void SubGrid::getDensitySkeleton(EigenMatrix& D_){
 	const int ngrids = this->NumGrids;
 	const int natoms = this->getNumAtoms();
 	const EigenMatrix Dblock = D_(this->BasisList, this->BasisList);
-	const Eigen::TensorMap<EigenTensor<2>> D(Dblock.data(), nbasis, nbasis);
+	const Eigen::TensorMap<const EigenTensor<2>> D(Dblock.data(), nbasis, nbasis);
 	if ( this->Type >= 0 ){
-		RhoGrads.resize(ngrids, 3, natoms); RhoGrads.setZero();
+		RhoGrad.resize(ngrids, 3, natoms); RhoGrad.setZero();
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
 			const int head = this->AtomHeads[iatom];
 			const int length = this->AtomLengths[iatom];
@@ -113,12 +112,12 @@ void SubGrid::getDensitySkeleton(EigenMatrix& D_){
 	}
 }
 
-void Grid::getDensitySkeleton2(EigenMatrix D_){
+void SubGrid::getDensitySkeleton2(EigenMatrix& D_){
 	const int nbasis = this->getNumBasis();
 	const int ngrids = this->NumGrids;
 	const int natoms = this->getNumAtoms();
 	const EigenMatrix Dblock = D_(this->BasisList, this->BasisList);
-	const Eigen::TensorMap<EigenTensor<2>> D(Dblock.data(), nbasis, nbasis);
+	const Eigen::TensorMap<const EigenTensor<2>> D(Dblock.data(), nbasis, nbasis);
 	if ( this->Type >= 0 ){
 		RhoHess.resize(ngrids, 3, natoms, 3, natoms); RhoHess.setZero();
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
@@ -139,7 +138,7 @@ void Grid::getDensitySkeleton2(EigenMatrix D_){
 				const int jlength = this->AtomLengths[jatom];
 				const EigenTensor<2> Dab = SliceTensor(D, {ihead, jhead}, {ilength, jlength});
 				const EigenTensor<3> AO1b = SliceTensor(AO1, {0, jhead, 0}, {ngrids, jlength, 3});
-				const EigenTensor<3> RhoHessab(ngrids, 3, 3);
+				EigenTensor<3> RhoHessab(ngrids, 3, 3);
 				RhoHessab.setZero();
 				#include "DensityEinSum/Dab_mu,nu...AO1a_g,mu,t...AO1b_g,nu,s---RhoHessab_g,t,s.hpp"
 				RhoHess.chip(jatom, 4).chip(iatom, 2) = RhoHessab;

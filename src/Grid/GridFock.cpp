@@ -6,7 +6,6 @@
 #include <libmwfn.h>
 
 #include "../Macro.h"
-#include "Tensor.h"
 #include "Grid.h"
 
 void SubGrid::getFock(EigenMatrix& F_){
@@ -82,24 +81,24 @@ void SubGrid::getFockU(std::vector<EigenMatrix>& Fs){
 	const int ngrids = this->NumGrids;
 	const int nmats = (int)Fs.size();
 	const int nbasis = this->getNumBasis();
-	const Eigen::TensorMap<EigenTensor<2>> RhoG( []() -> double* {
-			if constexpr (std::is_same_v<d_t, s_t>) return RhoGrad.data();
+	const Eigen::TensorMap<EigenTensor<2>> RhoG( [&RhoGrad = this->RhoGrad, &RhoU = this->RhoU]() -> double* {
+			if constexpr ( d_t == s_t ) return RhoGrad.data();
 			else return RhoU.data();
-	}, this->Type >= 0 ? ngrids : 0, nmats );
-	const Eigen:TensorMap<EigenTensor<3>> Rho1G( []() -> double* {
-			if constexpr (std::is_same_v<d_t, s_t>) return Rho1Grad.data();
+	}(), this->Type >= 0 ? ngrids : 0, nmats );
+	const Eigen::TensorMap<EigenTensor<3>> Rho1G( [&Rho1Grad = this->Rho1Grad, &Rho1U = this->Rho1U]() -> double* {
+			if constexpr ( d_t == s_t ) return Rho1Grad.data();
 			else return Rho1U.data();
-	}, this->Type >= 1 ? ngrids : 0, 3, nmats );
-	const Eigen:TensorMap<EigenTensor<2>> SigmaG( []() -> double* {
-			if constexpr (std::is_same_v<d_t, s_t>) return SigmaGrad.data();
+	}(), this->Type >= 1 ? ngrids : 0, 3, nmats );
+	const Eigen::TensorMap<EigenTensor<2>> SigmaG( [&SigmaGrad = this->SigmaGrad, &SigmaU = this->SigmaU]() -> double* {
+			if constexpr ( d_t == s_t ) return SigmaGrad.data();
 			else return SigmaU.data();
-	}, this->Type >= 1 ? ngrids : 0, nmats );
+	}(), this->Type >= 1 ? ngrids : 0, nmats );
 	EigenTensor<3> F(nbasis, nbasis, nmats); F.setZero();
 	if ( this->Type >= 0 ){
 		EigenTensor<2> TMP0(ngrids, nmats); TMP0.setZero();
-		#include "FockEinSum/E2Rho2_g...RhoG_g,mat---TMP0_mat.hpp"
+		#include "FockEinSum/E2Rho2_g...RhoG_g,mat---TMP0_g,mat.hpp"
 		if ( this->Type >= 1 ){
-			#include "FockEinSum/E2RhoSigma_g...SigmaG_g,mat---TMP0_mat.hpp"
+			#include "FockEinSum/E2RhoSigma_g...SigmaG_g,mat---TMP0_g,mat.hpp"
 		}
 		EigenTensor<2> TMP1(ngrids, nmats); TMP1.setZero();
 		#include "FockEinSum/W_g...TMP0_g,mat---TMP1_g,mat.hpp"
@@ -114,7 +113,7 @@ void SubGrid::getFockU(std::vector<EigenMatrix>& Fs){
 		EigenTensor<3> TMP2(ngrids, 3, nmats); TMP2.setZero();
 		#include "FockEinSum/TMP1_g,mat...Rho1_g,r---TMP2_g,r,mat.hpp"
 		EigenTensor<3> TMP3(ngrids, 3, nmats); TMP3.setZero();
-		#include "FockEinSum/E1Sigma_g...Rho1Grad_g,r,mat---TMP3_g,r,mat.hpp"
+		#include "FockEinSum/E1Sigma_g...Rho1G_g,r,mat---TMP3_g,r,mat.hpp"
 		EigenTensor<3> TMP4 = TMP2 + TMP3;
 		EigenTensor<3> F1(nbasis, nbasis, nmats); F1.setZero();
 		#include "FockEinSum/W_g...TMP4_g,r,mat...AO1_g,mu,r...AO_g,nu---F1_mu,nu,mat.hpp"

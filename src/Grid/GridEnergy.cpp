@@ -6,15 +6,14 @@
 #include <libmwfn.h>
 
 #include "../Macro.h"
-#include "Tensor.h"
 #include "Grid.h"
 
-double SubGrid::getEnergy(){
+void SubGrid::getEnergy(double& e){
 	assert( this->NumGrids == W.dimension(0) );
 	assert( this->NumGrids == Rho.dimension(0) );
 	assert( this->NumGrids == E.dimension(0) );
-	const EigenTensor<0> e = (W * Rho * E).sum();
-	return e();
+	const EigenTensor<0> e_ = (W * Rho * E).sum();
+	e += e_();
 }
 
 void SubGrid::getEnergyGrad(std::vector<double>& e){
@@ -33,7 +32,7 @@ void SubGrid::getEnergyGrad(std::vector<double>& e){
 	}
 }
 
-void Grid::getEnergyHess(std::vector<std::vector<double>>& e){
+void SubGrid::getEnergyHess(std::vector<std::vector<double>>& e){
 	const int natoms = this->getNumAtoms();
 	EigenTensor<4> H(3, natoms, 3, natoms); H.setZero();
 	if ( this->Type >= 0 ){

@@ -8,7 +8,6 @@
 #include <cstdio>
 #include <sstream>
 #include <fstream>
-#include <iostream>
 #include <string>
 #include <map>
 #include <array>
@@ -18,11 +17,11 @@
 #include <libmwfn.h>
 
 #include "../Macro.h"
-#include "Tensor.h"
 #include "Grid.h"
 #include "sphere_lebedev_rule.hpp"
 
-#define max_size 4
+#define max_size 128
+#define ao_threshold 1e-24
 
 int SphericalGridNumber(std::string path, std::vector<MwfnCenter>& centers){
 	int ngrids = 0;
@@ -180,13 +179,13 @@ std::tuple<EigenMatrix, EigenMatrix> Cut(EigenMatrix P){
 		};
 		return std::make_tuple(L, std::vector<EigenMatrix>{G}, std::vector<std::function<EigenMatrix (EigenMatrix)>>{H});
 	};
-	const std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
+	const std::tuple<double, double, double> tol = {1.e-8, 1, 1};
 	Maniverse::TrustRegionSetting tr_setting;
 	double L = 0;
-	if ( ! Maniverse::TrustRegion(
+	Maniverse::TrustRegion(
 			func, tr_setting, tol,
-			0.001, 1, 300, L, M, 1
-	) ) throw std::runtime_error("Convergence failed!");
+			0.001, 1, 100, L, M, 0
+	);
 
 	const double A = M.Point(0);
 	const double B = M.Point(1);
@@ -211,10 +210,10 @@ void RecursiveCut(EigenMatrix parent, std::vector<EigenMatrix>& all_batches){
 SubGrid::SubGrid(EigenMatrix P){
 	const int ngrids = P.cols();
 	const int new_ngrids = ( ngrids + 7 ) & ~7;
-	const EigenVector x_vec = P.rows(0);
-	const EigenVector y_vec = P.rows(1);
-	const EigenVector z_vec = P.rows(2);
-	const EigenVector w_vec = P.rows(3);
+	const EigenVector x_vec = P.row(0);
+	const EigenVector y_vec = P.row(1);
+	const EigenVector z_vec = P.row(2);
+	const EigenVector w_vec = P.row(3);
 	this->X.assign(new_ngrids, 0);
 	this->Y.assign(new_ngrids, 0);
 	this->Z.assign(new_ngrids, 0);
@@ -223,9 +222,12 @@ SubGrid::SubGrid(EigenMatrix P){
 	std::memcpy(Y.data(), y_vec.data(), ngrids * 8);
 	std::memcpy(Z.data(), z_vec.data(), ngrids * 8);
 	std::memcpy(W.data(), w_vec.data(), ngrids * 8);
+	std::memcpy(X.data() + ngrids, X.data(), ( new_ngrids - ngrids ) * 8);
+	std::memcpy(Y.data() + ngrids, Y.data(), ( new_ngrids - ngrids ) * 8);
+	std::memcpy(Z.data() + ngrids, Z.data(), ( new_ngrids - ngrids ) * 8);
 }
 
-Grid::Grid(Mwfn* mwfn, std::string grid, int thread, int output){
+Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
 	this->MWFN = mwfn;
 	if ( grid.size() == 0 ) return;
 	std::string path = std::getenv("CHINIUM_PATH");
@@ -241,8 +243,12 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int thread, int output){
 	SphericalGrid(path, mwfn->Centers, P.data());
 	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 
+	if (output) std::printf("Clutersing grid points ... ");
+	start = __now__;
 	std::vector<EigenMatrix> batches;
 	RecursiveCut(P, batches);
+	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
+	if (output) std::printf("The grid points are clustered into %d groups.\n", (int)batches.size());
 
 	// First touch allocation of subgrids among OMP threads
 	std::vector<SubGrid> subgrids; subgrids.resize(batches.size());
@@ -251,13 +257,13 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int thread, int output){
 	for ( int i = 0; i < (int)subgrids.size(); i++ ){
 		SubGrid& subgrid = subgrids[i] = SubGrid(batches[i]);
 		subgrid.MWFN = mwfn;
-		subgrid.NumGrids = batches[i].cols();
-		subgrid.getAO(mwfn, 0, 0);
+		subgrid.NumGrids = subgrid.W.dimension(0);
+		subgrid.BasisList.resize(mwfn->getNumBasis()); for ( int k = 0; k < mwfn->getNumBasis(); k++ ) subgrid.BasisList[k] = k;
+		subgrid.getAO(0);
 		subgrid.BasisList.resize(0);
-		int atom = 0;
-		int length = 0;
 		for ( int mu = 0; mu < mwfn->getNumBasis(); mu++ ){
-			if ( subgrid.AO.chip(mu, 1).abs().maximum().data()[0] > 1e-10 ){
+			const EigenTensor<0> max = subgrid.AO.chip(mu, 1).abs().maximum();
+			if ( max() > ao_threshold ){
 				subgrid.BasisList.push_back(mu);
 			}
 		}
@@ -266,7 +272,7 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int thread, int output){
 		total += complexity[i];
 
 		std::vector<int> basis2atom_tot = mwfn->Basis2Atom();
-		std::vector<int> basis2atom; basis2atom.reserve(subgrid.getNumBasis())
+		std::vector<int> basis2atom; basis2atom.reserve(subgrid.getNumBasis());
 		for ( int basis : subgrid.BasisList ){
 			basis2atom.push_back(basis2atom_tot[basis]);
 		}
@@ -296,7 +302,7 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int thread, int output){
 	for ( int kthread = 0; kthread < nthreads; kthread++ ){
 		this->SubGridBatches[kthread].reserve(bins[kthread].size());
 		for ( SubGrid& subgrid : bins[kthread] ){
-			this->SubGridBatches[kthread].push_back(std::make_unique<SubGrid>(subgrid))
+			this->SubGridBatches[kthread].push_back(std::make_unique<SubGrid>(subgrid));
 		}
 	}
 }

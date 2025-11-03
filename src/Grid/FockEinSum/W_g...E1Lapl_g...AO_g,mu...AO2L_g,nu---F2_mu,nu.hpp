@@ -34,7 +34,7 @@ TOP
 	EigenTensor<2> WE1LaplAO(g_len, mu_len);
 	WE1Lapl.setZero();
 	WE1LaplAO.setZero();
-	const double* WE1Lapl_ = &WE1Lapl(0);
+	double* WE1Lapl_ = &WE1Lapl(0);
 	const double* W_ = &W(0);
 	const double* E1Lapl_ = &E1Lapl(0);
 	#pragma omp simd simdlen(8) aligned(WE1Lapl_, W_, E1Lapl_: 64)

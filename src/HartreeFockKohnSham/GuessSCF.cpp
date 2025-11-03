@@ -6,6 +6,7 @@
 #include <string>
 #include <cassert>
 #include <vector>
+#include <deque>
 #include <libmwfn.h>
 
 #include "../Macro.h"
@@ -14,34 +15,59 @@
 #include "SAP.h"
 
 EigenMatrix SuperpositionAtomicPotential(std::vector<MwfnCenter>& centers, Grid& grid){
-	const int ngrids = grid.NumGrids;
+	// Pretending LDA and saving data
 	const int old_type = grid.Type;
-	const Eigen::Tensor<double, 1> old_E1Rhos = grid.E1Rhos;
-	grid.Type = 0; // Pretending LDA
-	grid.E1Rhos.resize(ngrids); grid.E1Rhos.setZero();
-	for ( MwfnCenter& center : centers ){
-		const double atomx = center.Coordinates[0];
-		const double atomy = center.Coordinates[1];
-		const double atomz = center.Coordinates[2];
-		for ( long int igrid = 0; igrid < ngrids; igrid++ ){
-			const double x = grid.Xs[igrid] - atomx;
-			const double y = grid.Ys[igrid] - atomy;
-			const double z = grid.Zs[igrid] - atomz;
-			const double r = std::sqrt(x * x + y * y + z * z) + 1.e-12;
-			double bestdiff = 114514;
-			double bestvap = 114514;
-			for ( int iradius = 0; iradius < __nradii__; iradius++ ){
-				if ( bestdiff > std::abs( Radii[iradius] - r ) ){
-					bestdiff = std::abs( Radii[iradius] - r );
-					bestvap = SAPs[center.Index][iradius] / r;
+	grid.setType(0);
+	std::deque<std::deque<EigenTensor<1>>> old_E1Rhos;
+	for ( std::vector<std::unique_ptr<SubGrid>>& subgrids : grid.SubGridBatches ){
+		std::deque<EigenTensor<1>> batch_old_E1Rhos;
+		for ( std::unique_ptr<SubGrid>& subgrid : subgrids ){
+			batch_old_E1Rhos.push_back(subgrid->E1Rho);
+		}
+		old_E1Rhos.push_back(batch_old_E1Rhos);
+	}
+
+	// Calculating SAP
+	#pragma omp parallel for schedule(static) num_threads(grid.getNumThreads())
+	for ( std::vector<std::unique_ptr<SubGrid>>& subgrids : grid.SubGridBatches ){
+		for ( std::unique_ptr<SubGrid>& subgrid : subgrids ){
+			const int ngrids = subgrid->NumGrids;
+			subgrid->E1Rho.resize(ngrids); subgrid->E1Rho.setZero();
+			for ( MwfnCenter& center : centers ){
+				const double atomx = center.Coordinates[0];
+				const double atomy = center.Coordinates[1];
+				const double atomz = center.Coordinates[2];
+				for ( long int igrid = 0; igrid < ngrids; igrid++ ){
+					const double x = subgrid->X[igrid] - atomx;
+					const double y = subgrid->Y[igrid] - atomy;
+					const double z = subgrid->Z[igrid] - atomz;
+					const double r = std::sqrt(x * x + y * y + z * z) + 1.e-12;
+					double bestdiff = 114514;
+					double bestvap = 114514;
+					for ( int iradius = 0; iradius < __nradii__; iradius++ ){
+						if ( bestdiff > std::abs( Radii[iradius] - r ) ){
+							bestdiff = std::abs( Radii[iradius] - r );
+							bestvap = SAPs[center.Index][iradius] / r;
+						}
+					}
+					subgrid->E1Rho(igrid) += bestvap;
 				}
 			}
-			grid.E1Rhos(igrid) += bestvap;
 		}
 	}
 	const EigenMatrix Fsap = grid.getFock();
-	grid.Type = old_type; // Recoverying grid data
-	grid.E1Rhos = old_E1Rhos;
+
+	// Recovering data
+	for ( std::vector<std::unique_ptr<SubGrid>>& subgrids : grid.SubGridBatches ){
+		std::deque<EigenTensor<1>>& batch_old_E1Rhos = old_E1Rhos.front();
+		for ( std::unique_ptr<SubGrid>& subgrid : subgrids ){
+			subgrid->E1Rho = batch_old_E1Rhos.front();
+			batch_old_E1Rhos.pop_front();
+		}
+		old_E1Rhos.pop_front();
+	}
+	grid.setType(old_type);
+
 	return Fsap;
 }
 

@@ -38,7 +38,7 @@ TOP
 				const double* AO1_mur = &AO1(0, mu, r);
 				#pragma omp simd simdlen(8) aligned(DAO1nur_, AO1_mur: 64)
 				for ( int g = 0; g < g_len; g++ ){
-					DAO1nur_[g] += Dmunu * AO1_mur[g];
+					DAO1nur_[g] += D(mu, nu) * AO1_mur[g];
 				}
 			}
 			double* Tau_ = &Tau(0);

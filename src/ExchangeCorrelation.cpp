@@ -88,162 +88,164 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 	tensor.setZero();
 
 #define __Append_XC__(tensor, tmp)\
-	if ( grid.tensor.size() == 0 ) grid.tensor = tmp;\
-	else grid.tensor += tmp;
+	if ( subgrid->tensor.size() == 0 ) subgrid->tensor = tmp;\
+	else subgrid->tensor += tmp;
 
 #define __XC_LDA__\
-	assert( rhos.size() == ngrids );\
+	assert( rho.size() == ngrids );\
 	if ( order == "e" ){\
-		__Allocate_Temporary__(es)\
-		xc_lda_exc(&func, ngrids, rhos.data(), es.data());\
-		__Append_XC__(Es, es)\
+		__Allocate_Temporary__(e)\
+		xc_lda_exc(&func, ngrids, rho.data(), e.data());\
+		__Append_XC__(E, e)\
 	}else if ( order == "v" ){\
-		__Allocate_Temporary__(e1rhos)\
-		xc_lda_vxc(&func, ngrids, rhos.data(), e1rhos.data());\
-		__Append_XC__(E1Rhos, e1rhos)\
+		__Allocate_Temporary__(e1rho)\
+		xc_lda_vxc(&func, ngrids, rho.data(), e1rho.data());\
+		__Append_XC__(E1Rho, e1rho)\
 	}else if ( order == "ev" ){\
-		__Allocate_Temporary__(es)\
-		__Allocate_Temporary__(e1rhos)\
-		xc_lda_exc_vxc(&func, ngrids, rhos.data(), es.data(), e1rhos.data());\
-		__Append_XC__(Es, es)\
-		__Append_XC__(E1Rhos, e1rhos)\
+		__Allocate_Temporary__(e)\
+		__Allocate_Temporary__(e1rho)\
+		xc_lda_exc_vxc(&func, ngrids, rho.data(), e.data(), e1rho.data());\
+		__Append_XC__(E, e)\
+		__Append_XC__(E1Rho, e1rho)\
 	}else if ( order == "f" ){\
-		__Allocate_Temporary__(e2rho2s)\
-		xc_lda_fxc(&func, ngrids, rhos.data(), e2rho2s.data());\
-		__Append_XC__(E2Rho2s, e2rho2s)\
+		__Allocate_Temporary__(e2rho2)\
+		xc_lda_fxc(&func, ngrids, rho.data(), e2rho2.data());\
+		__Append_XC__(E2Rho2, e2rho2)\
 	}/*else if ( order == "k" ){\
-		__Allocate_Temporary__(e3rho3s)\
-		xc_lda_kxc(&func, ngrids, rhos.data(), e3rho3s.data());\
-		__Append_XC__(E3Rho3s, e3rho3s)\
+		__Allocate_Temporary__(e3rho3)\
+		xc_lda_kxc(&func, ngrids, rho.data(), e3rho3.data());\
+		__Append_XC__(E3Rho3, e3rho3)\
 	}else if ( order == "l" ){\
-		__Allocate_Temporary__(e4rho4s)\
-		xc_lda_lxc(&func, ngrids, rhos.data(), e4rho4s.data());\
-		__Append_XC__(E4Rho4s, e4rho4s)\
+		__Allocate_Temporary__(e4rho4)\
+		xc_lda_lxc(&func, ngrids, rho.data(), e4rho4.data());\
+		__Append_XC__(E4Rho4, e4rho4)\
 	}*/
 
 #define __XC_GGA__\
-	assert( rhos.size() == ngrids );\
-	assert( sigmas.size() == ngrids );\
+	assert( rho.size() == ngrids );\
+	assert( sigma.size() == ngrids );\
 	if ( order == "e" ){\
-		__Allocate_Temporary__(es)\
-		xc_gga_exc(&func, ngrids, rhos.data(), sigmas.data(), es.data());\
-		__Append_XC__(Es, es)\
+		__Allocate_Temporary__(e)\
+		xc_gga_exc(&func, ngrids, rho.data(), sigma.data(), e.data());\
+		__Append_XC__(E, e)\
 	}else if ( order == "v" ){\
-		__Allocate_Temporary__(e1rhos)\
-		__Allocate_Temporary__(e1sigmas)\
-		xc_gga_vxc(&func, ngrids, rhos.data(), sigmas.data(), e1rhos.data(), e1sigmas.data());\
-		__Append_XC__(E1Rhos, e1rhos)\
-		__Append_XC__(E1Sigmas, e1sigmas)\
+		__Allocate_Temporary__(e1rho)\
+		__Allocate_Temporary__(e1sigma)\
+		xc_gga_vxc(&func, ngrids, rho.data(), sigma.data(), e1rho.data(), e1sigma.data());\
+		__Append_XC__(E1Rho, e1rho)\
+		__Append_XC__(E1Sigma, e1sigma)\
 	}else if ( order == "ev" ){\
-		__Allocate_Temporary__(es)\
-		__Allocate_Temporary__(e1rhos)\
-		__Allocate_Temporary__(e1sigmas)\
-		xc_gga_exc_vxc(&func, ngrids, rhos.data(), sigmas.data(), es.data(), e1rhos.data(), e1sigmas.data());\
-		__Append_XC__(Es, es)\
-		__Append_XC__(E1Rhos, e1rhos)\
-		__Append_XC__(E1Sigmas, e1sigmas)\
+		__Allocate_Temporary__(e)\
+		__Allocate_Temporary__(e1rho)\
+		__Allocate_Temporary__(e1sigma)\
+		xc_gga_exc_vxc(&func, ngrids, rho.data(), sigma.data(), e.data(), e1rho.data(), e1sigma.data());\
+		__Append_XC__(E, e)\
+		__Append_XC__(E1Rho, e1rho)\
+		__Append_XC__(E1Sigma, e1sigma)\
 	}else if ( order == "f" ){\
-		__Allocate_Temporary__(e2rho2s)\
-		__Allocate_Temporary__(e2rhosigmas)\
-		__Allocate_Temporary__(e2sigma2s)\
-		xc_gga_fxc(&func, ngrids, rhos.data(), sigmas.data(), e2rho2s.data(), e2rhosigmas.data(), e2sigma2s.data());\
-		__Append_XC__(E2Rho2s, e2rho2s)\
-		__Append_XC__(E2RhoSigmas, e2rhosigmas)\
-		__Append_XC__(E2Sigma2s, e2sigma2s)\
+		__Allocate_Temporary__(e2rho2)\
+		__Allocate_Temporary__(e2rhosigma)\
+		__Allocate_Temporary__(e2sigma2)\
+		xc_gga_fxc(&func, ngrids, rho.data(), sigma.data(), e2rho2.data(), e2rhosigma.data(), e2sigma2.data());\
+		__Append_XC__(E2Rho2, e2rho2)\
+		__Append_XC__(E2RhoSigma, e2rhosigma)\
+		__Append_XC__(E2Sigma2, e2sigma2)\
 	}/*else if ( order == "k" ){\
-		__Allocate_Temporary__(e3rho3s)\
-		__Allocate_Temporary__(e3rho2sigmas)\
-		__Allocate_Temporary__(e3rhosigma2s)\
-		__Allocate_Temporary__(e3sigma3s)\
-		xc_gga_kxc(&func, ngrids, rhos.data(), sigmas.data(), e3rho3s.data(), e3rho2sigmas.data(), e3rhosigma2s.data(), e3sigma3s.data());\
-		__Append_XC__(E3Rho3s, e3rho3s)\
-		__Append_XC__(E3Rho2Sigmas, e3rho2sigmas)\
-		__Append_XC__(E3RhoSigma2s, e3rhosigma2s)\
-		__Append_XC__(E3Sigma3s, e3sigma3s)\
+		__Allocate_Temporary__(e3rho3)\
+		__Allocate_Temporary__(e3rho2sigma)\
+		__Allocate_Temporary__(e3rhosigma2)\
+		__Allocate_Temporary__(e3sigma3)\
+		xc_gga_kxc(&func, ngrids, rho.data(), sigma.data(), e3rho3.data(), e3rho2sigma.data(), e3rhosigma2.data(), e3sigma3.data());\
+		__Append_XC__(E3Rho3, e3rho3)\
+		__Append_XC__(E3Rho2Sigma, e3rho2sigma)\
+		__Append_XC__(E3RhoSigma2, e3rhosigma2)\
+		__Append_XC__(E3Sigma3, e3sigma3)\
 	}else if ( order == "l" ){\
-		__Allocate_Temporary__(e4rho4s)\
-		__Allocate_Temporary__(e4rho3sigmas)\
-		__Allocate_Temporary__(e4rho2sigma2s)\
-		__Allocate_Temporary__(e4rhosigma3s)\
-		__Allocate_Temporary__(e4sigma4s)\
-		xc_gga_lxc(&func, ngrids, rhos.data(), sigmas.data(), e4rho4s.data(), e4rho3sigmas.data(), e4rho2sigma2s.data(), e4rhosigma3s.data(), e4sigma4s.data());\
-		__Append_XC__(E4Rho4s, e4rho4s)\
-		__Append_XC__(E4Rho3Sigmas, e4rho3sigmas)\
-		__Append_XC__(E4Rho2Sigma2s, e4rho2sigma2s)\
-		__Append_XC__(E4RhoSigma3s, e4rhosigma3s)\
-		__Append_XC__(E4Sigma4s, e4sigma4s)\
+		__Allocate_Temporary__(e4rho4)\
+		__Allocate_Temporary__(e4rho3sigma)\
+		__Allocate_Temporary__(e4rho2sigma2)\
+		__Allocate_Temporary__(e4rhosigma3)\
+		__Allocate_Temporary__(e4sigma4)\
+		xc_gga_lxc(&func, ngrids, rho.data(), sigma.data(), e4rho4.data(), e4rho3sigma.data(), e4rho2sigma2.data(), e4rhosigma3.data(), e4sigma4.data());\
+		__Append_XC__(E4Rho4, e4rho4)\
+		__Append_XC__(E4Rho3Sigma, e4rho3sigma)\
+		__Append_XC__(E4Rho2Sigma2, e4rho2sigma2)\
+		__Append_XC__(E4RhoSigma3, e4rhosigma3)\
+		__Append_XC__(E4Sigma4, e4sigma4)\
 	}*/
 
 #define __XC_MGGA__\
-	assert( rhos.size() == ngrids );\
-	assert( sigmas.size() == ngrids );\
-	assert( lapls.size() == ngrids );\
-	assert( taus.size() == ngrids );\
+	assert( rho.size() == ngrids );\
+	assert( sigma.size() == ngrids );\
+	assert( lapl.size() == ngrids );\
+	assert( tau.size() == ngrids );\
 	if ( order == "e" ){\
-		__Allocate_Temporary__(es)\
-		xc_mgga_exc(&func, ngrids, rhos.data(), sigmas.data(), lapls.data(), taus.data(), es.data());\
-		__Append_XC__(Es, es)\
+		__Allocate_Temporary__(e)\
+		xc_mgga_exc(&func, ngrids, rho.data(), sigma.data(), lapl.data(), tau.data(), e.data());\
+		__Append_XC__(E, e)\
 	}else if ( order == "v" ){\
-		__Allocate_Temporary__(e1rhos)\
-		__Allocate_Temporary__(e1sigmas)\
-		__Allocate_Temporary__(e1lapls)\
-		__Allocate_Temporary__(e1taus)\
-		xc_mgga_vxc(&func, ngrids, rhos.data(), sigmas.data(), lapls.data(), taus.data(), e1rhos.data(), e1sigmas.data(), e1lapls.data(), e1taus.data());\
-		__Append_XC__(E1Rhos, e1rhos)\
-		__Append_XC__(E1Sigmas, e1sigmas)\
-		__Append_XC__(E1Lapls, e1lapls)\
-		__Append_XC__(E1Taus, e1taus)\
+		__Allocate_Temporary__(e1rho)\
+		__Allocate_Temporary__(e1sigma)\
+		__Allocate_Temporary__(e1lapl)\
+		__Allocate_Temporary__(e1tau)\
+		xc_mgga_vxc(&func, ngrids, rho.data(), sigma.data(), lapl.data(), tau.data(), e1rho.data(), e1sigma.data(), e1lapl.data(), e1tau.data());\
+		__Append_XC__(E1Rho, e1rho)\
+		__Append_XC__(E1Sigma, e1sigma)\
+		__Append_XC__(E1Lapl, e1lapl)\
+		__Append_XC__(E1Tau, e1tau)\
 	}else if ( order == "ev" ){\
-		__Allocate_Temporary__(es)\
-		__Allocate_Temporary__(e1rhos)\
-		__Allocate_Temporary__(e1sigmas)\
-		__Allocate_Temporary__(e1lapls)\
-		__Allocate_Temporary__(e1taus)\
-		xc_mgga_exc_vxc(&func, ngrids, rhos.data(), sigmas.data(), lapls.data(), taus.data(), es.data(), e1rhos.data(), e1sigmas.data(), e1lapls.data(), e1taus.data());\
-		__Append_XC__(Es, es)\
-		__Append_XC__(E1Rhos, e1rhos)\
-		__Append_XC__(E1Sigmas, e1sigmas)\
-		__Append_XC__(E1Lapls, e1lapls)\
-		__Append_XC__(E1Taus, e1taus)\
+		__Allocate_Temporary__(e)\
+		__Allocate_Temporary__(e1rho)\
+		__Allocate_Temporary__(e1sigma)\
+		__Allocate_Temporary__(e1lapl)\
+		__Allocate_Temporary__(e1tau)\
+		xc_mgga_exc_vxc(&func, ngrids, rho.data(), sigma.data(), lapl.data(), tau.data(), e.data(), e1rho.data(), e1sigma.data(), e1lapl.data(), e1tau.data());\
+		__Append_XC__(E, e)\
+		__Append_XC__(E1Rho, e1rho)\
+		__Append_XC__(E1Sigma, e1sigma)\
+		__Append_XC__(E1Lapl, e1lapl)\
+		__Append_XC__(E1Tau, e1tau)\
 	}
 
-#define __Alias_Density__(here, there, there_cache)\
-	Eigen::Tensor<double, 1>& here = grid.there.size() > 0 ? grid.there : grid.there_cache;
-
 void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
-	const int ngrids = grid.NumGrids;
-	Eigen::Tensor<double, 1>& rhos = grid.Rhos;
-	Eigen::Tensor<double, 1>& sigmas = grid.Sigmas;
-	Eigen::Tensor<double, 1>& lapls = grid.Lapls;
-	Eigen::Tensor<double, 1>& taus = grid.Taus;
-	if ( order == "e" ){
-		grid.Es.setZero();
-	}else if ( order == "v" ){
-		grid.E1Rhos.setZero(); grid.E1Sigmas.setZero(); grid.E1Lapls.setZero(); grid.E1Taus.setZero();
-	}else if ( order == "ev" ){
-		grid.Es.setZero();
-		grid.E1Rhos.setZero(); grid.E1Sigmas.setZero(); grid.E1Lapls.setZero(); grid.E1Taus.setZero();
-	}else if ( order == "f" ){
-		grid.E2Rho2s.setZero(); grid.E2RhoSigmas.setZero(); grid.E2Sigma2s.setZero();
-	}/*else if ( order == "k" ){
-		grid.E3Rho3s.setZero(); grid.E3Rho2Sigmas.setZero(); grid.E3RhoSigma2s.setZero(); E3Sigma3s.setZero();
-	}else if ( order == "l" ){
-		grid.E4Rho4s.setZero(); grid.E4Rho3Sigmas.setZero(); grid.E4Rho2Sigma2s.setZero(); grid.E4RhoSigma3s.setZero(); grid.E4Sigma4s.setZero();
-	}*/
-	for ( int code : this->Codes ){
-		xc_func_type func;
-		xc_func_init(&func, code, this->Spin);
-		switch (func.info->family){
-			case (XC_FAMILY_LDA):
-			case (XC_FAMILY_HYB_LDA):
-				__XC_LDA__ break;
-			case (XC_FAMILY_GGA):
-			case (XC_FAMILY_HYB_GGA):
-				__XC_GGA__ break;
-			case (XC_FAMILY_MGGA):
-			case (XC_FAMILY_HYB_MGGA):
-				__XC_MGGA__ break;
+	#pragma omp parallel for schedule(static) num_threads(grid.getNumThreads())
+	for ( std::vector<std::unique_ptr<SubGrid>>& subgrids : grid.SubGridBatches ){
+		for ( std::unique_ptr<SubGrid>& subgrid : subgrids ){		
+			const int ngrids = subgrid->NumGrids;
+			Eigen::Tensor<double, 1>& rho = subgrid->Rho;
+			Eigen::Tensor<double, 1>& sigma = subgrid->Sigma;
+			Eigen::Tensor<double, 1>& lapl = subgrid->Lapl;
+			Eigen::Tensor<double, 1>& tau = subgrid->Tau;
+			if ( order == "e" ){
+				subgrid->E.setZero();
+			}else if ( order == "v" ){
+				subgrid->E1Rho.setZero(); subgrid->E1Sigma.setZero(); subgrid->E1Lapl.setZero(); subgrid->E1Tau.setZero();
+			}else if ( order == "ev" ){
+				subgrid->E.setZero();
+				subgrid->E1Rho.setZero(); subgrid->E1Sigma.setZero(); subgrid->E1Lapl.setZero(); subgrid->E1Tau.setZero();
+			}else if ( order == "f" ){
+				subgrid->E2Rho2.setZero(); subgrid->E2RhoSigma.setZero(); subgrid->E2Sigma2.setZero();
+			}/*else if ( order == "k" ){
+				subgrid->E3Rho3.setZero(); subgrid->E3Rho2Sigma.setZero(); subgrid->E3RhoSigma2.setZero(); subgrid->E3Sigma3.setZero();
+			}else if ( order == "l" ){
+				subgrid->E4Rho4.setZero(); subgrid->E4Rho3Sigma.setZero(); subgrid->E4Rho2Sigma2.setZero(); subgrid->E4RhoSigma3.setZero(); subgrid->E4Sigma4.setZero();
+			}*/
+			for ( int code : this->Codes ){
+				xc_func_type func;
+				xc_func_init(&func, code, this->Spin);
+				switch (func.info->family){
+					case (XC_FAMILY_LDA):
+					case (XC_FAMILY_HYB_LDA):
+						__XC_LDA__ break;
+					case (XC_FAMILY_GGA):
+					case (XC_FAMILY_HYB_GGA):
+						__XC_GGA__ break;
+					case (XC_FAMILY_MGGA):
+					case (XC_FAMILY_HYB_MGGA):
+						__XC_MGGA__ break;
+				}
+				xc_func_end(&func);
+			}
 		}
-		xc_func_end(&func);
 	}
 }

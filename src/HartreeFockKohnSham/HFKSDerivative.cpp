@@ -53,7 +53,6 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 
 	const int natoms = mwfn.getNumCenters();
 	const int nbasis = mwfn.getNumBasis();
-	const long int ngrids = grid.NumGrids;
 	std::vector<double> Gradient(3 * natoms, 0);
 	std::vector<std::vector<double>> Hessian(3 * natoms, std::vector<double>(3 * natoms, 0));
 	std::vector<int> bf2atom(nbasis);
@@ -91,67 +90,41 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 	// XC
 	if (xc){
 		if ( derivative > 1 ) xc.Evaluate("f", grid);
-		// Creating batches for grids
-		const long int ngrids_per_batch = __max_num_grids__ > ngrids ? __max_num_grids__ : ngrids; // If only gradient is required, the grids will be done in batches. Otherwise, they will be done simultaneously, because the intermediate variable, nuclear gradient of density on grids, is required in CPSCF.
-		std::vector<long int> batch_tails = {};
-		long int tmp = 0;
-		while ( tmp < ngrids ){
-			if ( tmp + ngrids_per_batch < ngrids )
-				batch_tails.push_back(tmp + ngrids_per_batch);
-			else batch_tails.push_back(ngrids);
-			tmp += ngrids_per_batch;
-		}
-		const int nbatches = batch_tails.size();
-		if (output) std::printf("Calculating XC nuclear skeleton derivatives in %d batches ...\n", nbatches);
 
-		const auto start_all = __now__;
-		for ( int ibatch = 0; ibatch < nbatches; ibatch++ ){
-			const auto start_batch = __now__;
-			if (output) std::printf("| Batch %d\n", ibatch);
-			const int batch_head = ibatch == 0 ? 0 : batch_tails[ibatch - 1];
-			const int batch_tail = batch_tails[ibatch];
-			if (output) std::printf("| | ");
-			Grid batch_grid(grid, batch_head, batch_tail - batch_head, output);
+		// XC gradient
+		grid.getAO(derivative, output);
+		auto start = __now__;
+		if (output) std::printf("Calculating skeleton gradient of density ...");
+		grid.getDensitySkeleton(2 * D);
+		if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
-			// XC gradient
-			if (output) std::printf("| | ");
-			batch_grid.getAO(derivative, output);
+		start = __now__;
+		if (output) std::printf("Calculating XC gradient ...");
+		const std::vector<double> gxc = grid.getEnergyGrad();
+		__VectorIncrement__(Gradient, gxc, 1)
+		if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
-			auto start = __now__;
-			if (output) std::printf("| | Calculating skeleton gradient of density ...");
-			batch_grid.getDensitySkeleton(2 * D);
+		// XC skeleton hessian and skeleton Fock
+		if ( derivative > 1 ){
+			start = __now__;
+			if (output) std::printf("Calculating skeleton hessian of density ...");
+			grid.getDensitySkeleton2(2 * D);
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
 			start = __now__;
-			if (output) std::printf("| | Calculating XC gradient ...");
-			const std::vector<double> gxc = batch_grid.getEnergyGrad();
-			__VectorIncrement__(Gradient, gxc, 1)
+			if (output) std::printf("Calculating XC skeleton hessian ...");
+			const std::vector<std::vector<double>> hxc = grid.getEnergyHess();
+			__VectorVectorIncrement__(Hessian, hxc, 1)
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
-			// XC skeleton hessian and skeleton Fock
-			if ( derivative > 1 ){
-				start = __now__;
-				if (output) std::printf("| | Calculating skeleton hessian of density ...");
-				batch_grid.getDensitySkeleton2(2 * D);
-				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
-
-				start = __now__;
-				if (output) std::printf("| | Calculating XC skeleton hessian ...");
-				const std::vector<std::vector<double>> hxc = batch_grid.getEnergyHess();
-				__VectorVectorIncrement__(Hessian, hxc, 1)
-				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
-
-				start = __now__;
-				if (output) std::printf("| | Calculating skeleton gradient of XC Fock matrices ...");
-				std::vector<EigenMatrix> fxcskeletons = batch_grid.getFockSkeleton();
-				__VectorIncrement__(Fskeletons, fxcskeletons, 1)
-				fxcskeletons = batch_grid.getFockU();
-				__VectorIncrement__(Fskeletons, fxcskeletons, 1)
-				if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
-			}
-			if (output) std::printf("| | Done in %f s\n", __duration__(start_batch, __now__));
+			start = __now__;
+			if (output) std::printf("Calculating skeleton gradient of XC Fock matrices ...");
+			std::vector<EigenMatrix> fxcskeletons = grid.getFockSkeleton();
+			__VectorIncrement__(Fskeletons, fxcskeletons, 1)
+			fxcskeletons = grid.getFockU<s_t>();
+			__VectorIncrement__(Fskeletons, fxcskeletons, 1)
+			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 		}
-		if (output) std::printf("| Done in %f s\n", __duration__(start_all, __now__));
 	}
 
 	if ( derivative > 1 ){

@@ -33,7 +33,7 @@ TOP
 	EigenTensor<2> WE1RhoAO(g_len, mu_len);
 	WE1Rho.setZero();
 	WE1RhoAO.setZero();
-	const double* WE1Rho_ = &WE1Rho(0);
+	double* WE1Rho_ = &WE1Rho(0);
 	const double* W_ = &W(0);
 	const double* E1Rho_ = &E1Rho(0);
 	#pragma omp simd simdlen(8) aligned(WE1Rho_, W_, E1Rho_: 64)

@@ -32,7 +32,7 @@ TOP
 		for ( int mu = 0; mu < mu_len; mu++ ){
 			double* DAOnu_ = &DAOnu(0);
 			const double* AO_mu = &AO(0, mu);
-			#pragma omp simd simden(8) aligned(DAOnu_, AO_mu: 64)
+			#pragma omp simd simdlen(8) aligned(DAOnu_, AO_mu: 64)
 			for ( int g = 0; g < g_len; g++ ){
 				DAOnu_[g] += D(mu, nu) * AO_mu[g];
 			}

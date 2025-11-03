@@ -42,7 +42,7 @@ TOP
 		const double* AO_nu = &AO(0, nu);
 		#pragma omp simd simdlen(8) aligned(Rho_, DAOnu_, AO_nu: 64) 
 		for ( int g = 0; g < g_len; g++ ){
-			Rho[g] += DAOnu[g] * AO_nu[g];
+			Rho_[g] += DAOnu_[g] * AO_nu[g];
 		}
 	}
 }

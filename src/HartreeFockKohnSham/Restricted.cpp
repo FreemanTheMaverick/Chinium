@@ -169,10 +169,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 				const auto [FhfU, _, __] = int4c2e.ContractInts(v, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
 				EigenMatrix FxcU = EigenZero(vprime.rows(), vprime.cols());
 				if (xc){
-					std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
-					std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
-					grid.getDensityU({2*v}, RhoUss, Rho1Uss, SigmaUss);
-					FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
+					grid.getDensityU({2*v});
+					FxcU = grid.getFockU<u_t>()[0];
 				}
 				const EigenMatrix FU = FhfU + FxcU;
 				return (Z.transpose() * FU * Z).eval();

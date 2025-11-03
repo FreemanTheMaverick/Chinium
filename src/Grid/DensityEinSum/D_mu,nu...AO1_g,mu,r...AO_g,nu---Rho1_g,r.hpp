@@ -38,13 +38,13 @@ TOP
 				const double* AO1_mur = &AO1(0, mu, r);
 				#pragma omp simd simdlen(8) aligned(DAO1nur_, AO1_mur: 64)
 				for ( int g = 0; g < g_len; g++ ){
-					DAO1nur_[g] += D(mu, nu) * AO1_nur[g];
+					DAO1nur_[g] += D(mu, nu) * AO1_mur[g];
 				}
 			}
 			double* Rho1_r = &Rho1(0, r);
 			const double* DAO1nur_ = &DAO1nur(0);
 			const double* AO_nu = &AO(0, nu);
-			#pragma omp simd simdlen(8) aligned(DAO1nur_, DAO1nur_, AO_nu: 64)
+			#pragma omp simd simdlen(8) aligned(Rho1_r, DAO1nur_, AO_nu: 64)
 			for ( int g = 0; g < g_len; g++ ){
 				Rho1_r[g] += DAO1nur_[g] * AO_nu[g];
 			}

@@ -41,7 +41,7 @@ TOP
 				for ( int nu = 0; nu < nu_len; nu++ ){
 					double* DAO1matr_nu = &DAO1matr(0, nu);
 					const double* AO1_mur = &AO1(0, mu, r);
-					#pragma omp simd simdlen(8) aligned(DAO1matr_ptr, AO1_ptr: 64)
+					#pragma omp simd simdlen(8) aligned(DAO1matr_nu, AO1_mur: 64)
 					for ( int g = 0; g < g_len; g++ ){
 						DAO1matr_nu[g] += D(mu, nu, mat) * AO1_mur[g];
 					}

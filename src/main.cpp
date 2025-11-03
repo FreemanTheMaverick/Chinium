@@ -112,7 +112,7 @@ int main(int /*argc*/, char* argv[]){
 	Int2C1E int2c1e = Int2C1E(mwfn);
 	Int4C2E int4c2e = Int4C2E(mwfn, 1, -1); // EXX is unknown by now.
 	ExchangeCorrelation xc;
-	Grid grid(&mwfn, grid_str, 1);
+	Grid grid(&mwfn, grid_str, nthreads, 1);
 	int2c1e.CalculateIntegrals(0, 1);
 	mwfn.Overlap = int2c1e.Overlap;
 	if ( jobtype == "SCF" ){
@@ -122,16 +122,16 @@ int main(int /*argc*/, char* argv[]){
 		int4c2e.getThreadPointers(nthreads, 1);
 		int4c2e.CalculateIntegrals(0, 1);
 		if ( method != "HF" || guess == "SAP" ){
-			if ( grid.NumGrids == 0 ) throw std::runtime_error("For DFT or SAP, you must specify the grid!");
+			if ( grid.SubGridBatches[0][0]->NumGrids == 0 ) throw std::runtime_error("For DFT or SAP, you must specify the grid!");
 			if ( method != "HF" ){
 				xc.Read(method, 1);
-				grid.Type = xc.Family == "LDA" ? 0 : xc.Family == "GGA" ? 1 : 2;
+				grid.setType( xc.Family == "LDA" ? 0 : xc.Family == "GGA" ? 1 : 2 );
 				grid.getAO(0, 1); // Prepared for SCF and CPSCF only, which use the AO values more than once. Higher-order derivatives that will be used only once will be computed in batches in HartreeFockKohnSham/HFKSDerivative.cpp to save memory.
 				int4c2e.EXX = xc.EXX;
 			}else{
-				grid.Type = 0;
+				grid.setType(0);
 				grid.getAO(0, 1); // For SAP initial guess.
-				grid.Type = -1;
+				grid.setType(-1);
 			}
 		}
 		if ( guess == "READ" ){ // Orthogonalizing the orbitals read from mwfn.

@@ -9,7 +9,6 @@
 #include <libmwfn.h>
 
 #include "../Macro.h"
-#include "Tensor.h"
 #include "Grid.h"
 
 void GetAoValues(
@@ -215,13 +214,11 @@ void GetAoValues(
 	}
 }
 
-void SubGrid::getAO(int derivative, int output){
+void SubGrid::getAO(int derivative){
 	const int order = derivative + this->Type;
-	if (output) std::printf("Generating grids to order %d of basis functions ... ", order);
-	auto start = __now__;
 	const int ngrids = this->NumGrids;
 	const int nbasis = this->MWFN->getNumBasis();
-	const int this_nbasis = (int)this->BasisIndices.size();
+	const int this_nbasis = this->getNumBasis();
 	std::vector<double> ao, ao1, ao2l, ao2, ao3;
 
 	if ( order >= 0 ){
@@ -274,8 +271,8 @@ void SubGrid::getAO(int derivative, int output){
 		   	ao3.data() + ngrids * nbasis * 9  // zzz
 	);
 
-	for ( int ibasis = 0; ibasis < this_nbasis, ibasis++ ){
-		const int basis = this->BasisIndices[ibasis];
+	for ( int ibasis = 0; ibasis < this_nbasis; ibasis++ ){
+		const int basis = this->BasisList[ibasis];
 		if ( order >= 0 ){
 			std::memcpy(this->AO.data() + ibasis * ngrids, ao.data() + basis * ngrids, ngrids * 8);
 		}
@@ -290,6 +287,4 @@ void SubGrid::getAO(int derivative, int output){
 			std::memcpy(this->AO2.data() + ibasis * ngrids * 10, ao2.data() + basis * ngrids * 10, ngrids * 10 * 8);
 		}
 	}
-
-	if (output) std::printf("Done in %f s\n", __duration__(start, __now__));
 }

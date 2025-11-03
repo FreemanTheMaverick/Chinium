@@ -264,10 +264,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 						const auto [FhfU, _, __] = int4c2e.ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
 						EigenMatrix FxcU = EigenZero(D.rows(), D.cols());
 						if (xc){
-							std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
-							std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
-							grid.getDensityU({2*D}, RhoUss, Rho1Uss, SigmaUss);
-							FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
+							grid.getDensityU({2*D});
+							FxcU = grid.getFockU<u_t>()[0];
 						}
 						const EigenMatrix FU = FhfU + FxcU;
 						FoverC = Z.transpose() * FU * Z;
@@ -287,10 +285,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 						const auto [FhfU, _, __] = int4c2e.ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
 						EigenMatrix FxcU = EigenZero(D.rows(), D.cols());
 						if (xc){
-							std::vector<Eigen::Tensor<double, 1>> RhoUss, SigmaUss;
-							std::vector<Eigen::Tensor<double, 2>> Rho1Uss;
-							grid.getDensityU({2*D}, RhoUss, Rho1Uss, SigmaUss);
-							FxcU = grid.getFockU(RhoUss, Rho1Uss, SigmaUss)[0];
+							grid.getDensityU({2*D});
+							FxcU = grid.getFockU<u_t>()[0];
 						}
 						const EigenMatrix FU = FhfU + FxcU;
 						FoverOcc = Z.transpose() * FU * Z;
