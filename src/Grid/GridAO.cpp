@@ -232,7 +232,7 @@ void SubGrid::getAO(int derivative){
 	if ( order >= 2 ){
 		ao2l.resize(ngrids * nbasis);
 		ao2.resize(ngrids * nbasis * 6);
-		this->AO2L.resize(ngrids, nbasis);
+		this->AO2L.resize(ngrids, this_nbasis);
 		this->AO2.resize(ngrids, this_nbasis, 6);
 	}
 	if ( order >= 3 ){
@@ -284,7 +284,7 @@ void SubGrid::getAO(int derivative){
 			std::memcpy(this->AO2.data() + ibasis * ngrids * 6, ao2.data() + basis * ngrids * 6, ngrids * 6 * 8);
 		}
 		if ( order >= 3 ){
-			std::memcpy(this->AO2.data() + ibasis * ngrids * 10, ao2.data() + basis * ngrids * 10, ngrids * 10 * 8);
+			std::memcpy(this->AO3.data() + ibasis * ngrids * 10, ao3.data() + basis * ngrids * 10, ngrids * 10 * 8);
 		}
 	}
 }
