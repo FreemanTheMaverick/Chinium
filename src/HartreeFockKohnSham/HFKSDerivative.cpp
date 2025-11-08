@@ -95,7 +95,7 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 		grid.getAO(derivative, output);
 		auto start = __now__;
 		if (output) std::printf("Calculating skeleton gradient of density ...");
-		grid.getDensitySkeleton(2 * D);
+		grid.getDensitySkeleton({2 * D});
 		if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
 		start = __now__;
@@ -108,7 +108,7 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 		if ( derivative > 1 ){
 			start = __now__;
 			if (output) std::printf("Calculating skeleton hessian of density ...");
-			grid.getDensitySkeleton2(2 * D);
+			grid.getDensitySkeleton2({2 * D});
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 
 			start = __now__;
@@ -119,9 +119,9 @@ std::tuple<EigenMatrix, EigenMatrix> HFKSDerivative(Mwfn& mwfn, Environment& env
 
 			start = __now__;
 			if (output) std::printf("Calculating skeleton gradient of XC Fock matrices ...");
-			std::vector<EigenMatrix> fxcskeletons = grid.getFockSkeleton();
+			std::vector<EigenMatrix> fxcskeletons = grid.getFockSkeleton()[0];
 			__VectorIncrement__(Fskeletons, fxcskeletons, 1)
-			fxcskeletons = grid.getFockU<s_t>();
+			fxcskeletons = grid.getFockU<s_t>()[0];
 			__VectorIncrement__(Fskeletons, fxcskeletons, 1)
 			if (output) std::printf(" Done in %f s\n", __duration__(start, __now__));
 		}

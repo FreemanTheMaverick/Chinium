@@ -128,10 +128,10 @@ std::tuple<
 		auto fock_start = __now__;
 		std::vector<EigenMatrix> undoneFU1s = int4c2e.ContractInts(undoneDs, nthreads, 1);
 		std::vector<EigenMatrix> undoneFU2s(undoneDs.size(), EigenZero(nbasis, nbasis));
-		if ( grid.Type >= 0 ){
+		if ( grid.SubGridBatches[0][0]->Type >= 0 ){
 			for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
-			grid.getDensityU(undoneDs);
-			undoneFU2s = grid.getFockU<u_t>();
+			grid.getDensityU({undoneDs});
+			undoneFU2s = grid.getFockU<u_t>()[0];
 		}
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			const EigenMatrix FU = undoneFU1s[jundone] + undoneFU2s[jundone];
@@ -214,10 +214,10 @@ std::vector<EigenVector> OccupationGradient(
 		}
 		std::vector<EigenMatrix> undoneFUs = int4c2e.ContractInts(undoneDs, nthreads, 1);
 		std::vector<EigenMatrix> undoneFU2s(undoneDs.size(), EigenZero(nbasis, nbasis));
-		if ( grid.Type >= 0 ){
+		if ( grid.SubGridBatches[0][0]->Type >= 0 ){
 			for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
-			grid.getDensityU(undoneDs);
-			undoneFU2s = grid.getFockU<u_t>();
+			grid.getDensityU({undoneDs});
+			undoneFU2s = grid.getFockU<u_t>()[0];
 		}
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			undoneFUs[jundone] += undoneFU2s[jundone];
@@ -274,10 +274,10 @@ std::map<int, EigenMatrix> OccupationFluctuation(
 		auto fock_start = __now__;
 		std::vector<EigenMatrix> undoneGs = int4c2e.ContractInts(undoneDs, nthreads, 1);
 		std::vector<EigenMatrix> undoneFU2s(undoneDs.size(), EigenZero(nbasis, nbasis));
-		if ( grid.Type >= 0 ){
+		if ( grid.SubGridBatches[0][0]->Type >= 0 ){
 			for ( EigenMatrix& undoneD : undoneDs ) undoneD *= 2;
-			grid.getDensityU(undoneDs);
-			undoneFU2s = grid.getFockU<u_t>();
+			grid.getDensityU({undoneDs});
+			undoneFU2s = grid.getFockU<u_t>()[0];
 		}
 		for ( int imatrix = 0, jundone = 0; imatrix < nmatrices; imatrix++ ) if ( !Dones_[imatrix] ){
 			Gs[imatrix] = undoneGs[jundone] + undoneFU2s[jundone];

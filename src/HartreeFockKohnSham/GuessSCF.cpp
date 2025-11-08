@@ -16,23 +16,25 @@
 
 EigenMatrix SuperpositionAtomicPotential(std::vector<MwfnCenter>& centers, Grid& grid){
 	// Pretending LDA and saving data
-	const int old_type = grid.Type;
-	grid.setType(0);
-	std::deque<std::deque<EigenTensor<1>>> old_E1Rhos;
+	const int old_type = grid.SubGridBatches[0][0]->Type;
+	const int old_spin = grid.SubGridBatches[0][0]->Spin;
+	std::deque<std::deque<EigenTensor<2>>> old_Eps1Rhos;
 	for ( std::vector<std::unique_ptr<SubGrid>>& subgrids : grid.SubGridBatches ){
-		std::deque<EigenTensor<1>> batch_old_E1Rhos;
+		std::deque<EigenTensor<2>> batch_old_Eps1Rhos;
 		for ( std::unique_ptr<SubGrid>& subgrid : subgrids ){
-			batch_old_E1Rhos.push_back(subgrid->E1Rho);
+			batch_old_Eps1Rhos.push_back(subgrid->Eps1Rho);
 		}
-		old_E1Rhos.push_back(batch_old_E1Rhos);
+		old_Eps1Rhos.push_back(batch_old_Eps1Rhos);
 	}
 
 	// Calculating SAP
 	#pragma omp parallel for schedule(static) num_threads(grid.getNumThreads())
 	for ( std::vector<std::unique_ptr<SubGrid>>& subgrids : grid.SubGridBatches ){
 		for ( std::unique_ptr<SubGrid>& subgrid : subgrids ){
+			subgrid->Type = 0;
+			subgrid->Spin = 1;
 			const int ngrids = subgrid->NumGrids;
-			subgrid->E1Rho.resize(ngrids); subgrid->E1Rho.setZero();
+			subgrid->Eps1Rho.resize(ngrids, 1); subgrid->Eps1Rho.setZero();
 			for ( MwfnCenter& center : centers ){
 				const double atomx = center.Coordinates[0];
 				const double atomy = center.Coordinates[1];
@@ -50,23 +52,24 @@ EigenMatrix SuperpositionAtomicPotential(std::vector<MwfnCenter>& centers, Grid&
 							bestvap = SAPs[center.Index][iradius] / r;
 						}
 					}
-					subgrid->E1Rho(igrid) += bestvap;
+					subgrid->Eps1Rho(igrid, 0) += bestvap;
 				}
 			}
 		}
 	}
-	const EigenMatrix Fsap = grid.getFock();
+	const EigenMatrix Fsap = grid.getFock()[0];
 
 	// Recovering data
 	for ( std::vector<std::unique_ptr<SubGrid>>& subgrids : grid.SubGridBatches ){
-		std::deque<EigenTensor<1>>& batch_old_E1Rhos = old_E1Rhos.front();
+		std::deque<EigenTensor<2>>& batch_old_Eps1Rhos = old_Eps1Rhos.front();
 		for ( std::unique_ptr<SubGrid>& subgrid : subgrids ){
-			subgrid->E1Rho = batch_old_E1Rhos.front();
-			batch_old_E1Rhos.pop_front();
+			subgrid->Type = old_type;
+			subgrid->Spin = old_spin;
+			subgrid->Eps1Rho = batch_old_Eps1Rhos.front();
+			batch_old_Eps1Rhos.pop_front();
 		}
-		old_E1Rhos.pop_front();
+		old_Eps1Rhos.pop_front();
 	}
-	grid.setType(old_type);
 
 	return Fsap;
 }

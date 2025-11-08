@@ -73,10 +73,10 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
 		if (xc){
-			grid.getDensity(2 * D_);
+			grid.getDensity({2 * D_});
 			xc.Evaluate("ev", grid);
 			Exc_ = grid.getEnergy();
-			Gxc_ = grid.getFock();
+			Gxc_ = grid.getFock()[0];
 		}
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix Fnew_ = Fhf_ + Gxc_;
@@ -200,11 +200,11 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(D_.rows(), D_.cols());
 		if (xc){
-			grid.getDensity(2 * D_);
+			grid.getDensity({2 * D_});
 			xc.Evaluate("ev", grid);
 			if constexpr ( scf_t == newton_t ) xc.Evaluate("f", grid);
 			Exc_ = grid.getEnergy();
-			Gxc_ = grid.getFock();
+			Gxc_ = grid.getFock()[0];
 		}
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix F_ = Fhf_ + Gxc_;
@@ -264,8 +264,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 						const auto [FhfU, _, __] = int4c2e.ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
 						EigenMatrix FxcU = EigenZero(D.rows(), D.cols());
 						if (xc){
-							grid.getDensityU({2*D});
-							FxcU = grid.getFockU<u_t>()[0];
+							grid.getDensityU({{2*D}});
+							FxcU = grid.getFockU<u_t>()[0][0];
 						}
 						const EigenMatrix FU = FhfU + FxcU;
 						FoverC = Z.transpose() * FU * Z;
@@ -285,8 +285,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 						const auto [FhfU, _, __] = int4c2e.ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
 						EigenMatrix FxcU = EigenZero(D.rows(), D.cols());
 						if (xc){
-							grid.getDensityU({2*D});
-							FxcU = grid.getFockU<u_t>()[0];
+							grid.getDensityU({{2*D}});
+							FxcU = grid.getFockU<u_t>()[0][0];
 						}
 						const EigenMatrix FU = FhfU + FxcU;
 						FoverOcc = Z.transpose() * FU * Z;

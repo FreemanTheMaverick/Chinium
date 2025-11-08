@@ -228,7 +228,6 @@ SubGrid::SubGrid(EigenMatrix P){
 }
 
 Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
-	this->MWFN = mwfn;
 	if ( grid.size() == 0 ) return;
 	std::string path = std::getenv("CHINIUM_PATH");
 	path += "/Grids/" + grid + "/";
@@ -257,6 +256,7 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
 	for ( int i = 0; i < (int)subgrids.size(); i++ ){
 		SubGrid& subgrid = subgrids[i] = SubGrid(batches[i]);
 		subgrid.MWFN = mwfn;
+		subgrid.Spin = mwfn->getNumSpins();
 		subgrid.NumGrids = subgrid.W.dimension(0);
 		subgrid.BasisList.resize(mwfn->getNumBasis()); for ( int k = 0; k < mwfn->getNumBasis(); k++ ) subgrid.BasisList[k] = k;
 		subgrid.getAO(0);

@@ -8,55 +8,38 @@
 #include "../Macro.h"
 #include "Grid.h"
 
-void SubGrid::getEnergy(double& e){
-	assert( this->NumGrids == W.dimension(0) );
-	assert( this->NumGrids == Rho.dimension(0) );
-	assert( this->NumGrids == E.dimension(0) );
-	const EigenTensor<0> e_ = (W * Rho * E).sum();
-	e += e_();
+void SubGrid::getEnergy(EigenTensor<0>& E){
+	#include "EnergyEinSum/W_g...Rho_g,w...Eps_g,w---E_.hpp"
 }
 
-void SubGrid::getEnergyGrad(std::vector<double>& e){
-	const int natoms = this->getNumAtoms();
-	EigenTensor<2> G(3, natoms); G.setZero();
+void SubGrid::getEnergyGrad(EigenTensor<2>& E){
+	const int ngrids = this->NumGrids;
+	const int nspins = this->Spin;
 	if ( this->Type >= 0 ){
-		#include "EnergyEinSum/W_g...E1Rho_g...RhoGrad_g,t,a---G_t,a.hpp"
+		#include "EnergyEinSum/W_g...Eps1Rho_g,w...RhoGrad_g,t,a,w---E_t,a.hpp"
 	}
 	if ( this->Type >= 1 ){
-		#include "EnergyEinSum/W_g...E1Sigma_g...SigmaGrad_g,t,a---G_t,a.hpp"
-	}
-	for ( int a = 0; a < natoms; a++ ){
-		e[this->AtomList[a] * 3 + 0] += G(0, a);
-		e[this->AtomList[a] * 3 + 1] += G(1, a);
-		e[this->AtomList[a] * 3 + 2] += G(2, a);
+		EigenTensor<2> S(nspins, nspins); // Scaling factors
+		S.setConstant(0.5);
+		for ( int w = 0; w < nspins; w++ ) S(w, w) = 1;
+		EigenTensor<3> ScaledEps1Sigma(ngrids, nspins, nspins);
+		ScaledEps1Sigma.setZero();
+		#include "EnergyEinSum/S_u,v...Eps1Sigma_g,u+v---ScaledEps1Sigma_g,u,v.hpp"
+		#include "EnergyEinSum/W_g...ScaledEps1Sigma_g,u,v...SigmaGrad_g,t,a,v+v---E_t,a.hpp"
 	}
 }
 
-void SubGrid::getEnergyHess(std::vector<std::vector<double>>& e){
+void SubGrid::getEnergyHess(EigenTensor<4>& E){
 	const int natoms = this->getNumAtoms();
-	EigenTensor<4> H(3, natoms, 3, natoms); H.setZero();
 	if ( this->Type >= 0 ){
-		#include "EnergyEinSum/W_g...E2Rho2_g...RhoGrad_g,t,a...RhoGrad_g,s,b---H_t,a,s,b.hpp"
-		#include "EnergyEinSum/W_g...E1Rho_g...RhoHess_g,t,a,s,b---H_t,a,s,b.hpp"
+		#include "EnergyEinSum/W_g...Eps2Rho2_g,u,v...RhoGrad_g,t,a,u...RhoGrad_g,s,b,v---E_t,a,s,b.hpp"
+		#include "EnergyEinSum/W_g...Eps1Rho_g,w...RhoHess_g,t,a,s,b,w---E_t,a,s,b.hpp"
 	}
-	if ( this->Type >= 1 ){
-		EigenTensor<4> H1(3, natoms, 3, natoms); H1.setZero();
-		#include "EnergyEinSum/W_g...E2RhoSigma_g...RhoGrad_g,t,a...SigmaGrad_g,s,b---H1_t,a,s,b.hpp"
-		H += H1 + H1.shuffle(Eigen::array<int, 4>{2, 3, 0, 1});
-		#include "EnergyEinSum/W_g...E2Sigma2_g...SigmaGrad_g,t,a...SigmaGrad_g,s,b---H_t,a,s,b.hpp"
-		#include "EnergyEinSum/W_g...E1Sigma_g...SigmaHess_g,t,a,s,b---H_t,a,s,b.hpp"
-	}
-	for ( int a = 0; a < natoms; a++ ){
-		for ( int b = 0; b < natoms; b++ ){
-			e[0 + this->AtomList[a] * 3][0 + this->AtomList[b] * 3] += H(0, a, 0, b);
-			e[0 + this->AtomList[a] * 3][1 + this->AtomList[b] * 3] += H(0, a, 1, b);
-			e[0 + this->AtomList[a] * 3][2 + this->AtomList[b] * 3] += H(0, a, 2, b);
-			e[1 + this->AtomList[a] * 3][0 + this->AtomList[b] * 3] += H(1, a, 0, b);
-			e[1 + this->AtomList[a] * 3][1 + this->AtomList[b] * 3] += H(1, a, 1, b);
-			e[1 + this->AtomList[a] * 3][2 + this->AtomList[b] * 3] += H(1, a, 2, b);
-			e[2 + this->AtomList[a] * 3][0 + this->AtomList[b] * 3] += H(2, a, 0, b);
-			e[2 + this->AtomList[a] * 3][1 + this->AtomList[b] * 3] += H(2, a, 1, b);
-			e[2 + this->AtomList[a] * 3][2 + this->AtomList[b] * 3] += H(2, a, 2, b);
-		}
+	if ( this->Type >= 1 ){ // To be corrected for U and RO
+		EigenTensor<4> E1(3, natoms, 3, natoms); E1.setZero();
+		#include "EnergyEinSum/W_g...Eps2RhoSigma_g,w,v...RhoGrad_g,t,a,w...SigmaGrad_g,s,b,v---E1_t,a,s,b.hpp"
+		E += E1 + E1.shuffle(Eigen::array<int, 4>{2, 3, 0, 1});
+		#include "EnergyEinSum/W_g...Eps2Sigma2_g,u,v...SigmaGrad_g,t,a,u...SigmaGrad_g,s,b,v---E_t,a,s,b.hpp"
+		#include "EnergyEinSum/W_g...Eps1Sigma_g,u...SigmaHess_g,t,a,s,b,u---E_t,a,s,b.hpp"
 	}
 }

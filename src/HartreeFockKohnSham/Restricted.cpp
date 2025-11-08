@@ -61,10 +61,10 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
 		if (xc){
-			grid.getDensity(2 * D_);
+			grid.getDensity({2 * D_});
 			xc.Evaluate("ev", grid);
 			Exc_ = grid.getEnergy();
-			Gxc_ = grid.getFock();
+			Gxc_ = grid.getFock()[0];
 		}
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix Fnew_ = Fhf_ + Gxc_;
@@ -125,11 +125,11 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(Ghf_.rows(), Ghf_.cols());
 		if (xc){
-			grid.getDensity(2 * D_);
+			grid.getDensity({2 * D_});
 			xc.Evaluate("ev", grid);
 			if constexpr ( scf_t == newton_t ) xc.Evaluate("f", grid);
 			Exc_ = grid.getEnergy();
-			Gxc_ = grid.getFock();
+			Gxc_ = grid.getFock()[0];
 		}
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix F_ = Fhf_ + Gxc_;
@@ -169,8 +169,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 				const auto [FhfU, _, __] = int4c2e.ContractInts(v, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
 				EigenMatrix FxcU = EigenZero(vprime.rows(), vprime.cols());
 				if (xc){
-					grid.getDensityU({2*v});
-					FxcU = grid.getFockU<u_t>()[0];
+					grid.getDensityU({{2*v}});
+					FxcU = grid.getFockU<u_t>()[0][0];
 				}
 				const EigenMatrix FU = FhfU + FxcU;
 				return (Z.transpose() * FU * Z).eval();
