@@ -51,7 +51,7 @@ class SubGrid{ public:
 	EigenTensor<6> SigmaHess;
 	void getDensitySkeleton2(EigenTensor<3>& D);
 
-	EigenTensor<2> Eps;
+	EigenTensor<1> Eps;
 	EigenTensor<2> Eps1Rho;
 	EigenTensor<2> Eps1Sigma;
 	EigenTensor<2> Eps1Lapl;

@@ -9,7 +9,7 @@
 #include "Grid.h"
 
 void SubGrid::getEnergy(EigenTensor<0>& E){
-	#include "EnergyEinSum/W_g...Rho_g,w...Eps_g,w---E_.hpp"
+	#include "EnergyEinSum/W_g...Rho_g,w...Eps_g---E_.hpp"
 }
 
 void SubGrid::getEnergyGrad(EigenTensor<2>& E){
