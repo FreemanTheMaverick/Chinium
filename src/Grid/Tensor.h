@@ -3,7 +3,7 @@ using EigenTensor = Eigen::Tensor<double, ndim>;
 
 template<typename Derived, int ndim> inline EigenTensor<ndim> SliceTensor(
 		const Eigen::TensorBase<Derived, Eigen::ReadOnlyAccessors>& tensor,
-		const int (&offsets_)[ndim], const int (&extents_)[ndim]){
+		const long int (&offsets_)[ndim], const long int (&extents_)[ndim]){
 	Eigen::array<Eigen::Index, ndim> offsets;
 	Eigen::array<Eigen::Index, ndim> extents;
 	for ( int i = 0; i < ndim; i++ ){

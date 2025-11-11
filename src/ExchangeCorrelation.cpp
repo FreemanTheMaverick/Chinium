@@ -369,7 +369,7 @@ void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 					std::memcpy(&v2_mid(0, 4, 4), &v2_in(0, 14), ngrids * 8); // sigma_beta sigma_beta
 				}
 
-				const EigenTensor<2> trans2 = SliceTensor(trans, {0, 0}, {(int)v2_mid.dimension(1), (int)v2_mid.dimension(1)});
+				const EigenTensor<2> trans2 = SliceTensor(trans, {0, 0}, {v2_mid.dimension(1), v2_mid.dimension(1)});
 				const EigenTensor<3> v2_out = v2_mid.contract(trans2, Eigen::array<Eigen::IndexPair<int>, 1>{Eigen::IndexPair<int>(1, 1)}).contract(trans2, Eigen::array<Eigen::IndexPair<int>, 1>{Eigen::IndexPair<int>(2, 1)}); // v3_out = trans * v3_in * trans.t
 
 				if ( spin_type == 0 ){
