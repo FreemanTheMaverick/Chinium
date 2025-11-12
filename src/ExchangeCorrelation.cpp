@@ -298,10 +298,10 @@ void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 
 			EigenTensor<2> v1_in;
 			if ( order == "v" || order == "ev" ){
-				Eps1Rho = Eps1Rho.transpose().eval();
-				Eps1Sigma = Eps1Sigma.transpose().eval();
-				Eps1Lapl = Eps1Lapl.transpose().eval();
-				Eps1Tau = Eps1Tau.transpose().eval();
+				Eps1Rho.transposeInPlace();
+				Eps1Sigma.transposeInPlace();
+				Eps1Lapl.transposeInPlace();
+				Eps1Tau.transposeInPlace();
 				if ( spin_type == 0 ){
 					v1_in.resize(ngrids, 4);
 					std::memcpy(&v1_in(0, 0), Eps1Rho.data(), ngrids * 8);
@@ -318,9 +318,9 @@ void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 			}
 			EigenTensor<2> v2_in;
 			if ( order == "f" ){
-				Eps2Rho2 = Eps2Rho2.transpose().eval();
-				Eps2RhoSigma = Eps2RhoSigma.transpose().eval();
-				Eps2Sigma2 = Eps2Sigma2.transpose().eval();
+				Eps2Rho2.transposeInPlace();
+				Eps2RhoSigma.transposeInPlace();
+				Eps2Sigma2.transposeInPlace();
 				if ( spin_type == 0 ){
 					v2_in.resize(ngrids, 3);
 					std::memcpy(&v2_in(0, 0), Eps2Rho2.data(), ngrids * 8);
