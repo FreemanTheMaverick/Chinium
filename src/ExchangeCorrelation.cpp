@@ -86,81 +86,81 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 
 #define __XC_LDA__\
 	if ( order == "e" ){\
-		EigenTensor<1> eps(Eps.value().dimensions()); eps.setZero();\
-		xc_lda_exc(&func, ngrids, rho.value().data(), eps.data());\
-		Eps.value() += eps;\
+		EigenVector eps(ngrids);\
+		xc_lda_exc(&func, ngrids, rho.data(), eps.data());\
+		Eps += eps;\
 	}else if ( order == "v" ){\
-		EigenTensor<2> eps1rho(Eps1Rho.value().dimensions()); eps1rho.setZero();\
-		xc_lda_vxc(&func, ngrids, rho.value().data(), eps1rho.data());\
-		Eps1Rho.value() += eps1rho;\
+		EigenMatrix eps1rho(Eps1Rho.rows(), ngrids);\
+		xc_lda_vxc(&func, ngrids, rho.data(), eps1rho.data());\
+		Eps1Rho += eps1rho;\
 	}else if ( order == "ev" ){\
-		EigenTensor<1> eps(Eps.value().dimensions()); eps.setZero();\
-		EigenTensor<2> eps1rho(Eps1Rho.value().dimensions()); eps1rho.setZero();\
-		xc_lda_exc_vxc(&func, ngrids, rho.value().data(), eps.data(), eps1rho.data());\
-		Eps.value() += eps;\
-		Eps1Rho.value() += eps1rho;\
+		EigenVector eps(ngrids);\
+		EigenMatrix eps1rho(Eps1Rho.rows(), ngrids);\
+		xc_lda_exc_vxc(&func, ngrids, rho.data(), eps.data(), eps1rho.data());\
+		Eps += eps;\
+		Eps1Rho += eps1rho;\
 	}else if ( order == "f" ){\
-		EigenTensor<2> eps2rho2(Eps2Rho2.value().dimensions()); eps2rho2.setZero();\
-		xc_lda_fxc(&func, ngrids, rho.value().data(), eps2rho2.data());\
-		Eps2Rho2.value() += eps2rho2;\
+		EigenMatrix eps2rho2(Eps2Rho2.rows(), ngrids);\
+		xc_lda_fxc(&func, ngrids, rho.data(), eps2rho2.data());\
+		Eps2Rho2 += eps2rho2;\
 	}
 
 #define __XC_GGA__\
 	if ( order == "e" ){\
-		EigenTensor<1> eps(Eps.value().dimensions()); eps.setZero();\
-		xc_gga_exc(&func, ngrids, rho.value().data(), sigma.value().data(), eps.data());\
-		Eps.value() += eps;\
+		EigenVector eps(ngrids);\
+		xc_gga_exc(&func, ngrids, rho.data(), sigma.data(), eps.data());\
+		Eps += eps;\
 	}else if ( order == "v" ){\
-		EigenTensor<2> eps1rho(Eps1Rho.value().dimensions()); eps1rho.setZero();\
-		EigenTensor<2> eps1sigma(Eps1Sigma.value().dimensions()); eps1sigma.setZero();\
-		xc_gga_vxc(&func, ngrids, rho.value().data(), sigma.value().data(), eps1rho.data(), eps1sigma.data());\
-		Eps1Rho.value() += eps1rho;\
-		Eps1Sigma.value() += eps1sigma;\
+		EigenMatrix eps1rho(Eps1Rho.rows(), ngrids);\
+		EigenMatrix eps1sigma(Eps1Sigma.rows(), ngrids);\
+		xc_gga_vxc(&func, ngrids, rho.data(), sigma.data(), eps1rho.data(), eps1sigma.data());\
+		Eps1Rho += eps1rho;\
+		Eps1Sigma += eps1sigma;\
 	}else if ( order == "ev" ){\
-		EigenTensor<1> eps(Eps.value().dimensions()); eps.setZero();\
-		EigenTensor<2> eps1rho(Eps1Rho.value().dimensions()); eps1rho.setZero();\
-		EigenTensor<2> eps1sigma(Eps1Sigma.value().dimensions()); eps1sigma.setZero();\
-		xc_gga_exc_vxc(&func, ngrids, rho.value().data(), sigma.value().data(), eps.data(), eps1rho.data(), eps1sigma.data());\
-		Eps.value() += eps;\
-		Eps1Rho.value() += eps1rho;\
-		Eps1Sigma.value() += eps1sigma;\
+		EigenVector eps(ngrids);\
+		EigenMatrix eps1rho(Eps1Rho.rows(), ngrids);\
+		EigenMatrix eps1sigma(Eps1Sigma.rows(), ngrids);\
+		xc_gga_exc_vxc(&func, ngrids, rho.data(), sigma.data(), eps.data(), eps1rho.data(), eps1sigma.data());\
+		Eps += eps;\
+		Eps1Rho += eps1rho;\
+		Eps1Sigma += eps1sigma;\
 	}else if ( order == "f" ){\
-		EigenTensor<2> eps2rho2(Eps2Rho2.value().dimensions()); eps2rho2.setZero();\
-		EigenTensor<2> eps2rhosigma(Eps2RhoSigma.value().dimensions()); eps2rhosigma.setZero();\
-		EigenTensor<2> eps2sigma2(Eps2Sigma2.value().dimensions()); eps2sigma2.setZero();\
-		xc_gga_fxc(&func, ngrids, rho.value().data(), sigma.value().data(), eps2rho2.data(), eps2rhosigma.data(), eps2sigma2.data());\
-		Eps2Rho2.value() += eps2rho2;\
-		Eps2RhoSigma.value() += eps2rhosigma;\
-		Eps2Sigma2.value() += eps2sigma2;\
+		EigenMatrix eps2rho2(Eps2Rho2.rows(), ngrids);\
+		EigenMatrix eps2rhosigma(Eps2RhoSigma.rows(), ngrids);\
+		EigenMatrix eps2sigma2(Eps2Sigma2.rows(), ngrids);\
+		xc_gga_fxc(&func, ngrids, rho.data(), sigma.data(), eps2rho2.data(), eps2rhosigma.data(), eps2sigma2.data());\
+		Eps2Rho2 += eps2rho2;\
+		Eps2RhoSigma += eps2rhosigma;\
+		Eps2Sigma2 += eps2sigma2;\
 	}
 
 #define __XC_MGGA__\
 	if ( order == "e" ){\
-		EigenTensor<1> eps(Eps.value().dimensions()); eps.setZero();\
-		xc_mgga_exc(&func, ngrids, rho.value().data(), sigma.value().data(), lapl.value().data(), tau.value().data(), eps.data());\
-		Eps.value() += eps;\
+		EigenVector eps(ngrids);\
+		xc_mgga_exc(&func, ngrids, rho.data(), sigma.data(), lapl.data(), tau.data(), eps.data());\
+		Eps += eps;\
 	}else if ( order == "v" ){\
-		EigenTensor<2> eps1rho(Eps1Rho.value().dimensions()); eps1rho.setZero();\
-		EigenTensor<2> eps1sigma(Eps1Sigma.value().dimensions()); eps1sigma.setZero();\
-		EigenTensor<2> eps1lapl(Eps1Lapl.value().dimensions()); eps1lapl.setZero();\
-		EigenTensor<2> eps1tau(Eps1Tau.value().dimensions()); eps1tau.setZero();\
-		xc_mgga_vxc(&func, ngrids, rho.value().data(), sigma.value().data(), lapl.value().data(), tau.value().data(), eps1rho.data(), eps1sigma.data(), eps1lapl.data(), eps1tau.data());\
-		Eps1Rho.value() += eps1rho;\
-		Eps1Sigma.value() += eps1sigma;\
-		Eps1Lapl.value() += eps1lapl;\
-		Eps1Tau.value() += eps1tau;\
+		EigenMatrix eps1rho(Eps1Rho.rows(), ngrids);\
+		EigenMatrix eps1sigma(Eps1Sigma.rows(), ngrids);\
+		EigenMatrix eps1lapl(Eps1Lapl.rows(), ngrids);\
+		EigenMatrix eps1tau(Eps1Tau.rows(), ngrids);\
+		xc_mgga_vxc(&func, ngrids, rho.data(), sigma.data(), lapl.data(), tau.data(), eps1rho.data(), eps1sigma.data(), eps1lapl.data(), eps1tau.data());\
+		Eps1Rho += eps1rho;\
+		Eps1Sigma += eps1sigma;\
+		Eps1Lapl += eps1lapl;\
+		Eps1Tau += eps1tau;\
 	}else if ( order == "ev" ){\
-		EigenTensor<1> eps(Eps.value().dimensions()); eps.setZero();\
-		EigenTensor<2> eps1rho(Eps1Rho.value().dimensions()); eps1rho.setZero();\
-		EigenTensor<2> eps1sigma(Eps1Sigma.value().dimensions()); eps1sigma.setZero();\
-		EigenTensor<2> eps1lapl(Eps1Lapl.value().dimensions()); eps1lapl.setZero();\
-		EigenTensor<2> eps1tau(Eps1Tau.value().dimensions()); eps1tau.setZero();\
-		xc_mgga_exc_vxc(&func, ngrids, rho.value().data(), sigma.value().data(), lapl.value().data(), tau.value().data(), eps.data(), eps1rho.data(), eps1sigma.data(), eps1lapl.data(), eps1tau.data());\
-		Eps.value() += eps;\
-		Eps1Rho.value() += eps1rho;\
-		Eps1Sigma.value() += eps1sigma;\
-		Eps1Lapl.value() += eps1lapl;\
-		Eps1Tau.value() += eps1tau;\
+		EigenVector eps(ngrids);\
+		EigenMatrix eps1rho(Eps1Rho.rows(), ngrids);\
+		EigenMatrix eps1sigma(Eps1Sigma.rows(), ngrids);\
+		EigenMatrix eps1lapl(Eps1Lapl.rows(), ngrids);\
+		EigenMatrix eps1tau(Eps1Tau.rows(), ngrids);\
+		xc_mgga_exc_vxc(&func, ngrids, rho.data(), sigma.data(), lapl.data(), tau.data(), eps.data(), eps1rho.data(), eps1sigma.data(), eps1lapl.data(), eps1tau.data());\
+		Eps += eps;\
+		Eps1Rho += eps1rho;\
+		Eps1Sigma += eps1sigma;\
+		Eps1Lapl += eps1lapl;\
+		Eps1Tau += eps1tau;\
 	}
 
 void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
@@ -194,12 +194,11 @@ void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 				if (subgrid->Lapl.data()) std::memcpy(&d_out(0, 9), subgrid->Lapl.data(), ngrids * 3 * 8);
 				if (subgrid->Tau.data()) std::memcpy(&d_out(0, 12), subgrid->Tau.data(), ngrids * 3 * 8);
 			}
+
 			EigenMatrix trans_mat;
-			if ( spin_type == 0 ){
-				trans_mat = EigenOne(4, 4);
-			}else if ( spin_type == 1 ){
-				trans_mat = EigenOne(9, 9);
-			}else if ( spin_type == 2 ){
+			if ( spin_type == 0 ) trans_mat = EigenOne(4, 4);
+			else if ( spin_type == 1 ) trans_mat = EigenOne(9, 9);
+			else if ( spin_type == 2 ){
 				trans_mat.resize(9, 9); trans_mat <<
 					0.5 , 0.5 , 0.  , 0.  , 0.  , 0.  , 0.  , 0.  , 0.  ,
 					1.  , 0.  , 0.  , 0.  , 0.  , 0.  , 0.  , 0.  , 0.  ,
@@ -236,58 +235,48 @@ void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 			}
 			const Eigen::TensorMap<EigenTensor<2>> trans(trans_mat.data(), trans_mat.rows(), trans_mat.cols());
             const EigenTensor<2> d_in = d_out.contract(trans, Eigen::array<Eigen::IndexPair<int>, 1>{Eigen::IndexPair<int>(1, 0)}); // d_in = d_out * trans
-			std::optional<const Eigen::Map<const EigenVector>> rho, sigma, lapl, tau;
+			EigenMatrix rho, sigma, lapl, tau;
 			if ( spin_type == 0 ){
-				rho.emplace(&d_in(0, 0), ngrids);
-				sigma.emplace(&d_in(0, 1), ngrids);
-				lapl.emplace(&d_in(0, 2), ngrids);
-				tau.emplace(&d_in(0, 3), ngrids);
+				rho = Eigen::Map<const EigenMatrix>(&d_in(0, 0), 1, ngrids);
+				sigma = Eigen::Map<const EigenMatrix>(&d_in(0, 1), 1, ngrids);
+				lapl = Eigen::Map<const EigenMatrix>(&d_in(0, 2), 1, ngrids);
+				tau = Eigen::Map<const EigenMatrix>(&d_in(0, 3), 1, ngrids);
 			}else{
-				rho.emplace(&d_in(0, 0), ngrids * 2);
-				sigma.emplace(&d_in(0, 2), ngrids * 3);
-				lapl.emplace(&d_in(0, 5), ngrids * 2);
-				tau.emplace(&d_in(0, 7), ngrids * 2);
+				rho = Eigen::Map<const EigenMatrix>(&d_in(0, 0), ngrids, 2).transpose();
+				sigma = Eigen::Map<const EigenMatrix>(&d_in(0, 2), ngrids, 3).transpose();
+				lapl = Eigen::Map<const EigenMatrix>(&d_in(0, 5), ngrids, 2).transpose();
+				tau = Eigen::Map<const EigenMatrix>(&d_in(0, 7), ngrids, 2).transpose();
 			}
 
-			EigenTensor<1> v0;
-			EigenTensor<2> v1_in;
-			EigenTensor<2> v2_in;
-			std::optional<Eigen::TensorMap<EigenTensor<1>>> Eps;
-			std::optional<Eigen::TensorMap<EigenTensor<2>>> Eps1Rho, Eps1Sigma, Eps1Lapl, Eps1Tau;
-			std::optional<Eigen::TensorMap<EigenTensor<2>>> Eps2Rho2, Eps2RhoSigma, Eps2Sigma2;
+			EigenVector Eps;
 			if ( order == "e" || order == "ev" ){
-				v0.resize(ngrids); v0.setZero();
-				Eps.emplace(v0.data(), ngrids);
+				Eps.resize(ngrids); Eps.setZero();
 			}
+			EigenMatrix Eps1Rho, Eps1Sigma, Eps1Lapl, Eps1Tau;
 			if ( order == "v" || order == "ev" ){
 				if ( spin_type == 0 ){
-					v1_in.resize(ngrids, 4);
-					Eps1Rho.emplace(&v1_in(0, 0), ngrids, 1);
-					Eps1Sigma.emplace(&v1_in(0, 1), ngrids, 1);
-					Eps1Lapl.emplace(&v1_in(0, 2), ngrids, 1);
-					Eps1Tau.emplace(&v1_in(0, 3), ngrids, 1);
+					Eps1Rho = EigenZero(1, ngrids);
+					Eps1Sigma = EigenZero(1, ngrids);
+					Eps1Lapl = EigenZero(1, ngrids);
+					Eps1Tau = EigenZero(1, ngrids);
 				}else{
-					v1_in.resize(ngrids, 9);
-					Eps1Rho.emplace(&v1_in(0, 0), ngrids, 2);
-					Eps1Sigma.emplace(&v1_in(0, 2), ngrids, 3);
-					Eps1Lapl.emplace(&v1_in(0, 5), ngrids, 2);
-					Eps1Tau.emplace(&v1_in(0, 7), ngrids, 2);
+					Eps1Rho = EigenZero(2, ngrids);
+					Eps1Sigma = EigenZero(3, ngrids);
+					Eps1Lapl = EigenZero(2, ngrids);
+					Eps1Tau = EigenZero(2, ngrids);
 				}
-				v1_in.setZero();
 			}
+			EigenMatrix Eps2Rho2, Eps2RhoSigma, Eps2Sigma2;
 			if ( order == "f" ){
 				if ( spin_type == 0 ){
-					v2_in.resize(ngrids, 3);
-					Eps2Rho2.emplace(&v2_in(0, 0), ngrids, 1);
-					Eps2RhoSigma.emplace(&v2_in(0, 1), ngrids, 1);
-					Eps2Sigma2.emplace(&v2_in(0, 2), ngrids, 1);
+					Eps2Rho2 = EigenZero(1, ngrids);
+					Eps2RhoSigma = EigenZero(1, ngrids);
+					Eps2Sigma2 = EigenZero(1, ngrids);
 				}else{
-					v2_in.resize(ngrids, 15);
-					Eps2Rho2.emplace(&v2_in(0, 0), ngrids, 3);
-					Eps2RhoSigma.emplace(&v2_in(0, 3), ngrids, 6);
-					Eps2Sigma2.emplace(&v2_in(0, 9), ngrids, 6);
+					Eps2Rho2 = EigenZero(3, ngrids);
+					Eps2RhoSigma = EigenZero(6, ngrids);
+					Eps2Sigma2 = EigenZero(6, ngrids);
 				}
-				v2_in.setZero();
 			}
 
 			for ( int code : this->Codes ){
@@ -307,8 +296,46 @@ void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 				xc_func_end(&func);
 			}
 
+			EigenTensor<2> v1_in;
+			if ( order == "v" || order == "ev" ){
+				Eps1Rho = Eps1Rho.transpose().eval();
+				Eps1Sigma = Eps1Sigma.transpose().eval();
+				Eps1Lapl = Eps1Lapl.transpose().eval();
+				Eps1Tau = Eps1Tau.transpose().eval();
+				if ( spin_type == 0 ){
+					v1_in.resize(ngrids, 4);
+					std::memcpy(&v1_in(0, 0), Eps1Rho.data(), ngrids * 8);
+					std::memcpy(&v1_in(0, 1), Eps1Sigma.data(), ngrids * 8);
+					std::memcpy(&v1_in(0, 2), Eps1Lapl.data(), ngrids * 8);
+					std::memcpy(&v1_in(0, 3), Eps1Tau.data(), ngrids * 8);
+				}else{
+					v1_in.resize(ngrids, 9);
+					std::memcpy(&v1_in(0, 0), Eps1Rho.data(), 2 * ngrids * 8);
+					std::memcpy(&v1_in(0, 2), Eps1Sigma.data(), 3 * ngrids * 8);
+					std::memcpy(&v1_in(0, 5), Eps1Lapl.data(), 2 * ngrids * 8);
+					std::memcpy(&v1_in(0, 7), Eps1Tau.data(), 2 * ngrids * 8);
+				}
+			}
+			EigenTensor<2> v2_in;
+			if ( order == "f" ){
+				Eps2Rho2 = Eps2Rho2.transpose().eval();
+				Eps2RhoSigma = Eps2RhoSigma.transpose().eval();
+				Eps2Sigma2 = Eps2Sigma2.transpose().eval();
+				if ( spin_type == 0 ){
+					v2_in.resize(ngrids, 3);
+					std::memcpy(&v2_in(0, 0), Eps2Rho2.data(), ngrids * 8);
+					std::memcpy(&v2_in(0, 1), Eps2RhoSigma.data(), ngrids * 8);
+					std::memcpy(&v2_in(0, 2), Eps2Sigma2.data(), ngrids * 8);
+				}else{
+					v2_in.resize(ngrids, 15);
+					std::memcpy(&v2_in(0, 0), Eps2Rho2.data(), 3 * ngrids * 8);
+					std::memcpy(&v2_in(0, 3), Eps2RhoSigma.data(), 6 * ngrids * 8);
+					std::memcpy(&v2_in(0, 9), Eps2Sigma2.data(), 6 * ngrids * 8);
+				}
+			}
+
 			if ( order == "e" || order == "ev" ){
-				subgrid->Eps = v0;
+				subgrid->Eps = Eigen::TensorMap<EigenTensor<1>>(Eps.data(), ngrids);
 			}
 			if ( order == "v" || order == "ev" ){
             	const EigenTensor<2> v1_out = v1_in.contract(trans, Eigen::array<Eigen::IndexPair<int>, 1>{Eigen::IndexPair<int>(1, 1)}); // v2_out = v2_in * trans.t

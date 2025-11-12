@@ -79,6 +79,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			auto [E, epsa, epsb, occa, occb, Ca, Cb] = UnrestrictedDIIS(
 					T, Mu,
 					int2c1e, int4c2e,
+					xc, grid,
 					Fa, Fb,
 					Occa, Occb,
 					Z, Z,
@@ -118,7 +119,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 		}else if ( mwfn.Wfntype == 1 ){
 			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
 			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
-			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedLBFGS(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
+			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedLBFGS(int2c1e, int4c2e, xc, grid, D1prime, D2prime, Z1, Z2, output-1, nthreads);
 			E_scf = E;
 			mwfn.setEnergy(epsilon1s, 1);
 			mwfn.setEnergy(epsilon2s, 2);
@@ -164,7 +165,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 		}else if ( mwfn.Wfntype == 1 ){
 			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
 			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
-			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedNewton(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
+			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedNewton(int2c1e, int4c2e, xc, grid, D1prime, D2prime, Z1, Z2, output-1, nthreads);
 			E_scf = E;
 			mwfn.setEnergy(epsilon1s, 1);
 			mwfn.setEnergy(epsilon2s, 2);
@@ -210,7 +211,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 		}else if ( mwfn.Wfntype == 1 ){
 			EigenMatrix D1prime = mwfn.getOccupation(1).asDiagonal();
 			EigenMatrix D2prime = mwfn.getOccupation(2).asDiagonal();
-			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedARH(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output-1, nthreads);
+			auto [E, epsilon1s, epsilon2s, C1, C2] = UnrestrictedARH(int2c1e, int4c2e, xc, grid, D1prime, D2prime, Z1, Z2, output-1, nthreads);
 			E_scf = E;
 			mwfn.setEnergy(epsilon1s, 1);
 			mwfn.setEnergy(epsilon2s, 2);

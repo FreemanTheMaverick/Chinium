@@ -32,12 +32,14 @@
 std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedDIIS(
 		double T, double Mu,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Fa, EigenMatrix Fb,
 		EigenVector Occa, EigenVector Occb,
 		EigenMatrix Za, EigenMatrix Zb,
 		int output, int nthreads){
 	double oldE = 0;
 	double E = 0;
+	const int nbasis = Fa.rows();
 	EigenVector epsa = EigenZero(Za.cols(), 1);
 	EigenVector epsb = EigenZero(Zb.cols(), 1);
 	EigenVector occa = Occa;
@@ -45,7 +47,6 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 	EigenMatrix Ca = EigenZero(Za.rows(), Za.cols());
 	EigenMatrix Cb = EigenZero(Zb.rows(), Zb.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-	std::vector<EigenMatrix> Jas, Jbs, Kas, Kbs;
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> es(S);
 	EigenMatrix sinvsqrt = es.operatorInverseSqrt();
 	std::function<
@@ -91,9 +92,21 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		const auto [_, Ghfa_, Ghfb_] = int4c2e.ContractInts(EigenZero(0, 0), Da_, Db_, nthreads, 1);
 		const EigenMatrix Fhfa_ = Hcore + Ghfa_;
 		const EigenMatrix Fhfb_ = Hcore + Ghfb_;
-		const EigenMatrix Fnewa_ = Fhfa_;
-		const EigenMatrix Fnewb_ = Fhfb_;
-		E += 0.5 * ( Dot(Da_, Hcore + Fnewa_) + Dot(Db_, Hcore + Fnewb_) );
+		double Exc_ = 0;
+		EigenMatrix Gxca_ = EigenZero(nbasis, nbasis);
+		EigenMatrix Gxcb_ = EigenZero(nbasis, nbasis);
+		if (xc){
+			grid.getDensity({Da_, Db_});
+			xc.Evaluate("ev", grid);
+			Exc_ = grid.getEnergy();
+			std::vector<EigenMatrix> Gxc_ = grid.getFock();
+			Gxca_ = Gxc_[0];
+			Gxcb_ = Gxc_[1];
+		}
+		const EigenMatrix Fnewa_ = Fhfa_ + Gxca_;
+		const EigenMatrix Fnewb_ = Fhfb_ + Gxcb_;
+
+		E += 0.5 * ( Dot(Da_, Hcore + Fhfa_) + Dot(Db_, Hcore + Fhfb_) ) + Exc_;
 		if (output>0){
 			if ( T == 0 ) std::printf("Electronic energy = %.10f\n", E);
 			else std::printf("Electronic grand potential = %.10f\n", E);
@@ -140,6 +153,7 @@ enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
 		int output, int nthreads){
@@ -175,10 +189,22 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		const EigenMatrix D1_ = Z1 * D1prime_ * Z1.transpose();
 		const EigenMatrix D2_ = Z2 * D2prime_ * Z2.transpose();
 		const auto [_, Ghf1_, Ghf2_] = int4c2e.ContractInts(EigenZero(0, 0), D1_, D2_, nthreads, 1);
+		double Exc_ = 0;
+		EigenMatrix Gxc1_ = EigenZero(Z1.rows(), Z1.rows());
+		EigenMatrix Gxc2_ = EigenZero(Z1.rows(), Z1.rows());
+		if (xc){
+			grid.getDensity({D1_, D2_});
+			xc.Evaluate("ev", grid);
+			if constexpr ( scf_t == newton_t ) xc.Evaluate("f", grid);
+			Exc_ = grid.getEnergy();
+			std::vector<EigenMatrix> Gxc_ = grid.getFock();
+			Gxc1_ = Gxc_[0];
+			Gxc2_ = Gxc_[1];
+		}
 		const EigenMatrix Fhf1_ = Hcore + Ghf1_;
 		const EigenMatrix Fhf2_ = Hcore + Ghf2_;
-		const EigenMatrix F1_ = Fhf1_;
-		const EigenMatrix F2_ = Fhf2_;
+		const EigenMatrix F1_ = Fhf1_ + Gxc1_;
+		const EigenMatrix F2_ = Fhf2_ + Gxc2_;
 		const EigenMatrix F1prime_ = Z1.transpose() * F1_ * Z1; // Euclidean gradient
 		const EigenMatrix F2prime_ = Z2.transpose() * F2_ * Z2; // Euclidean gradient
 
@@ -197,7 +223,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		eigensolver.compute(F2prime_);
 		epsilon2s = eigensolver.eigenvalues();
 		C2 = Z2 * eigensolver.eigenvectors();
-		const double E_ = 0.5 * ( Dot(D1_, Hcore + F1_) + Dot(D2_, Hcore + F2_) );
+		const double E_ = 0.5 * ( Dot(D1_, Hcore + Fhf1_) + Dot(D2_, Hcore + Fhf2_) ) + Exc_;
 
 		int nocc = std::lround(D1prime.diagonal().sum());
 		const int nbasis = D1prime.rows();
@@ -236,10 +262,16 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 					Vtmp1 = v1prime;
 					return EigenZero(v1prime.rows(), v1prime.cols());
 				});
-				He.push_back([Z1, Z2, &Vtmp1, &int4c2e, &Gtmp2, nthreads](EigenMatrix v2prime){
+				He.push_back([Z1, Z2, &Vtmp1, &int4c2e, &xc, &grid, &Gtmp2, nthreads](EigenMatrix v2prime){
 					const EigenMatrix v1 = Z1 * Vtmp1 * Z1.transpose();
 					const EigenMatrix v2 = Z2 * v2prime * Z2.transpose();
-					const auto [_, Gtmp1_, Gtmp2_] = int4c2e.ContractInts(EigenZero(0, 0), v1, v2, nthreads, 0);
+					auto [_, Gtmp1_, Gtmp2_] = int4c2e.ContractInts(EigenZero(0, 0), v1, v2, nthreads, 0);
+					if (xc){
+						grid.getDensityU({{v1}, {v2}});
+						std::vector<std::vector<EigenMatrix>> Gtmpxc_ = grid.getFockU<u_t>();
+						Gtmp1_ += Gtmpxc_[0][0];
+						Gtmp2_ += Gtmpxc_[1][0];
+					}
 					Gtmp2 = Gtmp2_;
 					return (EigenMatrix)(Z2.transpose() * Gtmp1_ * Z2);
 				});
@@ -301,26 +333,29 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedLBFGS(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
 		int output, int nthreads){
-	return UnrestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
+	return UnrestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, D1prime, D2prime, Z1, Z2, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedNewton(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
 		int output, int nthreads){
-	return UnrestrictedRiemann<newton_t>(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
+	return UnrestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, D1prime, D2prime, Z1, Z2, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedARH(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix D1prime, EigenMatrix D2prime,
 		EigenMatrix Z1, EigenMatrix Z2,
 		int output, int nthreads){
-	return UnrestrictedRiemann<arh_t>(int2c1e, int4c2e, D1prime, D2prime, Z1, Z2, output, nthreads);
+	return UnrestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, D1prime, D2prime, Z1, Z2, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH_villain(

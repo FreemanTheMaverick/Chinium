@@ -111,7 +111,7 @@ int main(int /*argc*/, char* argv[]){
 	// Electron integrals, density functional and grid
 	Int2C1E int2c1e = Int2C1E(mwfn);
 	Int4C2E int4c2e = Int4C2E(mwfn, 1, -1); // EXX is unknown by now.
-	ExchangeCorrelation xc;
+	ExchangeCorrelation xc; xc.Spin = mwfn.Wfntype == 0 ? 1 : 2;
 	Grid grid(&mwfn, grid_str, nthreads, 1);
 	int2c1e.CalculateIntegrals(0, 1);
 	mwfn.Overlap = int2c1e.Overlap;

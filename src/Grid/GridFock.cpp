@@ -112,7 +112,7 @@ void SubGrid::getFockU(EigenTensor<4>& F_){
 	const Eigen::TensorMap<EigenTensor<3>> SigmaG( [&SigmaGrad = this->SigmaGrad, &SigmaU = this->SigmaU]() -> double* {
 			if constexpr ( d_t == s_t ) return SigmaGrad.data();
 			else return SigmaU.data();
-	}(), this->Type >= 1 ? ngrids : 0, nmats, nspins );
+	}(), this->Type >= 1 ? ngrids : 0, nmats, nspins * ( nspins + 1 ) / 2 );
 	EigenTensor<4> F(nbasis, nbasis, nmats, nspins); F.setZero();
 	if ( this->Type >= 0 ){
 		EigenTensor<3> TMP0(ngrids, nmats, nspins); TMP0.setZero();
@@ -124,7 +124,6 @@ void SubGrid::getFockU(EigenTensor<4>& F_){
 		#include "FockEinSum/W_g...TMP0_g,mat,w---TMP1_g,mat,w.hpp"
 		EigenTensor<4> F0(nbasis, nbasis, nmats, nspins); F0.setZero();
 		#include "FockEinSum/TMP1_g,mat,w...AO_g,mu...AO_g,nu---F0_mu,nu,mat,w.hpp"
-//std::cout<<F0.chip(0, 3)<<std::endl;
 		F += 0.5 * F0;
 	}
 	if ( this->Type >= 1 ){
