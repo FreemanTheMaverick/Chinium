@@ -42,6 +42,7 @@ template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		int nd, int na, int nb,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Cprime, EigenMatrix Z,
 		int output, int nthreads){
 	double E = 0;
@@ -73,11 +74,27 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		const EigenMatrix Da_ = Z * Daprime_ * Z.transpose();
 		const EigenMatrix Db_ = SafeLowSpin(Z * Dbprime_ * Z.transpose());
 		const auto [Gd_, Ga_, Gb_] = int4c2e.ContractInts(Dd_, Da_, Db_, nthreads, 1);
-		const EigenMatrix Fd_ = Hcore + Gd_;
-		const EigenMatrix Fa_ = Hcore + Ga_;
-		const EigenMatrix Fb_ = SafeLowSpin(Hcore + Gb_);
+		const EigenMatrix Fhfd_ = Hcore + Gd_;
+		const EigenMatrix Fhfa_ = Hcore + Ga_;
+		const EigenMatrix Fhfb_ = SafeLowSpin(Hcore + Gb_);
 		double Exc_ = 0;
-		EigenMatrix Gxc_ = EigenZero(Fd_.rows(), Fd_.cols());
+		EigenMatrix Gxcd_ = EigenZero(nbasis, nbasis);
+		EigenMatrix Gxca_ = EigenZero(nbasis, nbasis);
+		EigenMatrix Gxcb_ = EigenZero(nbasis, nbasis);
+		if (xc){
+			if ( low_spin ) grid.getDensity({2 * Dd_, Da_, Db_});
+			else grid.getDensity({2 * Dd_, Da_});
+			xc.Evaluate("ev", grid);
+			if constexpr ( scf_t == newton_t ) xc.Evaluate("f", grid);
+			Exc_ = grid.getEnergy();
+			const std::vector<EigenMatrix> Gxc_ = grid.getFock();
+			Gxcd_ = Gxc_[0];
+			Gxca_ = Gxc_[1];
+			Gxcb_ = SafeLowSpin(Gxc_[2]);
+		}
+		const EigenMatrix Fd_ = Fhfd_ + Gxcd_;
+		const EigenMatrix Fa_ = Fhfa_ + Gxca_;
+		const EigenMatrix Fb_ = SafeLowSpin(Fhfb_ + Gxcb_);
 		const EigenMatrix Fdprime_ = Z.transpose() * Fd_ * Z;
 		const EigenMatrix Faprime_ = Z.transpose() * Fa_ * Z;
 		const EigenMatrix Fbprime_ = SafeLowSpin(Z.transpose() * Fb_ * Z);
@@ -98,13 +115,13 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		//C = Z * eigensolver.eigenvectors();
 		const double E_ = low_spin ?
 			0.5 * Hcore.cwiseProduct( 2 * Dd_ + Da_ + Db_ ).sum()
-			+ Fd_.cwiseProduct(Dd_).sum()
-			+ 0.5 * Fa_.cwiseProduct(Da_).sum()
-			+ 0.5 * Fb_.cwiseProduct(Db_).sum()
+			+ Fhfd_.cwiseProduct(Dd_).sum()
+			+ 0.5 * Fhfa_.cwiseProduct(Da_).sum()
+			+ 0.5 * Fhfb_.cwiseProduct(Db_).sum()
 			+ Exc_ :
 			0.5 * Hcore.cwiseProduct( 2 * Dd_ + Da_ ).sum()
-			+ Fd_.cwiseProduct(Dd_).sum()
-			+ 0.5 * Fa_.cwiseProduct(Da_).sum()
+			+ Fhfd_.cwiseProduct(Dd_).sum()
+			+ 0.5 * Fhfa_.cwiseProduct(Da_).sum()
 			+ Exc_;
 		EigenMatrix Grad = EigenZero(Cprime_.rows(), nd + na + nb);
 		if (low_spin) Grad << 4 * Fdprime_ * Cdprime_, 2 * Faprime_ * Caprime_, 2 * Fbprime_ * Cbprime_;
@@ -154,7 +171,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 					std::vector<std::function<EigenMatrix (EigenMatrix)>>{Psqrtinv}
 			);
 		}else if constexpr ( scf_t == newton_t || scf_t == arh_t ){
-			std::function<EigenMatrix (EigenMatrix)> He = [low_spin, BlockParameters, Z, Fdprime_, Faprime_, Fbprime_, Cdprime_, Caprime_, Cbprime_, &int4c2e, nthreads, &arh](EigenMatrix vprime){
+			std::function<EigenMatrix (EigenMatrix)> He = [low_spin, BlockParameters, Z, Fdprime_, Faprime_, Fbprime_, Cdprime_, Caprime_, Cbprime_, &int4c2e, &xc, &grid, nthreads, &arh](EigenMatrix vprime){
 				EigenMatrix vdprime = FlagGetColumns(vprime, 0);
 				EigenMatrix vaprime = FlagGetColumns(vprime, 1);
 				EigenMatrix vbprime = SafeLowSpin(FlagGetColumns(vprime, 2));
@@ -171,7 +188,15 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 					const EigenMatrix Dd = Z * Ddprime * Z.transpose();
 					const EigenMatrix Da = Z * Daprime * Z.transpose();
 					const EigenMatrix Db = SafeLowSpin(Z * Dbprime * Z.transpose());
-					const auto [Gd_, Ga_, Gb_] = int4c2e.ContractInts(Dd, Da, Db, nthreads, 0);
+					auto [Gd_, Ga_, Gb_] = int4c2e.ContractInts(Dd, Da, Db, nthreads, 0);
+					if (xc){
+						if ( low_spin ) grid.getDensityU({{2*Dd}, {Da}, {Db}});
+						else grid.getDensityU({{2*Dd}, {Da}});
+						const std::vector<std::vector<EigenMatrix>> Gxc_ = grid.getFockU<u_t>();
+						Gd_ += Gxc_[0][0];
+						Ga_ += Gxc_[1][0];
+						if ( low_spin ) Gb_ += SafeLowSpin(Gxc_[2][0]);
+					}
 					HDd = Z.transpose() * Gd_ * Z;
 					HDa = Z.transpose() * Ga_ * Z;
 					HDb = SafeLowSpin(Z.transpose() * Gb_ * Z);
@@ -226,23 +251,26 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenLBFGS(
 		int nd, int na, int nb,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Cprime, EigenMatrix Z,
 		int output, int nthreads){
-	return RestrictedOpenRiemann<lbfgs_t>(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output, nthreads);
+	return RestrictedOpenRiemann<lbfgs_t>(nd, na, nb, int2c1e, int4c2e, xc, grid, Cprime, Z, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenNewton(
 		int nd, int na, int nb,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Cprime, EigenMatrix Z,
 		int output, int nthreads){
-	return RestrictedOpenRiemann<newton_t>(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output, nthreads);
+	return RestrictedOpenRiemann<newton_t>(nd, na, nb, int2c1e, int4c2e, xc, grid, Cprime, Z, output, nthreads);
 }
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenARH(
 		int nd, int na, int nb,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Cprime, EigenMatrix Z,
 		int output, int nthreads){
-	return RestrictedOpenRiemann<arh_t>(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output, nthreads);
+	return RestrictedOpenRiemann<arh_t>(nd, na, nb, int2c1e, int4c2e, xc, grid, Cprime, Z, output, nthreads);
 }

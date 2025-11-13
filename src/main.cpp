@@ -108,6 +108,42 @@ int main(int /*argc*/, char* argv[]){
 	Gradient += G_nuc;
 	Hessian += H_nuc;
 
+	if ( guess == "READ" ){ // Orthogonalizing the orbitals read from mwfn.
+		mwfn.Orthogonalize("Lowdin");
+	}else{
+		if ( mwfn.Wfntype == 0 ){
+			mwfn.Orbitals.resize(mwfn.getNumBasis());
+			EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
+			for ( int i = 0; i < Round(na); i++ ) occ(i) = 1;
+			occ( Round(na) ) = na - Round(na);
+			mwfn.setOccupation(occ, 1);
+		}else if ( mwfn.Wfntype == 1 ){
+			mwfn.Orbitals.resize(mwfn.getNumBasis() * 2);
+			EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
+			for ( int i = 0; i < Round(na); i++ ) occ(i) = 1;
+			mwfn.setOccupation(occ, 1);
+			occ.setZero();
+			for ( int i = 0; i < nb; i++ ) occ(i) = 1;
+			mwfn.setOccupation(occ, 2);
+		}else if ( mwfn.Wfntype == 2 ){
+			mwfn.Orbitals.resize(mwfn.getNumBasis());
+			const int nd_int = std::lround(nd);
+			const int na_int = std::lround(na);
+			const int nb_int = std::lround(nb);
+			for ( int i = 0; i < na_int + nb_int - nd_int; i++ ){
+				auto& orbital_i = mwfn.Orbitals[i];
+				if ( i < nd_int ){
+					orbital_i.Occ = 2;
+					orbital_i.Type = 0;
+				}else{
+					orbital_i.Occ = 1;
+					if ( i < na_int ) orbital_i.Type = 1;
+					else orbital_i.Type = 2;
+				}
+			}
+		}
+	}
+
 	// Electron integrals, density functional and grid
 	Int2C1E int2c1e = Int2C1E(mwfn);
 	Int4C2E int4c2e = Int4C2E(mwfn, 1, -1); // EXX is unknown by now.
@@ -133,42 +169,7 @@ int main(int /*argc*/, char* argv[]){
 				grid.getAO(0, 1); // For SAP initial guess.
 				grid.setType(-1);
 			}
-		}
-		if ( guess == "READ" ){ // Orthogonalizing the orbitals read from mwfn.
-			mwfn.Orthogonalize("Lowdin");
-		}else{
-			if ( mwfn.Wfntype == 0 ){
-				mwfn.Orbitals.resize(mwfn.getNumBasis());
-				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
-				for ( int i = 0; i < Round(na); i++ ) occ(i) = 1;
-				occ( Round(na) ) = na - Round(na);
-				mwfn.setOccupation(occ, 1);
-			}else if ( mwfn.Wfntype == 1 ){
-				mwfn.Orbitals.resize(mwfn.getNumBasis() * 2);
-				EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
-				for ( int i = 0; i < Round(na); i++ ) occ(i) = 1;
-				mwfn.setOccupation(occ, 1);
-				occ.setZero();
-				for ( int i = 0; i < nb; i++ ) occ(i) = 1;
-				mwfn.setOccupation(occ, 2);
-			}else if ( mwfn.Wfntype == 2 ){
-				mwfn.Orbitals.resize(mwfn.getNumBasis());
-				const int nd_int = std::lround(nd);
-				const int na_int = std::lround(na);
-				const int nb_int = std::lround(nb);
-				for ( int i = 0; i < na_int + nb_int - nd_int; i++ ){
-					auto& orbital_i = mwfn.Orbitals[i];
-					if ( i < nd_int ){
-						orbital_i.Occ = 2;
-						orbital_i.Type = 0;
-					}else{
-						orbital_i.Occ = 1;
-						if ( i < na_int ) orbital_i.Type = 1;
-						else orbital_i.Type = 2;
-					}
-				}
-			}
-			GuessSCF(mwfn, int2c1e, grid, guess, 1);
+			if ( guess == "SAP" ) GuessSCF(mwfn, int2c1e, grid, guess, 1);
 		}
 		const double E_scf = HartreeFockKohnSham(mwfn, env, int2c1e, int4c2e, xc, grid, scf, 4, nthreads);
 		E_tot += E_scf;

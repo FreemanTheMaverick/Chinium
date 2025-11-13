@@ -9,7 +9,6 @@ extern "C"{
 #include <cassert>
 #include <string>
 #include <vector>
-#include <optional>
 #include <libmwfn.h>
 
 #include "Macro.h"
@@ -396,8 +395,14 @@ void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 					std::memcpy(&v2_mid(0, 4, 4), &v2_in(0, 14), ngrids * 8); // sigma_beta sigma_beta
 				}
 
-				const EigenTensor<2> trans2 = SliceTensor(trans, {0, 0}, {v2_mid.dimension(1), v2_mid.dimension(1)});
-				const EigenTensor<3> v2_out = v2_mid.contract(trans2, Eigen::array<Eigen::IndexPair<int>, 1>{Eigen::IndexPair<int>(1, 1)}).contract(trans2, Eigen::array<Eigen::IndexPair<int>, 1>{Eigen::IndexPair<int>(2, 1)}); // v3_out = trans * v3_in * trans.t
+				Eigen::array<int, 2> out_dim = {0, 0};
+				if ( spin_type == 0 ) out_dim = {2, 2};
+				else if ( spin_type == 1 ) out_dim = {5, 5};
+				else if ( spin_type == 2 ) out_dim = {5, 5};
+				else if ( spin_type == 3 ) out_dim = {9, 5};
+				const EigenTensor<2> trans2 = SliceTensor(trans, {0, 0}, {out_dim[0], out_dim[1]});
+				const EigenTensor<3> intermediate = v2_mid.contract(trans2, Eigen::array<Eigen::IndexPair<int>, 1>{Eigen::IndexPair<int>(1, 1)});
+				const EigenTensor<3> v2_out = intermediate.contract(trans2, Eigen::array<Eigen::IndexPair<int>, 1>{Eigen::IndexPair<int>(1, 1)}); // v2_out = trans * v2_in * trans.t
 
 				if ( spin_type == 0 ){
 					subgrid->Eps2Rho2 = SliceTensor(v2_out, {0, 0, 0}, {ngrids, 1, 1});

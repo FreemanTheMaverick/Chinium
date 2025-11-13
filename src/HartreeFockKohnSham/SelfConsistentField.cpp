@@ -135,7 +135,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 				}
 			}
 			EigenMatrix Cprime = EigenOne(Z.rows(), nd + na + nb);
-			auto [E, epsilons, C] = RestrictedOpenLBFGS(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			auto [E, epsilons, C] = RestrictedOpenLBFGS(nd, na, nb, int2c1e, int4c2e, xc, grid, Cprime, Z, output-1, nthreads);
 			E_scf = E;
 			mwfn.setCoefficientMatrix(C, 1);
 		}
@@ -181,7 +181,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 				}
 			}
 			EigenMatrix Cprime = EigenOne(Z.rows(), nd + na + nb);
-			auto [E, epsilons, C] = RestrictedOpenNewton(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			auto [E, epsilons, C] = RestrictedOpenNewton(nd, na, nb, int2c1e, int4c2e, xc, grid, Cprime, Z, output-1, nthreads);
 			E_scf = E;
 			mwfn.setCoefficientMatrix(C, 1);
 		}
@@ -227,7 +227,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 				}
 			}
 			EigenMatrix Cprime = EigenOne(Z.rows(), nd + na + nb);
-			auto [E, epsilons, C] = RestrictedOpenARH(nd, na, nb, int2c1e, int4c2e, Cprime, Z, output-1, nthreads);
+			auto [E, epsilons, C] = RestrictedOpenARH(nd, na, nb, int2c1e, int4c2e, xc, grid, Cprime, Z, output-1, nthreads);
 			E_scf = E;
 			mwfn.setCoefficientMatrix(C, 1);
 		}
