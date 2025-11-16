@@ -68,9 +68,13 @@ void SubGrid::getDensityU(EigenTensor<4>& D_){
 		Rho1U.resize(ngrids, 3, nmats, nspins); Rho1U.setZero();
 		#include "DensityEinSum/D_mu,nu,mat,w...AO1_g,mu,r...AO_g,nu---Rho1U_g,r,mat,w.hpp"
 		ScaleTensor(Rho1U, 2);
-		SigmaU.resize(ngrids, nmats, nspins * ( nspins + 1 ) / 2); SigmaU.setZero();
-		#include "DensityEinSum/Rho1U_g,r,mat,u...Rho1_g,r,v---SigmaU_g,mat,u+v.hpp"
-		ScaleTensor(SigmaU, 2);
+		EigenTensor<4> TMP(ngrids, nmats, nspins, nspins); TMP.setZero();
+		#include "DensityEinSum/Rho1U_g,r,mat,u...Rho1_g,r,v---TMP_g,mat,u,v.hpp"
+		TMP += TMP.shuffle(Eigen::array<int, 4>{0, 1, 3, 2}).eval();
+		SigmaU.resize(ngrids, nmats, nspins * ( nspins + 1 ) / 2);
+		for ( int v = 0, uv = 0; v < nspins; v++ ) for ( int u = 0; u <= v; u++, uv++ ){
+			SigmaU.chip(uv, 2) = TMP.chip(v, 3).chip(u, 2);
+		}
 	}
 }
 
