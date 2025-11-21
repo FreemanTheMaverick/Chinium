@@ -316,7 +316,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
 					dfunc_newton, tol,
-					20, 300, 0.1, 0.75, 5,
+					20, 300, 0.1, 0.75, 100,
 					E, M, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
