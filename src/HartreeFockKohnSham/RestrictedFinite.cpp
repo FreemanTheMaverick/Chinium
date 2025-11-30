@@ -140,6 +140,10 @@ static std::function<EigenMatrix (EigenMatrix)> Preconditioner(EigenMatrix C, Ei
 	};
 }
 
+#define ThinVec(vec) vec(Eigen::seqN(0, ni + na))
+#define ThinMat(mat) mat(Eigen::placeholders::all, Eigen::seqN(0, ni + na))
+#define Eta 1e-8
+
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRiemann(
@@ -167,7 +171,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 
 	EigenVector all_occ = occ_guess;
 	all_occ.resize(nbasis, 1);
-	std::tuple<int, int, int> n = Regularize(all_occ, 1e-6);
+	std::tuple<int, int, int> n = Regularize(all_occ, Eta);
 	auto& [ni, na, nv] = n;
 
 	EigenVector epsilons = EigenZero(nbasis, 1);
@@ -182,13 +186,13 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 			for ( int i = 0; i < na; i++ ) std::printf(" %f", Occ(i, 0));
 			std::printf("\n");
 		}
-		for ( int i = 0; i < na; i++ ) if ( Occ(i) > 1. - 1e-6 ){
-				all_occ(ni + i) = 1;
-				throw SwitchingManifold();
+		for ( int i = 0; i < na; i++ ) if ( Occ(i) > 1. - Eta ){
+			all_occ(ni + i) = 1;
+			throw SwitchingManifold();
 		}
-		for ( int i = na - 1; i >= 0; i-- ) if ( Occ(i) < 1e-6 ){
-				all_occ(ni + i) = 0;
-				throw SwitchingManifold();
+		for ( int i = na - 1; i >= 0; i-- ) if ( Occ(i) < Eta ){
+			all_occ(ni + i) = 0;
+			throw SwitchingManifold();
 		}
 
 		if ( na != 0 ) all_occ(Eigen::seqN(ni, na)) = Occ;
@@ -236,7 +240,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		for ( int i = 0; i < nbasis; i++ ){
 			for ( int j = i; j < nbasis; j++ ){
 				const double occ_diff = all_occ(i) - all_occ(j);
-				if ( std::abs(occ_diff) > 1e-6 ) A(i, j) = A(j, i) = - 2 * ( epsilons(i) - epsilons(j) ) * occ_diff;
+				if ( std::abs(occ_diff) > Eta ) A(i, j) = A(j, i) = - 2 * ( epsilons(i) - epsilons(j) ) * occ_diff;
 			}
 		}
 		std::function<EigenMatrix (EigenMatrix)> DummyC = [nbasis](EigenMatrix /*Z*/){ return EigenZero(nbasis, nbasis); };
@@ -256,8 +260,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 			return std::make_tuple(E_, Grad, precon, inv_precon);
 		}else if constexpr ( scf_t == newton_t || scf_t == arh_t){
 			std::vector<std::function<EigenMatrix (EigenMatrix)>> He;
-			He.push_back([Z, all_occ, Fprime, Cprime, &int4c2e, &xc, &grid, nthreads, &arh, &FoverC](EigenMatrix vprime){
-					EigenMatrix Dprime = Cprime * all_occ.asDiagonal() * vprime.transpose();
+			He.push_back([ni, na, Z, all_occ, Fprime, Cprime, &int4c2e, &xc, &grid, nthreads, &arh, &FoverC](EigenMatrix vprime){
+					EigenMatrix Dprime = ThinMat(Cprime) * ThinVec(all_occ).asDiagonal() * ThinMat(vprime).transpose();
 					Dprime += Dprime.transpose().eval();
 					if constexpr ( scf_t == newton_t ){
 						const EigenMatrix D = Z * Dprime * Z.transpose();
@@ -272,10 +276,11 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 					}else{
 						FoverC = arh.Hessian(Dprime);
 					}
-					const EigenMatrix res = 4 * ( 
-							FoverC * Cprime
-							+ Fprime * vprime
-					) * all_occ.asDiagonal();
+					EigenMatrix res = EigenZero(Cprime.rows(), Cprime.cols());
+					ThinMat(res) = 4 * ( 
+							FoverC * ThinMat(Cprime)
+							+ Fprime * ThinMat(vprime)
+					) * ThinVec(all_occ).asDiagonal();
 					return res;
 			});
 			if ( na != 0 ) He.push_back([ni, na, Z, Cprime, Cprime_thin, all_occ, Fprime, &int4c2e, &xc, &grid, nthreads, &arh, &FoverOcc](EigenMatrix gamma){
@@ -330,9 +335,9 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 	std::tuple<double, double, double> tol = {1.e-3, 1.e-2, 1.e-2};
 
 	label:
-	Maniverse::Flag flag(Cprime);
+	Maniverse::Flag flag(Cprime, "QR");
 	std::vector<int> spaces;
-	n = Regularize(all_occ, 1e-6);
+	n = Regularize(all_occ, Eta);
 	if ( ni > 0 ) spaces.push_back(ni);
 	for ( int i = 0; i < na; i++ ) spaces.push_back(1);
 	if ( nv > 0 ) spaces.push_back(nv);
@@ -368,21 +373,21 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		goto label;
 	}
 	EigenVector all_occ_new = FermiDirac(epsilons, T, Mu, 0);
-	n = Regularize(all_occ_new, 1e-6);
+	n = Regularize(all_occ_new, Eta);
 	if ( n_old != n ){
 		if ( ni_old > ni ){
 			const EigenMatrix Ci = Cprime.leftCols(ni_old);
 			const EigenMatrix Fi = Ci.transpose() * Fprime * Ci;
 			eigensolver.compute(Fi);
 			Cprime.leftCols(ni_old) = Ci * eigensolver.eigenvectors();
-			all_occ(ni_old - 1) = 0.99;
+			all_occ(ni_old - 1) = 1. - Eta * 1.01;
 		}
 		if ( nv_old > nv ){
 			const EigenMatrix Cv = Cprime.rightCols(nv_old);
 			const EigenMatrix Fv = Cv.transpose() * Fprime * Cv;
 			eigensolver.compute(Fv);
 			Cprime.rightCols(nv_old) = Cv * eigensolver.eigenvectors();
-			all_occ(nbasis - nv_old) = 0.01;
+			all_occ(nbasis - nv_old) = Eta * 1.01;
 		}
 		if (output) std::printf("Switching manifold due to inconsistent orbital energy and occupation!\n");
 		goto label;
