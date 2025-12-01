@@ -28,6 +28,13 @@
 #define S (int2c1e.Overlap)
 #define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
 
+static EigenVector FermiDirac(EigenVector epsilons, double T, double Mu, int order){
+	EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
+	EigenArray res = ns / std::pow( - T, order );
+	for ( int i = 1; i <= order; i++ ) res *= 1. - i * ns;
+	return res.matrix();
+}
+
 std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 		double T, double Mu,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
@@ -56,7 +63,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 		epsilons = eigensolver.eigenvalues();
 		C = Z * eigensolver.eigenvectors();
 		oldE = E;
-		EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
+		EigenArray ns = FermiDirac(epsilons, T, Mu, 0).array();
 		if (first_iter){
 			first_iter = 0;
 			ns = occupations.array();
@@ -80,6 +87,16 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 		}
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix Fnew_ = Fhf_ + Gxc_;
+		{
+			EigenMatrix Cprime_old = eigensolver.eigenvectors();
+			EigenMatrix Dprime_old = Cprime_old * occupations.asDiagonal() * Cprime_old.transpose();
+			EigenMatrix Fprime_new = Z.transpose() * Fnew_ * Z;
+			eigensolver.compute(Fprime_new);
+			EigenVector occ_new = FermiDirac(eigensolver.eigenvalues(), T, Mu, 0);
+			EigenMatrix Cprime_new = eigensolver.eigenvectors();
+			EigenMatrix Dprime_new = Cprime_new * occ_new.asDiagonal() * Cprime_new.transpose();
+			std::printf("Residual: %E\n", (Dprime_new - Dprime_old).norm());
+		}
 		E += (D_ * ( Hcore + Fhf_ )).trace() + Exc_;
 		if (output>0){
 			std::printf("Electronic grand potential = %.10f\n", E);
@@ -102,12 +119,96 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 	return std::make_tuple(E, epsilons, occupations, C);
 }
 
-static EigenVector FermiDirac(EigenVector epsilons, double T, double Mu, int order){
-	EigenArray ns = 1. / ( 1. + ( ( epsilons.array() - Mu ) / T ).exp() );
-	EigenArray res = ns / std::pow( - T, order );
-	for ( int i = 1; i <= order; i++ ) res *= 1. - i * ns;
-	return res.matrix();
+std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteLoopDIIS(
+		double T, double Mu,
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid,
+		EigenMatrix F, EigenVector Occ, EigenMatrix Z,
+		int output, int nthreads){
+	double oldE = 0;
+	double E = 0;
+	const int nbasis = F.cols();
+	EigenVector epsilons = EigenZero(Z.cols(), 1);
+	EigenVector occupations = Occ;
+	EigenMatrix C = EigenOne(Z.rows(), Z.cols());
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+	bool first_iter = 1;
+
+	std::function<std::tuple<
+			std::vector<EigenMatrix>,
+			std::vector<EigenMatrix>,
+			std::vector<EigenMatrix>
+			>(std::vector<EigenMatrix>&, std::vector<bool>&)
+	> update_func = [&](std::vector<EigenMatrix>& Fs_, std::vector<bool>&){
+		assert(Fs_.size() == 1 && "Only one Fock matrix should be optimized in spin-restricted SCF!");
+		const EigenMatrix F_ = Fs_[0];
+		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z;
+		eigensolver.compute(Fprime_);
+		epsilons = eigensolver.eigenvalues();
+		C = Z * eigensolver.eigenvectors();
+		oldE = E;
+		EigenArray ns = FermiDirac(epsilons, T, Mu, 0).array();
+		if (first_iter || 1){
+			first_iter = 0;
+			ns = occupations.array();
+		}//else occupations = ns.matrix();
+		if (output>0) std::printf("Total number of electrons = %.10f\n", 2 * ns.sum());
+		E = 2 * (
+				T * (
+					ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log()
+				).sum()
+				- Mu * ns.sum()
+		);
+		const EigenMatrix D_ = C * occupations.asDiagonal() * C.transpose();
+		const auto [Ghf_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+		double Exc_ = 0;
+		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
+		if (xc){
+			grid.getDensity({2 * D_});
+			xc.Evaluate("ev", grid);
+			Exc_ = grid.getEnergy();
+			Gxc_ = grid.getFock()[0];
+		}
+		const EigenMatrix Fhf_ = Hcore + Ghf_;
+		const EigenMatrix Fnew_ = F = Fhf_ + Gxc_;
+		{
+			EigenMatrix Cprime_old = eigensolver.eigenvectors();
+			EigenMatrix Dprime_old = Cprime_old * occupations.asDiagonal() * Cprime_old.transpose();
+			EigenMatrix Fprime_new = Z.transpose() * Fnew_ * Z;
+			eigensolver.compute(Fprime_new);
+			EigenVector occ_new = FermiDirac(eigensolver.eigenvalues(), T, Mu, 0);
+			EigenMatrix Cprime_new = eigensolver.eigenvectors();
+			EigenMatrix Dprime_new = Cprime_new * occ_new.asDiagonal() * Cprime_new.transpose();
+			std::printf("Residual: %E\n", (Dprime_new - Dprime_old).norm());
+		}
+		E += (D_ * ( Hcore + Fhf_ )).trace() + Exc_;
+		if (output>0){
+			std::printf("Electronic grand potential = %.10f\n", E);
+			std::printf("Changed by %E from the last step\n", E - oldE);
+		}
+		EigenMatrix G_ = Fnew_ * D_ * S - S * D_ * Fnew_;
+		EigenMatrix Aux_ = EigenZero(F.rows(), F.cols() + 1);
+		Aux_ << D_, EigenZero(F.rows(), 1);
+		Aux_(0, F.cols()) = E;
+		return std::make_tuple(
+				std::vector<EigenMatrix>{Fnew_},
+				std::vector<EigenMatrix>{G_},
+				std::vector<EigenMatrix>{Aux_}
+		);
+	};
+	hello:
+	std::vector<EigenMatrix> Fs = {F};
+	CDIIS cdiis(&update_func, 1, 20, 1e-6, 300, output>0 ? 2 : 0);
+	cdiis.Damps.push_back(std::make_tuple(0.1, 100, 0.75));
+	if ( !cdiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
+	EigenVector occupations_new = FermiDirac(epsilons, T, Mu, 0);
+	if ( ( occupations - occupations_new ).norm() > 1e-6 ){
+		occupations = occupations_new;
+		goto hello;
+	}
+	return std::make_tuple(E, epsilons, occupations, C);
 }
+
 
 class SwitchingManifold : public std::exception{ public:
 	const char* what() const throw(){
@@ -130,18 +231,16 @@ static std::tuple<int, int, int> Regularize(EigenVector& occ, double threshold){
 	return std::make_tuple(ni, na, nv);
 }
 
-#define IdentityFunc [](EigenMatrix v){ return v; }
-
-static std::function<EigenMatrix (EigenMatrix)> Preconditioner(EigenMatrix C, EigenMatrix A){
-	return [C, A](EigenMatrix Z){
-		EigenMatrix Omega = C.transpose() * Z;
-		Omega = Omega.cwiseProduct(A);
-		return ( C * Omega ).eval();
+static std::function<EigenMatrix (EigenMatrix)> Preconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix B, EigenMatrix C){
+	return [U, Uperp, B, C](EigenMatrix Z){
+		EigenMatrix Omega = U.transpose() * Z;
+		Omega = Omega.cwiseProduct(B);
+		EigenMatrix Kappa = Uperp.transpose() * Z;
+		Kappa = Kappa.cwiseProduct(C);
+		return ( U * Omega + Uperp * Kappa ).eval();
 	};
 }
 
-#define ThinVec(vec) vec(Eigen::seqN(0, ni + na))
-#define ThinMat(mat) mat(Eigen::placeholders::all, Eigen::seqN(0, ni + na))
 #define Eta 1e-8
 
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
@@ -176,29 +275,34 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 
 	EigenVector epsilons = EigenZero(nbasis, 1);
 	EigenMatrix Fprime = EigenZero(nbasis, nbasis);
+	EigenMatrix& Cprime_out = Cprime;
 
 	Maniverse::PreconFunc cfunc_newton = [&](std::vector<EigenMatrix> Xs, int /*order*/){
-		Cprime = Xs[0];
-		const EigenMatrix Cprime_thin = Cprime(Eigen::placeholders::all, Eigen::seqN(ni, na));
-		const EigenMatrix Occ = na != 0 ? Xs[1] : EigenZero(0, 0);
+		const EigenMatrix Cprime = Cprime_out.leftCols(ni + na) = Xs[0];
+		const EigenMatrix Cprime_thin = Cprime.rightCols(na);
+		Eigen::HouseholderQR<EigenMatrix> qr(Cprime);
+		const EigenMatrix Cprime_perp = Cprime_out.rightCols(nv) = EigenMatrix(qr.householderQ()).rightCols(nv);
+		const EigenMatrix thin_occ = na != 0 ? Xs[1] : EigenZero(0, 0);
+		EigenMatrix occ = EigenMatrix::Ones(ni + na, 1);
+		if ( na != 0 ) occ.bottomRows(na) = thin_occ;
 		if (output>0){
 			std::printf("Fractional occupation:");
-			for ( int i = 0; i < na; i++ ) std::printf(" %f", Occ(i, 0));
+			for ( int i = 0; i < na; i++ ) std::printf(" %f", thin_occ(i, 0));
 			std::printf("\n");
 		}
-		for ( int i = 0; i < na; i++ ) if ( Occ(i) > 1. - Eta ){
+		for ( int i = 0; i < na; i++ ) if ( thin_occ(i) > 1. - Eta ){
 			all_occ(ni + i) = 1;
 			throw SwitchingManifold();
 		}
-		for ( int i = na - 1; i >= 0; i-- ) if ( Occ(i) < Eta ){
+		for ( int i = na - 1; i >= 0; i-- ) if ( thin_occ(i) < Eta ){
 			all_occ(ni + i) = 0;
 			throw SwitchingManifold();
 		}
 
-		if ( na != 0 ) all_occ(Eigen::seqN(ni, na)) = Occ;
+		if ( na != 0 ) all_occ.head(ni + na) = occ;
 		if (output>0) std::printf("Total number of electrons = %.10f\n", 2 * all_occ.sum());
 
-		const EigenMatrix Dprime_ = Cprime * all_occ.asDiagonal() * Cprime.transpose();
+		const EigenMatrix Dprime_ = Cprime * occ.asDiagonal() * Cprime.transpose();
 		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
 		const auto [Ghf_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
 		double Exc_ = 0;
@@ -213,23 +317,31 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix F_ = Fhf_ + Gxc_;
 		Fprime = Z.transpose() * F_ * Z;
-		
+
 		eigensolver.compute(Fprime);
 		epsilons = eigensolver.eigenvalues();
 		C = Z * eigensolver.eigenvectors();
 
+		{
+			eigensolver.compute(Fprime);
+			EigenVector occ_new = FermiDirac(eigensolver.eigenvalues(), T, Mu, 0);
+			EigenMatrix Cprime_new = eigensolver.eigenvectors();
+			EigenMatrix Dprime_new = Cprime_new * occ_new.asDiagonal() * Cprime_new.transpose();
+			std::printf("Residual: %E\n", (Dprime_ - Dprime_new).norm());
+		}
+
 		// ARH hessian related
 		if constexpr ( scf_t == arh_t ) arh.Append(Dprime_, Fprime);
 
-		const EigenArray ns = na != 0 ? Occ.array() : EigenArray{0};
+		const EigenArray ns = na != 0 ? thin_occ.array() : EigenArray{0};
 		const double E_ =
 			( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_
 			+ 2 * T * ( ns.pow(ns).log() + ( 1. - ns ).pow( 1. - ns ).log() ).sum()
 			- 2 * Mu * ( ns.sum() + ni );
 
-		const EigenMatrix GradC = 4 * Fprime * Cprime * all_occ.asDiagonal();
+		const EigenMatrix GradC = 4 * Fprime * Cprime * occ.asDiagonal();
 		const EigenVector CtFC = ( Cprime.transpose() * Fprime * Cprime ).diagonal();
-		const EigenMatrix GradOcc1 = 2 * CtFC(Eigen::seqN(ni, na));
+		const EigenMatrix GradOcc1 = 2 * CtFC.tail(na);
 		const EigenMatrix GradOcc2 = ( - 2 * T * ( 1. / ns - 1. ).log() - 2 * Mu ).matrix();
 		std::vector<EigenMatrix> Grad = {GradC};
 		if ( na != 0 ) Grad.push_back(GradOcc1 + GradOcc2);
@@ -243,13 +355,18 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 				if ( std::abs(occ_diff) > Eta ) A(i, j) = A(j, i) = - 2 * ( epsilons(i) - epsilons(j) ) * occ_diff;
 			}
 		}
-		std::function<EigenMatrix (EigenMatrix)> DummyC = [nbasis](EigenMatrix /*Z*/){ return EigenZero(nbasis, nbasis); };
-		std::function<EigenMatrix (EigenMatrix)> DummyOcc = [na](EigenMatrix /*Z*/){ return EigenZero(na, 1); };
+		const EigenMatrix B = A.topLeftCorner(ni + na, ni + na);
+		const EigenMatrix C = A.bottomLeftCorner(nv, ni + na);
+		const std::function<EigenMatrix (EigenMatrix)> DummyC = [nbasis, ni, na](EigenMatrix /*Z*/){ return EigenZero(nbasis, ni + na); };
+		const std::function<EigenMatrix (EigenMatrix)> DummyOcc = [na](EigenMatrix /*Z*/){ return EigenZero(na, 1); };
+		const std::function<EigenMatrix (EigenMatrix)> IdentityFunc = [](EigenMatrix v){ return v; };
 		if constexpr ( scf_t == lbfgs_t ){
-			const EigenMatrix Asqrt = A.cwiseSqrt();
-			const EigenMatrix Asqrtinv = Asqrt.cwiseInverse();
-			const std::function<EigenMatrix (EigenMatrix)> Psqrt = Preconditioner(Cprime, Asqrtinv);
-			const std::function<EigenMatrix (EigenMatrix)> Psqrtinv = Preconditioner(Cprime, Asqrt);
+			const EigenMatrix Bsqrt = B.cwiseSqrt();
+			const EigenMatrix Bsqrtinv = Bsqrt.cwiseInverse();
+			const EigenMatrix Csqrt = C.cwiseSqrt();
+			const EigenMatrix Csqrtinv = Csqrt.cwiseInverse();
+			const std::function<EigenMatrix (EigenMatrix)> Psqrt = Preconditioner(Cprime, Cprime_perp, Bsqrtinv, Csqrtinv);
+			const std::function<EigenMatrix (EigenMatrix)> Psqrtinv = Preconditioner(Cprime, Cprime_perp, Bsqrt, Csqrt);
 			std::vector<std::function<EigenMatrix (EigenMatrix)>> precon = {Psqrt};
 			std::vector<std::function<EigenMatrix (EigenMatrix)>> inv_precon = {Psqrtinv};
 			if ( na != 0 ){
@@ -260,8 +377,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 			return std::make_tuple(E_, Grad, precon, inv_precon);
 		}else if constexpr ( scf_t == newton_t || scf_t == arh_t){
 			std::vector<std::function<EigenMatrix (EigenMatrix)>> He;
-			He.push_back([ni, na, Z, all_occ, Fprime, Cprime, &int4c2e, &xc, &grid, nthreads, &arh, &FoverC](EigenMatrix vprime){
-					EigenMatrix Dprime = ThinMat(Cprime) * ThinVec(all_occ).asDiagonal() * ThinMat(vprime).transpose();
+			He.push_back([Z, occ, Fprime, Cprime, &int4c2e, &xc, &grid, nthreads, &arh, &FoverC](EigenMatrix vprime){
+					EigenMatrix Dprime = Cprime * occ.asDiagonal() * vprime.transpose();
 					Dprime += Dprime.transpose().eval();
 					if constexpr ( scf_t == newton_t ){
 						const EigenMatrix D = Z * Dprime * Z.transpose();
@@ -276,14 +393,13 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 					}else{
 						FoverC = arh.Hessian(Dprime);
 					}
-					EigenMatrix res = EigenZero(Cprime.rows(), Cprime.cols());
-					ThinMat(res) = 4 * ( 
-							FoverC * ThinMat(Cprime)
-							+ Fprime * ThinMat(vprime)
-					) * ThinVec(all_occ).asDiagonal();
+					EigenMatrix res = 4 * ( 
+							FoverC * Cprime
+							+ Fprime * vprime
+					) * occ.asDiagonal();
 					return res;
 			});
-			if ( na != 0 ) He.push_back([ni, na, Z, Cprime, Cprime_thin, all_occ, Fprime, &int4c2e, &xc, &grid, nthreads, &arh, &FoverOcc](EigenMatrix gamma){
+			if ( na != 0 ) He.push_back([na, Z, Cprime, Cprime_thin, occ, Fprime, &int4c2e, &xc, &grid, nthreads, &arh, &FoverOcc](EigenMatrix gamma){
 					const EigenMatrix Dprime = Cprime_thin * gamma.asDiagonal() * Cprime_thin.transpose();
 					if constexpr ( scf_t == newton_t ){
 						const EigenMatrix D = Z * Dprime * Z.transpose();
@@ -298,30 +414,28 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 					}else{
 						FoverOcc = arh.Hessian(Dprime);
 					}
-					EigenMatrix all_gamma = EigenZero(Dprime.rows(), 1);
-					all_gamma(Eigen::seqN(ni, na), 0) = gamma;
-					const EigenMatrix res = 4 * (
-							Fprime * Cprime * all_gamma.asDiagonal()
-							+ FoverOcc * Cprime * all_occ.asDiagonal()
-					);
+					EigenMatrix res = FoverOcc * Cprime * occ.asDiagonal();
+					res.rightCols(na) += Fprime * Cprime_thin * gamma.asDiagonal();
+					res *= 4;
 					return res;
 			});
-			if ( na != 0 ) He.push_back([ni, na, Cprime, Fprime, &FoverC](EigenMatrix Delta){
+			if ( na != 0 ) He.push_back([na, Cprime_thin, Fprime, &FoverC](EigenMatrix Delta){
 					const EigenVector res = 2 * (
-							2 * Delta.transpose() * Fprime * Cprime
-							+ Cprime.transpose() * FoverC * Cprime
+							2 * Delta.rightCols(na).transpose() * Fprime * Cprime_thin
+							+ Cprime_thin.transpose() * FoverC * Cprime_thin
 					).diagonal();
-					return res(Eigen::seqN(ni, na)).eval();
+					return res;
 			});
-			if ( na != 0 ) He.push_back([T, ni, na, Cprime_thin, ns, Fprime, &FoverOcc](EigenMatrix gamma){
+			if ( na != 0 ) He.push_back([T, Cprime_thin, ns, Fprime, &FoverOcc](EigenMatrix gamma){
 					const EigenVector res = 2 * (
 							( Cprime_thin.transpose() * FoverOcc * Cprime_thin ).diagonal()
 							- ( T / ns / ( ns - 1. ) ).matrix().cwiseProduct(gamma)
 					);
 					return res;
 			});
-			const EigenMatrix Ainv = A.cwiseInverse();
-			const std::function<EigenMatrix (EigenMatrix)> Pr = Preconditioner(Cprime, Ainv);
+			const EigenMatrix Binv = B.cwiseInverse();
+			const EigenMatrix Cinv = C.cwiseInverse();
+			const std::function<EigenMatrix (EigenMatrix)> Pr = Preconditioner(Cprime, Cprime_perp, Binv, Cinv);
 			std::vector<std::function<EigenMatrix (EigenMatrix)>> precon = {Pr};
 			if ( na != 0 ){
 				precon.push_back(DummyC);
@@ -335,12 +449,11 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 	std::tuple<double, double, double> tol = {1.e-3, 1.e-2, 1.e-2};
 
 	label:
-	Maniverse::Flag flag(Cprime, "QR");
 	std::vector<int> spaces;
 	n = Regularize(all_occ, Eta);
+	Maniverse::Flag flag(Cprime.leftCols(ni + na));
 	if ( ni > 0 ) spaces.push_back(ni);
 	for ( int i = 0; i < na; i++ ) spaces.push_back(1);
-	if ( nv > 0 ) spaces.push_back(nv);
 	flag.setBlockParameters(spaces);
 	std::vector<std::shared_ptr<Maniverse::Manifold>> ms = {flag.Clone()};
 	if ( na > 0 ){
