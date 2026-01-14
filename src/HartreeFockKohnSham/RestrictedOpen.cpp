@@ -127,10 +127,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		if (low_spin) Grad << 4 * Fdprime_ * Cdprime_, 2 * Faprime_ * Caprime_, 2 * Fbprime_ * Cbprime_;
 		else Grad << 4 * Fdprime_ * Cdprime_, 2 * Faprime_ * Caprime_;
 
-		EigenMatrix Call = EigenOne(nbasis, nbasis);
-		Call.leftCols(nd + na + nb) = Cprime_;
-		Eigen::HouseholderQR<EigenMatrix> qr(Call);
-		Call = qr.householderQ();
+		Eigen::HouseholderQR<EigenMatrix> qr(Cprime_);
+		const EigenMatrix Call = qr.householderQ();
 		C = Z * Call;
 		const EigenMatrix Cperp = Call.rightCols(nbasis - nd - na - nb);
 		std::vector<EigenMatrix> Fmos = { Call.transpose() * Fdprime_ * Call, Call.transpose() * Faprime_ * Call, SafeLowSpin(Call.transpose() * Fbprime_ * Call), EigenZero(nbasis, nbasis)};

@@ -14,7 +14,6 @@
 #include <Maniverse/Manifold/Euclidean.h>
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/Optimizer/TrustRegion.h>
-#include <Maniverse/Optimizer/Anderson.h>
 #include <libmwfn.h>
 
 #include "../Macro.h"
@@ -87,7 +86,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 		}
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix Fnew_ = Fhf_ + Gxc_;
-		{
+		/*{
 			EigenMatrix Cprime_old = eigensolver.eigenvectors();
 			EigenMatrix Dprime_old = Cprime_old * occupations.asDiagonal() * Cprime_old.transpose();
 			EigenMatrix Fprime_new = Z.transpose() * Fnew_ * Z;
@@ -96,7 +95,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 			EigenMatrix Cprime_new = eigensolver.eigenvectors();
 			EigenMatrix Dprime_new = Cprime_new * occ_new.asDiagonal() * Cprime_new.transpose();
 			std::printf("Residual: %E\n", (Dprime_new - Dprime_old).norm());
-		}
+		}*/
 		E += (D_ * ( Hcore + Fhf_ )).trace() + Exc_;
 		if (output>0){
 			std::printf("Electronic grand potential = %.10f\n", E);
@@ -113,7 +112,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 		);
 	};
 	std::vector<EigenMatrix> Fs = {F};
-	CDIIS cdiis(&update_func, 1, 20, 1e-8, 300, output>0 ? 2 : 0);
+	CDIIS cdiis(&update_func, 1, 20, 1e-6, 300, output>0 ? 2 : 0);
 	cdiis.Damps.push_back(std::make_tuple(0.1, 100, 0.75));
 	if ( !cdiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
 	return std::make_tuple(E, epsilons, occupations, C);
@@ -242,6 +241,7 @@ static std::function<EigenMatrix (EigenMatrix)> Preconditioner(EigenMatrix U, Ei
 }
 
 #define Eta 1e-8
+#define Eta2 1e-6
 
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
@@ -322,13 +322,13 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		epsilons = eigensolver.eigenvalues();
 		C = Z * eigensolver.eigenvectors();
 
-		{
+		/*{
 			eigensolver.compute(Fprime);
 			EigenVector occ_new = FermiDirac(eigensolver.eigenvalues(), T, Mu, 0);
 			EigenMatrix Cprime_new = eigensolver.eigenvectors();
 			EigenMatrix Dprime_new = Cprime_new * occ_new.asDiagonal() * Cprime_new.transpose();
 			std::printf("Residual: %E\n", (Dprime_ - Dprime_new).norm());
-		}
+		}*/
 
 		// ARH hessian related
 		if constexpr ( scf_t == arh_t ) arh.Append(Dprime_, Fprime);
@@ -493,14 +493,14 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 			const EigenMatrix Fi = Ci.transpose() * Fprime * Ci;
 			eigensolver.compute(Fi);
 			Cprime.leftCols(ni_old) = Ci * eigensolver.eigenvectors();
-			all_occ(ni_old - 1) = 1. - Eta * 1.01;
+			all_occ(ni_old - 1) = 1. - Eta2;
 		}
 		if ( nv_old > nv ){
 			const EigenMatrix Cv = Cprime.rightCols(nv_old);
 			const EigenMatrix Fv = Cv.transpose() * Fprime * Cv;
 			eigensolver.compute(Fv);
 			Cprime.rightCols(nv_old) = Cv * eigensolver.eigenvectors();
-			all_occ(nbasis - nv_old) = Eta * 1.01;
+			all_occ(nbasis - nv_old) = Eta2;
 		}
 		if (output) std::printf("Switching manifold due to inconsistent orbital energy and occupation!\n");
 		goto label;
@@ -508,6 +508,10 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 	if ( tol != std::make_tuple(1e-8, 1e-5, 1e-5) ){
 		if (output) std::printf("Switching to higher convergence precision!\n");
 		tol = {1e-8, 1e-5, 1e-5};
+		if constexpr ( scf_t == arh_t ){
+			arh.Ps.pop_back();
+			arh.Gs.pop_back();
+		}
 		goto label;
 	}
 
