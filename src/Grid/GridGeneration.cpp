@@ -1,7 +1,7 @@
 #include <Eigen/Core>
 #include <unsupported/Eigen/CXX11/Tensor>
 #include <Maniverse/Manifold/Stiefel.h>
-#include <Maniverse/Optimizer/TrustRegion.h>
+#include <Maniverse/Optimizer/TruncatedNewton.h>
 #include <cmath>
 #include <vector>
 #include <chrono>
@@ -160,6 +160,19 @@ void SphericalGrid(
 	}
 }
 
+class CutFunc: public Maniverse::Objective{ public:
+	EigenMatrix P2;
+	CutFunc(EigenMatrix P2): P2(P2){};
+	void Calculate(std::vector<EigenMatrix> Ws, int /*derivative*/) override{
+		const EigenMatrix& W = Ws[0];
+		Value = - ( W.transpose() * P2 * W ).sum();
+		Gradient = { - 2 * P2 * W };
+	};
+	std::vector<std::vector<EigenMatrix>> Hessian(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<std::vector<EigenMatrix>>{{ - 2 * P2 * Vs[0] }};
+	};
+};
+
 std::tuple<EigenMatrix, EigenMatrix> Cut(EigenMatrix P){
 	EigenMatrix Pcentered = P.topRows(3);
 	std::array<double, 3> center = {0, 0, 0};
@@ -167,26 +180,14 @@ std::tuple<EigenMatrix, EigenMatrix> Cut(EigenMatrix P){
 		center[i] = P.row(i).mean();
 		Pcentered.row(i).array() -= center[i];
 	}
-	const EigenMatrix P2 = Pcentered * Pcentered.transpose();
+	CutFunc obj(Pcentered * Pcentered.transpose());
 	Maniverse::Stiefel stiefel(EigenMatrix::Ones(3, 1) / std::sqrt(3));
-	Maniverse::Iterate M({stiefel.Clone()}, 1);
-	Maniverse::UnpreconSecondFunc func = [P2](std::vector<EigenMatrix> Ws, int){
-		const EigenMatrix W = Ws[0];
-		const double L = - ( W.transpose() * P2 * W ).sum();
-		const EigenMatrix G = - 2 * P2 * W;
-		const std::function<EigenMatrix (EigenMatrix)> H = [P2](EigenMatrix v){
-			return ( - 2 * P2 * v ).eval();
-		};
-		return std::make_tuple(L, std::vector<EigenMatrix>{G}, std::vector<std::function<EigenMatrix (EigenMatrix)>>{H});
-	};
-	const std::tuple<double, double, double> tol = {1.e-8, 1, 1};
-	Maniverse::TrustRegionSetting tr_setting;
-	double L = 0;
-	Maniverse::TrustRegion(
-			func, tr_setting, tol,
-			0.001, 1, 100, L, M, 0
+	Maniverse::Iterate M(obj, {stiefel.Share()}, 1);
+	Maniverse::TrustRegion tr;
+	Maniverse::TruncatedNewton(
+			M, tr, {1.e-8, 1, 1},
+			0.001, 100, 0
 	);
-
 	const double A = M.Point(0);
 	const double B = M.Point(1);
 	const double C = M.Point(2);

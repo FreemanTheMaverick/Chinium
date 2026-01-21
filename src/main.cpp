@@ -15,7 +15,7 @@
 #include "Grid/Grid.h"
 #include "ExchangeCorrelation.h"
 #include "HartreeFockKohnSham/HartreeFockKohnSham.h"
-#include "Localization/Localize.h"
+//#include "Localization/Localize.h"
 
 #define Round(x) (int)( isInt(x) ? std::lround(x) : std::floor(x) )
 
@@ -200,12 +200,14 @@ int main(int /*argc*/, char* argv[]){
 			}
 		}
 	} // if ( jobtype == "SCF" )
+	/*
 	else if ( jobtype == "LOCALIZATION" ){
 		Localize(mwfn, int2c1e, method, "occ", 2);
 		Localize(mwfn, int2c1e, method, "vir", 2);
 		std::printf("Exporting wavefunction information to %s ...\n", mwfn_name.c_str());
 		mwfn.Export(mwfn_name);
 	}
+	*/
 
 	std::printf("*** Chinium terminated normally ***\n");
 	return 0;

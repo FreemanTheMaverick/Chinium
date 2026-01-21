@@ -7,10 +7,11 @@
 #include <chrono>
 #include <memory>
 #include <Maniverse/Manifold/Simplex.h>
-#include <Maniverse/Optimizer/TrustRegion.h>
+#include <Maniverse/Optimizer/TruncatedNewton.h>
 
 #include "../Macro.h"
 #include "EDIIS.h"
+#include "QuadraticObj.h"
 
 EDIIS::EDIIS(
 		std::function<std::tuple<
@@ -38,37 +39,18 @@ EigenVector EDIIS::Extrapolate(int index){
 		for ( int j = 0; j < size; j++ )
 			B(i, j) = - Dot(Ds(i) - Ds(j), Fs(i) - Fs(j));
 	}
+	QuadraticObj obj(A, B);
 	EigenMatrix p = EigenZero(size, 1); p(size - 1) = 0.9;
 	for ( int i = 0; i < size - 1; i++ )
 		p(i) = ( 1. - p(size - 1) ) / ( size - 1 );
-	Maniverse::Iterate M({Maniverse::Simplex(p).Clone()}, 1);
-
-	std::function<
-		std::tuple<
-			double,
-			std::vector<EigenMatrix>,
-			std::vector<std::function<EigenMatrix (EigenMatrix)>>
-		> (std::vector<EigenMatrix>, int)
-	> func = [A, B](std::vector<EigenMatrix> xs_, int){
-		const EigenMatrix x_ = xs_[0];
-		const double L = Dot(x_, A + 0.5 * B * x_);
-		const EigenMatrix G = A + B * x_;
-		const std::function<EigenMatrix (EigenMatrix)> H = [B](EigenMatrix v__){
-			return (EigenMatrix)(B * v__);
-		};
-		return std::make_tuple(
-				L,
-				std::vector<EigenMatrix>{G},
-				std::vector<std::function<EigenMatrix (EigenMatrix)>>{H}
-		);
-	};
+	Maniverse::Simplex simplex(p);
+	Maniverse::Iterate M(obj, {simplex.Share()}, 1);
 
 	if ( this->Verbose > 1 ) std::printf("| Calling Maniverse for optimization on the Simplex manifold\n");
-	double L = 0;
-	Maniverse::TrustRegionSetting tr_setting;
-	const bool converged = Maniverse::TrustRegion(
-				func, tr_setting, {1.e-4, 1.e-6, 1e-2},
-				0.001, 1, 1000, L, M, 0
+	Maniverse::TrustRegion tr;
+	const bool converged = Maniverse::TruncatedNewton(
+				M, tr, {1.e-4, 1.e-6, 1e-2},
+				0.001, 1000, 0
 	);
 	if ( this->Verbose > 1 && !converged ){
 		std::printf("| Warning: Optimization of EDIIS weights did not fully converged!\n");

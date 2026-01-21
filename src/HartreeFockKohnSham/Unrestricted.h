@@ -11,25 +11,25 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedLBFGS(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix D1prime, EigenMatrix D2prime,
+		int nocc1, int nocc2,
 		EigenMatrix Z1, EigenMatrix Z2,
-		int output, int nthreads
+		int nthreads, int output
 );
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedNewton(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix D1prime, EigenMatrix D2prime,
+		int nocc1, int nocc2,
 		EigenMatrix Z1, EigenMatrix Z2,
-		int output, int nthreads
+		int nthreads, int output
 );
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedARH(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix D1prime, EigenMatrix D2prime,
+		int nocc1, int nocc2,
 		EigenMatrix Z1, EigenMatrix Z2,
-		int output, int nthreads
+		int nthreads, int output
 );
 
 std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH_villain(

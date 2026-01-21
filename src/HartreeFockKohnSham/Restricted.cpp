@@ -11,9 +11,8 @@
 #include <cstdio>
 #include <memory>
 #include <Maniverse/Manifold/Grassmann.h>
-#include <Maniverse/Manifold/RealSymmetric.h>
 #include <Maniverse/Optimizer/LBFGS.h>
-#include <Maniverse/Optimizer/TrustRegion.h>
+#include <Maniverse/Optimizer/TruncatedNewton.h>
 #include <libmwfn.h>
 
 #include "../Macro.h"
@@ -92,141 +91,215 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 	return std::make_tuple(E, epsilons, C);
 }
 
-static std::function<EigenMatrix (EigenMatrix)> Preconditioner(EigenMatrix D, EigenMatrix A){
-	return [D, A](EigenMatrix Z){
-		EigenMatrix W = D * Z - Z * D;
-		W = W.cwiseProduct(A);
-		return ( D * W - W * D ).eval();
+#undef S
+#undef Hcore
+#define S (int2c1e->Overlap)
+#define Hcore (int2c1e->Kinetic + int2c1e->Nuclear )
+
+namespace{
+
+class ObjBase: public Maniverse::Objective{ public:
+	Int2C1E* int2c1e;
+	Int4C2E* int4c2e;
+	ExchangeCorrelation* xc;
+	Grid* grid;
+	int nocc;
+	EigenMatrix Z;
+	int nthreads;
+
+	int nbasis;
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+
+	EigenMatrix Dprime;
+	EigenMatrix Fprime;
+	EigenVector epsilons;
+	EigenMatrix C;
+	EigenMatrix A;
+
+	ObjBase(
+			Int2C1E& int2c1e, Int4C2E& int4c2e,
+			ExchangeCorrelation& xc, Grid& grid,
+			int nocc, EigenMatrix Z,
+			int nthreads
+	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), nocc(nocc), Z(Z), nthreads(nthreads){
+		nbasis = Z.rows();
+		epsilons = EigenZero(nbasis, 1);
+		C = A = EigenZero(nbasis, nbasis);
 	};
+
+	virtual void Calculate(std::vector<EigenMatrix> Dprimes, int /*derivative*/) override{
+		Dprime = Dprimes[0];
+		const EigenMatrix D = Z * Dprime * Z.transpose();
+		const auto [Ghf, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+		double Exc = 0;
+		EigenMatrix Gxc = EigenZero(nbasis, nbasis);
+		if (*xc){
+			grid->getDensity({ 2 * D });
+			xc->Evaluate("ev", *grid);
+			Exc = grid->getEnergy();
+			Gxc = grid->getFock()[0];
+		}
+		const EigenMatrix Fhf = Hcore + Ghf;
+		const EigenMatrix F = Fhf + Gxc;
+		Fprime = Z.transpose() * F * Z; // Euclidean gradient
+
+		Value = 0.5 * ( ( D * ( Hcore + Fhf ) ).trace() + Exc );
+		Gradient = { Fprime };
+
+		eigensolver.compute(Fprime);
+		epsilons = eigensolver.eigenvalues();
+		C = Z * eigensolver.eigenvectors();
+		A = EigenMatrix::Ones(nbasis, nbasis);
+		for ( int o = 0; o < nocc; o++ ){
+			for ( int v = nocc; v < nbasis; v++ ){
+				A(o, v) = A(v, o) = 2 * ( epsilons(v) - epsilons(o) );
+			}
+		}
+	};
+};
+
+EigenMatrix Preconditioner(EigenMatrix D, EigenMatrix A, EigenMatrix V){
+	EigenMatrix W = D * V - V * D;
+	W = W.cwiseProduct(A);
+	return D * W - W * D;
 }
+
+class ObjLBFGS: public ObjBase{ public:
+	EigenMatrix Asqrt;
+	EigenMatrix Asqrtinv;
+
+	using ObjBase::ObjBase;
+
+	void Calculate(std::vector<EigenMatrix> Dprimes, int /*derivative*/) override{
+		ObjBase::Calculate(Dprimes, 2);
+		Asqrt = A.cwiseSqrt();
+		Asqrtinv = Asqrt.cwiseInverse();
+	};
+
+	std::vector<std::vector<EigenMatrix>> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<std::vector<EigenMatrix>>{{ ::Preconditioner(Dprime, Asqrtinv, Vs[0]) }};
+	};
+
+	std::vector<std::vector<EigenMatrix>> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<std::vector<EigenMatrix>>{{ ::Preconditioner(Dprime, Asqrt, Vs[0]) }};
+	};
+};
+
+class ObjNewtonBase: public ObjBase{ public:
+	EigenMatrix Ainv;
+
+	using ObjBase::ObjBase;
+
+	virtual void Calculate(std::vector<EigenMatrix> Dprimes, int /*derivative*/) override{
+		ObjBase::Calculate(Dprimes, 2);
+		Ainv = A.cwiseInverse();
+	};
+
+	std::vector<std::vector<EigenMatrix>> Preconditioner(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<std::vector<EigenMatrix>>{{ ::Preconditioner(Dprime, Ainv, Vs[0]) }};
+	};
+};
+
+class ObjNewton: public ObjNewtonBase{ public:
+	using ObjNewtonBase::ObjNewtonBase;
+
+	void Calculate(std::vector<EigenMatrix> Dprimes, int /*derivative*/) override{
+		ObjNewtonBase::Calculate(Dprimes, 2);
+		if (*xc) xc->Evaluate("f", *grid);
+	};
+
+	std::vector<std::vector<EigenMatrix>> Hessian(std::vector<EigenMatrix> Vprimes) const override{
+		const EigenMatrix Vprime = Vprimes[0];
+		const EigenMatrix V = Z * Vprime * Z.transpose();
+		const auto [FhfU, _, __] = int4c2e->ContractInts(V, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
+		EigenMatrix FxcU = EigenZero(nbasis, nbasis);
+		if (*xc){
+			grid->getDensityU({{ 2 * V }});
+			FxcU = grid->getFockU<u_t>()[0][0];
+		}
+		const EigenMatrix FU = FhfU + FxcU;
+		return std::vector<std::vector<EigenMatrix>>{{ Z.transpose() * FU * Z }};
+	};
+};
+
+class ObjARH: public ObjNewtonBase{ public:
+	AugmentedRoothaanHall arh = AugmentedRoothaanHall(20, 1);
+
+	using ObjNewtonBase::ObjNewtonBase;
+
+	void Calculate(std::vector<EigenMatrix> Dprimes, int /*derivative*/) override{
+		ObjNewtonBase::Calculate(Dprimes, 2);
+		arh.Append(Dprime, Fprime);
+	};
+
+	std::vector<std::vector<EigenMatrix>> Hessian(std::vector<EigenMatrix> Vprimes) const override{
+		return std::vector<std::vector<EigenMatrix>>{{ arh.Hessian(Vprimes[0]) }};
+	};
+};
+
+} // namespace
 
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix Dprime, EigenMatrix Z,
-		int output, int nthreads){
-	double E = 0;
-	EigenVector epsilons = EigenZero(Z.cols(), 1);
-	EigenMatrix C = EigenZero(Z.rows(), Z.cols());
-	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-
-	// ARH hessian related
-	AugmentedRoothaanHall arh;
-	if constexpr ( scf_t == arh_t ) arh.Init(20, 1);
-
+		int nocc, EigenMatrix Z,
+		int nthreads, int output){
+	std::conditional_t< scf_t == lbfgs_t,
+				ObjLBFGS,
+				std::conditional_t< scf_t == newton_t,
+							ObjNewton,
+							ObjARH
+				>
+	> obj(int2c1e, int4c2e, xc, grid, nocc, Z, nthreads);
+	EigenMatrix Dprime = EigenZero(Z.cols(), Z.cols());
+	for ( int i = 0; i < nocc; i++ ) Dprime(i, i) = 1;
 	Maniverse::Grassmann grassmann(Dprime);
-	Maniverse::Iterate M({grassmann.Clone()}, 1);
-	Maniverse::PreconFunc dfunc_newton = [&](std::vector<EigenMatrix> Dprimes_, int /*order*/){
-		const EigenMatrix Dprime_ = Dprimes_[0];
-		const EigenMatrix D_ = Z * Dprime_ * Z.transpose();
-		const auto [Ghf_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
-		double Exc_ = 0;
-		EigenMatrix Gxc_ = EigenZero(Ghf_.rows(), Ghf_.cols());
-		if (xc){
-			grid.getDensity({2 * D_});
-			xc.Evaluate("ev", grid);
-			if constexpr ( scf_t == newton_t ) xc.Evaluate("f", grid);
-			Exc_ = grid.getEnergy();
-			Gxc_ = grid.getFock()[0];
-		}
-		const EigenMatrix Fhf_ = Hcore + Ghf_;
-		const EigenMatrix F_ = Fhf_ + Gxc_;
-		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z; // Euclidean gradient
-
-		// ARH hessian related
-		if constexpr ( scf_t == arh_t ) arh.Append(Dprime_, Fprime_);
-
-		eigensolver.compute(Fprime_);
-		epsilons = eigensolver.eigenvalues();
-		C = Z * eigensolver.eigenvectors();
-		const double E_ = 0.5 * ( ( D_ * ( Hcore + Fhf_ ) ).trace() + Exc_);
-
-		const int nocc = std::lround(Dprime.diagonal().sum());
-		const int nbasis = Dprime.rows();
-		EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
-		for ( int o = 0; o < nocc; o++ ){
-			for ( int v = nocc; v < nbasis; v++ ){
-				A(o, v) = A(v, o) = 2 * ( epsilons(v) - epsilons(o) );
-			}
-		}
-		if constexpr ( scf_t == lbfgs_t ){
-			const EigenMatrix Asqrt = A.cwiseSqrt();
-			const EigenMatrix Asqrtinv = Asqrt.cwiseInverse();
-			const std::function<EigenMatrix (EigenMatrix)> Psqrt = Preconditioner(Dprime_, Asqrtinv);
-			const std::function<EigenMatrix (EigenMatrix)> Psqrtinv = Preconditioner(Dprime_, Asqrt);
-			return std::make_tuple(
-				E_,
-				std::vector<EigenMatrix>{Fprime_},
-				std::vector<std::function<EigenMatrix (EigenMatrix)>>{Psqrt},
-				std::vector<std::function<EigenMatrix (EigenMatrix)>>{Psqrtinv}
-			);
-		}else if constexpr ( scf_t == newton_t || scf_t == arh_t){
-			std::function<EigenMatrix (EigenMatrix)> He = [](EigenMatrix vprime){ return vprime; };
-			if constexpr ( scf_t == newton_t ) He = [Z, &int4c2e, &grid, &xc, nthreads](EigenMatrix vprime){
-				const EigenMatrix v = Z * vprime * Z.transpose();
-				const auto [FhfU, _, __] = int4c2e.ContractInts(v, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
-				EigenMatrix FxcU = EigenZero(vprime.rows(), vprime.cols());
-				if (xc){
-					grid.getDensityU({{2*v}});
-					FxcU = grid.getFockU<u_t>()[0][0];
-				}
-				const EigenMatrix FU = FhfU + FxcU;
-				return (Z.transpose() * FU * Z).eval();
-			};
-			else He = [&arh](EigenMatrix vprime){ return arh.Hessian(vprime); };
-			const EigenMatrix Ainv = A.cwiseInverse();
-			const std::function<EigenMatrix (EigenMatrix)> Pr = Preconditioner(Dprime_, Ainv);
-			return std::make_tuple(
-					E_,
-					std::vector<EigenMatrix>{Fprime_},
-					std::vector<std::function<EigenMatrix (EigenMatrix)>>{He},
-					std::vector<std::function<EigenMatrix (EigenMatrix)>>{Pr}
-			);
-		}
-	};
-
-	const std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
+	Maniverse::Iterate M(obj, {grassmann.Share()}, 1);
+	std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
-					dfunc_newton, tol,
-					20, 300, 0.1, 0.75, 100,
-					E, M, output
+					M, tol,
+					20, 300, 0.1, 0.75, 100, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
-		double ratio = 0;
-		if constexpr ( scf_t == newton_t ) ratio = 0.001;
-		else ratio = 0.01;
-		Maniverse::TrustRegionSetting tr_setting;
-		if ( ! Maniverse::TrustRegion(
-					dfunc_newton, tr_setting, tol,
-					ratio, 1, 300, E, M, output
-		) ) throw std::runtime_error("Convergence failed!");
+		Maniverse::TrustRegion tr;
+		if constexpr ( scf_t == newton_t ){
+			if ( ! Maniverse::TruncatedNewton(
+						M, tr, tol,
+						0.001, 300, output
+			) ) throw std::runtime_error("Convergence failed!");
+		}else{
+			if ( ! Maniverse::TruncatedNewton(
+						M, tr, tol,
+						0.01, 300, output
+			) ) throw std::runtime_error("Convergence failed!");
+		}
 	}
-	return std::make_tuple(E, epsilons, C);
+	return std::make_tuple(obj.Value, obj.epsilons, obj.C);
 }
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedLBFGS(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix Dprime, EigenMatrix Z,
-		int output, int nthreads){
-	return RestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
+		int nocc, EigenMatrix Z,
+		int nthreads, int output){
+	return RestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, nocc, Z, nthreads, output);
 }
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedNewton(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix Dprime, EigenMatrix Z,
-		int output, int nthreads){
-	return RestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
+		int nocc, EigenMatrix Z,
+		int nthreads, int output){
+	return RestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, nocc, Z, nthreads, output);
 }
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedARH(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix Dprime, EigenMatrix Z,
-		int output, int nthreads){
-	return RestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, Dprime, Z, output, nthreads);
+		int nocc, EigenMatrix Z,
+		int nthreads, int output){
+	return RestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, nocc, Z, nthreads, output);
 }

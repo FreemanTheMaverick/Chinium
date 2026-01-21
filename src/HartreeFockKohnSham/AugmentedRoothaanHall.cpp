@@ -9,7 +9,7 @@
 
 #define current_size (int)this->Ps.size()
 
-void AugmentedRoothaanHall::Init(int max_size, bool verbose){
+AugmentedRoothaanHall::AugmentedRoothaanHall(int max_size, bool verbose){
 	if (verbose) std::printf("Initialized Augmented Roothaan Hall hessian with maximal size %d.\n", max_size);
 	this->MaxSize = max_size;
 	this->Verbose = verbose;
@@ -41,7 +41,7 @@ void AugmentedRoothaanHall::Append(EigenMatrix P, EigenMatrix G){
 	this->Gs.push_back(G);
 }
 
-EigenMatrix AugmentedRoothaanHall::Hessian(EigenMatrix v){
+EigenMatrix AugmentedRoothaanHall::Hessian(EigenMatrix v) const{
 	const int size = (int)this->Pdiffs.size();
 	if ( size <= 1 ) return v;
 
