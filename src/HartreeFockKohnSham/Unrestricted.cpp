@@ -308,8 +308,8 @@ class ObjNewton: public ObjNewtonBase{ public:
 			Gtmp2 += Gtmpxc[1][0];
 		}
 		return std::vector<std::vector<EigenMatrix>>{
-			{ EigenZero(nbasis, nbasis), Z2.transpose() * Gtmp1 * Z2 },
-			{ Z1.transpose() * Gtmp2 * Z1, EigenZero(nbasis, nbasis) }
+			{ Z1.transpose() * Gtmp1 * Z1, EigenZero(nbasis, nbasis) },
+			{ EigenZero(nbasis, nbasis), Z2.transpose() * Gtmp2 * Z2 }
 		};
 	};
 };
