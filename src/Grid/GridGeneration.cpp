@@ -168,8 +168,8 @@ class CutFunc: public Maniverse::Objective{ public:
 		Value = - ( W.transpose() * P2 * W ).sum();
 		Gradient = { - 2 * P2 * W };
 	};
-	std::vector<std::vector<EigenMatrix>> Hessian(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<std::vector<EigenMatrix>>{{ - 2 * P2 * Vs[0] }};
+	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<EigenMatrix>{ - 2 * P2 * Vs[0] };
 	};
 };
 

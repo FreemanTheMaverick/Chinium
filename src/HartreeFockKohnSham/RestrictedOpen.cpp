@@ -185,12 +185,12 @@ class ObjLBFGS: public ObjBase{ public:
 		Lsqrtinv = Lsqrt.cwiseInverse();
 	};
 
-	std::vector<std::vector<EigenMatrix>> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<std::vector<EigenMatrix>>{{ ::Preconditioner(Cprime, Cprime_perp, Ksqrtinv, Lsqrtinv, Vs[0]) }};
+	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<EigenMatrix>{ ::Preconditioner(Cprime, Cprime_perp, Ksqrtinv, Lsqrtinv, Vs[0]) };
 	};
 
-	std::vector<std::vector<EigenMatrix>> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<std::vector<EigenMatrix>>{{ ::Preconditioner(Cprime, Cprime_perp, Ksqrt, Lsqrt, Vs[0]) }};
+	std::vector<EigenMatrix> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<EigenMatrix>{ ::Preconditioner(Cprime, Cprime_perp, Ksqrt, Lsqrt, Vs[0]) };
 	};
 };
 
@@ -207,7 +207,7 @@ class ObjNewtonBase: public ObjBase{ public:
 
 	virtual std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const = 0;
 
-	std::vector<std::vector<EigenMatrix>> Hessian(std::vector<EigenMatrix> Vprimes) const override{
+	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vprimes) const override{
 		std::vector<EigenMatrix> dCprimes = Cprimes;
 		std::vector<EigenMatrix> dDprimes = Dprimes;
 		int ncols = 0;
@@ -229,11 +229,11 @@ class ObjNewtonBase: public ObjBase{ public:
 		if (nd) HdCprime(Eigen::placeholders::all, Eigen::seqN(0, nd)) = 4 * HdCprimes[itype++];
 		if (na) HdCprime(Eigen::placeholders::all, Eigen::seqN(nd, na)) = 2 * HdCprimes[itype++];
 		if (nb) HdCprime(Eigen::placeholders::all, Eigen::seqN(nd + na, nb)) = 2 * HdCprimes[itype++];
-		return std::vector<std::vector<EigenMatrix>>{{ HdCprime }};
+		return std::vector<EigenMatrix>{ HdCprime };
 	};
 
-	std::vector<std::vector<EigenMatrix>> Preconditioner(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<std::vector<EigenMatrix>>{{ ::Preconditioner(Cprime, Cprime_perp, Kinv, Linv, Vs[0]) }};
+	std::vector<EigenMatrix> Preconditioner(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<EigenMatrix>{ ::Preconditioner(Cprime, Cprime_perp, Kinv, Linv, Vs[0]) };
 	};
 };
 

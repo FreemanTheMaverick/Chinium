@@ -176,12 +176,12 @@ class ObjLBFGS: public ObjBase{ public:
 		Asqrtinv = Asqrt.cwiseInverse();
 	};
 
-	std::vector<std::vector<EigenMatrix>> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<std::vector<EigenMatrix>>{{ ::Preconditioner(Dprime, Asqrtinv, Vs[0]) }};
+	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<EigenMatrix>{ ::Preconditioner(Dprime, Asqrtinv, Vs[0]) };
 	};
 
-	std::vector<std::vector<EigenMatrix>> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<std::vector<EigenMatrix>>{{ ::Preconditioner(Dprime, Asqrt, Vs[0]) }};
+	std::vector<EigenMatrix> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<EigenMatrix>{ ::Preconditioner(Dprime, Asqrt, Vs[0]) };
 	};
 };
 
@@ -195,8 +195,8 @@ class ObjNewtonBase: public ObjBase{ public:
 		Ainv = A.cwiseInverse();
 	};
 
-	std::vector<std::vector<EigenMatrix>> Preconditioner(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<std::vector<EigenMatrix>>{{ ::Preconditioner(Dprime, Ainv, Vs[0]) }};
+	std::vector<EigenMatrix> Preconditioner(std::vector<EigenMatrix> Vs) const override{
+		return std::vector<EigenMatrix>{ ::Preconditioner(Dprime, Ainv, Vs[0]) };
 	};
 };
 
@@ -208,7 +208,7 @@ class ObjNewton: public ObjNewtonBase{ public:
 		if (*xc) xc->Evaluate("f", *grid);
 	};
 
-	std::vector<std::vector<EigenMatrix>> Hessian(std::vector<EigenMatrix> Vprimes) const override{
+	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vprimes) const override{
 		const EigenMatrix Vprime = Vprimes[0];
 		const EigenMatrix V = Z * Vprime * Z.transpose();
 		const auto [FhfU, _, __] = int4c2e->ContractInts(V, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
@@ -218,7 +218,7 @@ class ObjNewton: public ObjNewtonBase{ public:
 			FxcU = grid->getFockU<u_t>()[0][0];
 		}
 		const EigenMatrix FU = FhfU + FxcU;
-		return std::vector<std::vector<EigenMatrix>>{{ Z.transpose() * FU * Z }};
+		return std::vector<EigenMatrix>{ Z.transpose() * FU * Z };
 	};
 };
 
@@ -232,8 +232,8 @@ class ObjARH: public ObjNewtonBase{ public:
 		arh.Append(Dprime, Fprime);
 	};
 
-	std::vector<std::vector<EigenMatrix>> Hessian(std::vector<EigenMatrix> Vprimes) const override{
-		return std::vector<std::vector<EigenMatrix>>{{ arh.Hessian(Vprimes[0]) }};
+	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vprimes) const override{
+		return std::vector<EigenMatrix>{ arh.Hessian(Vprimes[0]) };
 	};
 };
 

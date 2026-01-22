@@ -308,8 +308,8 @@ class ObjBase: public Maniverse::Objective{ public:
 
 		Value = D.cwiseProduct(Hcore + Fhf).sum() + Exc
 			+ 2 * T * (
-					Occ_oa_arr.pow(Occ_oa_arr).log() +
-					( 1. - Occ_oa_arr ).pow( 1. - Occ_oa_arr ).log()
+					Occ_a_arr.pow(Occ_a_arr).log() +
+					( 1. - Occ_a_arr ).pow( 1. - Occ_a_arr ).log()
 			).sum()
 			- 2 * Mu * Occ_oa_arr.sum();
 		EigenMatrix GradC = 4 * Fprime * Cprime_oa * Occ_oa.asDiagonal();
@@ -357,24 +357,16 @@ class ObjLBFGS: public ObjBase{ public:
 		Lsqrtinv = Lsqrt.cwiseInverse();
 	};
 
-	std::vector<std::vector<EigenMatrix>> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
+	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
 		const EigenMatrix PCC = ::Preconditioner(Cprime_oa, Cprime_v, Ksqrtinv, Lsqrtinv, Vs[0]);
-		std::vector<std::vector<EigenMatrix>> PVV = {{ PCC }};
-		if ( Na ){
-			PVV[0].push_back(EigenZero(nbasis, No + Na));
-			PVV.push_back({ EigenZero(Na, 1), Vs[1] });
-		}
-		return PVV;
+		if ( Na ) return std::vector<EigenMatrix>{ PCC, Vs[1] };
+		else return std::vector<EigenMatrix>{ PCC };
 	};
 
-	std::vector<std::vector<EigenMatrix>> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
+	std::vector<EigenMatrix> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
 		const EigenMatrix PCC = ::Preconditioner(Cprime_oa, Cprime_v, Ksqrt, Lsqrt, Vs[0]);
-		std::vector<std::vector<EigenMatrix>> PVV = {{ PCC }};
-		if ( Na ){
-			PVV[0].push_back(EigenZero(nbasis, No + Na));
-			PVV.push_back({ EigenZero(Na, 1), Vs[1] });
-		}
-		return PVV;
+		if ( Na ) return std::vector<EigenMatrix>{ PCC, Vs[1] };
+		else return std::vector<EigenMatrix>{ PCC };
 	};
 };
 
@@ -391,8 +383,7 @@ class ObjNewtonBase: public ObjBase{ public:
 
 	virtual EigenMatrix DensityHessian(EigenMatrix dDprime) const = 0;
 
-	std::vector<std::vector<EigenMatrix>> Hessian(std::vector<EigenMatrix> dX) const override{
-		std::vector<std::vector<EigenMatrix>> HVV;
+	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dX) const override{
 		const EigenMatrix& dCprime_oa = dX[0];
 
 		// HCC
@@ -403,9 +394,8 @@ class ObjNewtonBase: public ObjBase{ public:
 				FoverC * Cprime_oa +
 				Fprime * dCprime_oa
 		) * Occ_oa.asDiagonal();
-		HVV = {{ HCC }};
-
-		if ( Na ){
+		if ( Na == 0 ) return std::vector<EigenMatrix>{ HCC };
+		else{
 			const EigenMatrix& dNprime_a = dX[1];
 
 			// HCN
@@ -414,34 +404,30 @@ class ObjNewtonBase: public ObjBase{ public:
 			EigenMatrix HCN = FoverN * Cprime_oa * Occ_oa.asDiagonal();
 			HCN.rightCols(Na) += Fprime * Cprime_a * dNprime_a.asDiagonal();
 			HCN *= 4;
-			HVV[0].push_back( HCN );
 
 			// HNC
 			EigenVector HNC = 2 * (
 					2 * dCprime_oa.rightCols(Na).transpose() * Fprime * Cprime_a
 					+ Cprime_a.transpose() * FoverC * Cprime_a
 			).diagonal();
-			HVV.push_back({ HNC });
 
 			// HNN
 			EigenVector HNN = 2 * (
 					( Cprime_a.transpose() * FoverN * Cprime_a ).diagonal()
 					- ( T / Occ_a_arr / ( Occ_a_arr - 1. ) ).matrix().cwiseProduct(dNprime_a)
 			);
-			HVV[1].push_back( HNN );
-		}
 
-		return HVV;
+			return std::vector<EigenMatrix>{
+							HCC + HCN,
+							HNC + HNN
+			};
+		}
 	};
 
-	std::vector<std::vector<EigenMatrix>> Preconditioner(std::vector<EigenMatrix> Vs) const override{
+	std::vector<EigenMatrix> Preconditioner(std::vector<EigenMatrix> Vs) const override{
 		const EigenMatrix PCC = ::Preconditioner(Cprime_oa, Cprime_v, Kinv, Linv, Vs[0]);
-		std::vector<std::vector<EigenMatrix>> PVV = {{ PCC }};
-		if ( Na ){
-			PVV[0].push_back(EigenZero(nbasis, No + Na));
-			PVV.push_back({ EigenZero(Na, 1), Vs[1] });
-		}
-		return PVV;
+		if ( Na ) return std::vector<EigenMatrix>{ PCC, Vs[1] };
+		else return std::vector<EigenMatrix>{ PCC };
 	};
 };
 
