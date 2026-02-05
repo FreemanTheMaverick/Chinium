@@ -16,7 +16,6 @@
 #include "ExchangeCorrelation.h"
 #include "HartreeFockKohnSham/HartreeFockKohnSham.h"
 //#include "Localization/Localize.h"
-#include<iostream>
 
 #define Round(x) (int)( isInt(x) ? std::lround(x) : std::floor(x) )
 
