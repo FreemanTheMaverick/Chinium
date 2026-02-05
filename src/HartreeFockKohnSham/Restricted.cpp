@@ -127,32 +127,34 @@ class ObjBase: public Maniverse::Objective{ public:
 		C = A = EigenZero(nbasis, nbasis);
 	};
 
-	virtual void Calculate(std::vector<EigenMatrix> Dprimes, int /*derivative*/) override{
-		Dprime = Dprimes[0];
-		const EigenMatrix D = Z * Dprime * Z.transpose();
-		const auto [Ghf, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
-		double Exc = 0;
-		EigenMatrix Gxc = EigenZero(nbasis, nbasis);
-		if (*xc){
-			grid->getDensity({ 2 * D });
-			xc->Evaluate("ev", *grid);
-			Exc = grid->getEnergy();
-			Gxc = grid->getFock()[0];
+	virtual void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
+		if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
+			Dprime = Dprimes[0];
+			const EigenMatrix D = Z * Dprime * Z.transpose();
+			const auto [Ghf, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+			double Exc = 0;
+			EigenMatrix Gxc = EigenZero(nbasis, nbasis);
+			if (*xc){
+				grid->getDensity({ 2 * D });
+				xc->Evaluate("ev", *grid);
+				Exc = grid->getEnergy();
+				Gxc = grid->getFock()[0];
+			}
+			const EigenMatrix Fhf = Hcore + Ghf;
+			const EigenMatrix F = Fhf + Gxc;
+			Value = 0.5 * ( ( D * ( Hcore + Fhf ) ).trace() + Exc );
+			Fprime = Z.transpose() * F * Z; // Euclidean gradient
 		}
-		const EigenMatrix Fhf = Hcore + Ghf;
-		const EigenMatrix F = Fhf + Gxc;
-		Fprime = Z.transpose() * F * Z; // Euclidean gradient
-
-		Value = 0.5 * ( ( D * ( Hcore + Fhf ) ).trace() + Exc );
-		Gradient = { Fprime };
-
-		eigensolver.compute(Fprime);
-		epsilons = eigensolver.eigenvalues();
-		C = Z * eigensolver.eigenvectors();
-		A = EigenMatrix::Ones(nbasis, nbasis);
-		for ( int o = 0; o < nocc; o++ ){
-			for ( int v = nocc; v < nbasis; v++ ){
-				A(o, v) = A(v, o) = 2 * ( epsilons(v) - epsilons(o) );
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			Gradient = { Fprime };
+			eigensolver.compute(Fprime);
+			epsilons = eigensolver.eigenvalues();
+			C = Z * eigensolver.eigenvectors();
+			A = EigenMatrix::Ones(nbasis, nbasis);
+			for ( int o = 0; o < nocc; o++ ){
+				for ( int v = nocc; v < nbasis; v++ ){
+					A(o, v) = A(v, o) = 2 * ( epsilons(v) - epsilons(o) );
+				}
 			}
 		}
 	};
@@ -170,10 +172,12 @@ class ObjLBFGS: public ObjBase{ public:
 
 	using ObjBase::ObjBase;
 
-	void Calculate(std::vector<EigenMatrix> Dprimes, int /*derivative*/) override{
-		ObjBase::Calculate(Dprimes, 2);
-		Asqrt = A.cwiseSqrt();
-		Asqrtinv = Asqrt.cwiseInverse();
+	void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
+		ObjBase::Calculate(Dprimes, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			Asqrt = A.cwiseSqrt();
+			Asqrtinv = Asqrt.cwiseInverse();
+		}
 	};
 
 	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
@@ -190,9 +194,11 @@ class ObjNewtonBase: public ObjBase{ public:
 
 	using ObjBase::ObjBase;
 
-	virtual void Calculate(std::vector<EigenMatrix> Dprimes, int /*derivative*/) override{
-		ObjBase::Calculate(Dprimes, 2);
-		Ainv = A.cwiseInverse();
+	virtual void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
+		ObjBase::Calculate(Dprimes, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
+			Ainv = A.cwiseInverse();
+		}
 	};
 
 	std::vector<EigenMatrix> Preconditioner(std::vector<EigenMatrix> Vs) const override{
@@ -203,9 +209,11 @@ class ObjNewtonBase: public ObjBase{ public:
 class ObjNewton: public ObjNewtonBase{ public:
 	using ObjNewtonBase::ObjNewtonBase;
 
-	void Calculate(std::vector<EigenMatrix> Dprimes, int /*derivative*/) override{
-		ObjNewtonBase::Calculate(Dprimes, 2);
-		if (*xc) xc->Evaluate("f", *grid);
+	void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
+		ObjNewtonBase::Calculate(Dprimes, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 2) && *xc ){
+			xc->Evaluate("f", *grid);
+		}
 	};
 
 	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vprimes) const override{
@@ -227,9 +235,11 @@ class ObjARH: public ObjNewtonBase{ public:
 
 	using ObjNewtonBase::ObjNewtonBase;
 
-	void Calculate(std::vector<EigenMatrix> Dprimes, int /*derivative*/) override{
-		ObjNewtonBase::Calculate(Dprimes, 2);
-		arh.Append(Dprime, Fprime);
+	void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
+		ObjNewtonBase::Calculate(Dprimes, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			arh.Append(Dprime, Fprime);
+		}
 	};
 
 	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vprimes) const override{

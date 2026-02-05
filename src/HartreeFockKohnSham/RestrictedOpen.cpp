@@ -72,95 +72,100 @@ class ObjBase: public Maniverse::Objective{ public:
 		epsilons = EigenZero(nbasis, 1);
 	};
 
-	virtual void Calculate(std::vector<EigenMatrix> Cprimes_, int /*derivative*/) override{
-		Cprime = Cprimes_[0];
-		std::vector<EigenMatrix> Ds(3, EigenZero(0, 0));
-		int ncols = 0;
-		for ( int itype = 0; itype < ntypes; itype++ ){
-			Cprimes[itype] = Cprime(Eigen::placeholders::all, Eigen::seqN(ncols, space_sizes[type]));
-			ncols += space_sizes[type];
-			Dprimes[itype] = Cprimes[itype] * Cprimes[itype].transpose();
-			Ds[type].resize(nbasis, nbasis);
-			Ds[type] = Z * Dprimes[itype] * Z.transpose();
-		}
-		std::vector<EigenMatrix> Ghfs(3, EigenZero(nbasis, nbasis));
-		std::tie(Ghfs[0], Ghfs[1], Ghfs[2]) = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
-		std::vector<EigenMatrix> Fhfs(ntypes, EigenZero(nbasis, nbasis));
-		for ( int itype = 0; itype < ntypes; itype++ ){
-			Fhfs[itype] = Hcore + Ghfs[type];
-		}
+	virtual void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
+		if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
+			Cprime = Cprimes_[0];
+			std::vector<EigenMatrix> Ds(3, EigenZero(0, 0));
+			int ncols = 0;
+			for ( int itype = 0; itype < ntypes; itype++ ){
+				Cprimes[itype] = Cprime(Eigen::placeholders::all, Eigen::seqN(ncols, space_sizes[type]));
+				ncols += space_sizes[type];
+				Dprimes[itype] = Cprimes[itype] * Cprimes[itype].transpose();
+				Ds[type].resize(nbasis, nbasis);
+				Ds[type] = Z * Dprimes[itype] * Z.transpose();
+			}
+			std::vector<EigenMatrix> Ghfs(3, EigenZero(nbasis, nbasis));
+			std::tie(Ghfs[0], Ghfs[1], Ghfs[2]) = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
+			std::vector<EigenMatrix> Fhfs(ntypes, EigenZero(nbasis, nbasis));
+			for ( int itype = 0; itype < ntypes; itype++ ){
+				Fhfs[itype] = Hcore + Ghfs[type];
+			}
 
-		Ds[0] *= 2;
-		Ds.erase(
-				std::remove_if(
-					Ds.begin(), Ds.end(),
-					[](const EigenMatrix& D){ return D.size() == 0; }
-				), Ds.end()
-		);
-		double Exc = 0;
-		std::vector<EigenMatrix> Gxcs(ntypes, EigenZero(nbasis, nbasis));
-		if (*xc){
-			grid->getDensity(Ds);
-			xc->Evaluate("ev", *grid);
-			Exc = grid->getEnergy();
-			Gxcs = grid->getFock();
-		}
+			Ds[0] *= 2;
+			Ds.erase(
+					std::remove_if(
+						Ds.begin(), Ds.end(),
+						[](const EigenMatrix& D){ return D.size() == 0; }
+					), Ds.end()
+			);
+			double Exc = 0;
+			std::vector<EigenMatrix> Gxcs(ntypes, EigenZero(nbasis, nbasis));
+			if (*xc){
+				grid->getDensity(Ds);
+				xc->Evaluate("ev", *grid);
+				Exc = grid->getEnergy();
+				Gxcs = grid->getFock();
+			}
 
-		std::vector<EigenMatrix> Fs(ntypes, EigenZero(nbasis, nbasis));
-		Value = Exc;
-		for ( int itype = 0; itype < ntypes; itype++ ){
-			Fs[itype] = Fhfs[itype] + Gxcs[itype];
-			Fprimes[itype] = Z.transpose() * Fs[itype] * Z;
-			Value += 0.5 * Ds[itype].cwiseProduct( Hcore + Fhfs[itype] ).sum();
-		}
-		Gradient = { EigenZero(nbasis, nd + na + nb) };
-		int itype = 0;
-		if (nd){
-			Gradient[0](Eigen::placeholders::all, Eigen::seqN(0, nd)) = 4 * Fprimes[itype] * Cprimes[itype];
-			itype++;
-		}
-		if (na){
-			Gradient[0](Eigen::placeholders::all, Eigen::seqN(nd, na)) = 2 * Fprimes[itype] * Cprimes[itype];
-			itype++;
-		}
-		if (nb){
-			Gradient[0](Eigen::placeholders::all, Eigen::seqN(nd + na, nb)) = 2 * Fprimes[itype] * Cprimes[itype];
-			itype++;
-		}
-
-		Eigen::HouseholderQR<EigenMatrix> qr(Cprime);
-		const EigenMatrix Call = qr.householderQ();
-		C = Z * Call;
-		Cprime_perp = Call.rightCols(nbasis - nd - na - nb);
-		std::vector<EigenMatrix> Fmos(4, EigenZero(0, 0));
-		itype = 0;
-		if (nd) Fmos[0] = Call.transpose() * Fprimes[itype++] * Call;
-		if (na) Fmos[1] = Call.transpose() * Fprimes[itype++] * Call;
-		if (nb) Fmos[2] = Call.transpose() * Fprimes[itype++] * Call;
-		Fmos[3] = EigenZero(nbasis, nbasis);
-		EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
-		for ( int i = 0; i < nbasis; i++ ){
-			int I = 0; int Iscale = 4;
-			if ( i < nd ){ I = 0; Iscale = 4; }
-			else if ( i < nd + na ){ I = 1; Iscale = 2; }
-			else if ( i < nd + na + nb ) { I = 2; Iscale = 2; }
-			else { I = 3; Iscale = 0; };
-			for ( int j = 0; j < nbasis; j++ ){
-				int J = 0; int Jscale = 4;
-				if ( j < nd ){ J = 0; Jscale = 4; }
-				else if ( j < nd + na ){ J = 1; Jscale = 2; }
-				else if ( j < nd + na + nb ){ J = 2; Jscale = 2; }
-				else{ J = 3; Jscale = 0; }
-				const double FIi = Fmos[I](i, i) * Iscale;
-				const double FIj = Fmos[I](j, j) * Iscale;
-				const double FJi = Fmos[J](i, i) * Jscale;
-				const double FJj = Fmos[J](j, j) * Jscale;
-				A(i, j) = std::abs(FIj + FJi - FIi - FJj);
-				if ( A(i, j) < 0.1 ) A(i, j) = 0.1;
+			std::vector<EigenMatrix> Fs(ntypes, EigenZero(nbasis, nbasis));
+			Value = Exc;
+			for ( int itype = 0; itype < ntypes; itype++ ){
+				Fs[itype] = Fhfs[itype] + Gxcs[itype];
+				Fprimes[itype] = Z.transpose() * Fs[itype] * Z;
+				Value += 0.5 * Ds[itype].cwiseProduct( Hcore + Fhfs[itype] ).sum();
 			}
 		}
-		K = A.block(0, 0, nd + na + nb, nd + na + nb);
-		L = A.block(nd + na + nb, 0, nbasis - nd - na - nb, nd + na + nb);
+
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			Gradient = { EigenZero(nbasis, nd + na + nb) };
+			int itype = 0;
+			if (nd){
+				Gradient[0](Eigen::placeholders::all, Eigen::seqN(0, nd)) = 4 * Fprimes[itype] * Cprimes[itype];
+				itype++;
+			}
+			if (na){
+				Gradient[0](Eigen::placeholders::all, Eigen::seqN(nd, na)) = 2 * Fprimes[itype] * Cprimes[itype];
+				itype++;
+			}
+			if (nb){
+				Gradient[0](Eigen::placeholders::all, Eigen::seqN(nd + na, nb)) = 2 * Fprimes[itype] * Cprimes[itype];
+				itype++;
+			}
+
+			Eigen::HouseholderQR<EigenMatrix> qr(Cprime);
+			const EigenMatrix Call = qr.householderQ();
+			C = Z * Call;
+			Cprime_perp = Call.rightCols(nbasis - nd - na - nb);
+			std::vector<EigenMatrix> Fmos(4, EigenZero(0, 0));
+			itype = 0;
+			if (nd) Fmos[0] = Call.transpose() * Fprimes[itype++] * Call;
+			if (na) Fmos[1] = Call.transpose() * Fprimes[itype++] * Call;
+			if (nb) Fmos[2] = Call.transpose() * Fprimes[itype++] * Call;
+			Fmos[3] = EigenZero(nbasis, nbasis);
+			EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
+			for ( int i = 0; i < nbasis; i++ ){
+				int I = 0; int Iscale = 4;
+				if ( i < nd ){ I = 0; Iscale = 4; }
+				else if ( i < nd + na ){ I = 1; Iscale = 2; }
+				else if ( i < nd + na + nb ) { I = 2; Iscale = 2; }
+				else { I = 3; Iscale = 0; };
+				for ( int j = 0; j < nbasis; j++ ){
+					int J = 0; int Jscale = 4;
+					if ( j < nd ){ J = 0; Jscale = 4; }
+					else if ( j < nd + na ){ J = 1; Jscale = 2; }
+					else if ( j < nd + na + nb ){ J = 2; Jscale = 2; }
+					else{ J = 3; Jscale = 0; }
+					const double FIi = Fmos[I](i, i) * Iscale;
+					const double FIj = Fmos[I](j, j) * Iscale;
+					const double FJi = Fmos[J](i, i) * Jscale;
+					const double FJj = Fmos[J](j, j) * Jscale;
+					A(i, j) = std::abs(FIj + FJi - FIi - FJj);
+					if ( A(i, j) < 0.1 ) A(i, j) = 0.1;
+				}
+			}
+			K = A.block(0, 0, nd + na + nb, nd + na + nb);
+			L = A.block(nd + na + nb, 0, nbasis - nd - na - nb, nd + na + nb);
+		}
 	};
 };
 
@@ -177,12 +182,14 @@ class ObjLBFGS: public ObjBase{ public:
 
 	using ObjBase::ObjBase;
 
-	void Calculate(std::vector<EigenMatrix> Cprimes_, int /*derivative*/) override{
-		ObjBase::Calculate(Cprimes_, 2);
-		Ksqrt = K.cwiseSqrt();
-		Ksqrtinv = Ksqrt.cwiseInverse();
-		Lsqrt = L.cwiseSqrt();
-		Lsqrtinv = Lsqrt.cwiseInverse();
+	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
+		ObjBase::Calculate(Cprimes_, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			Ksqrt = K.cwiseSqrt();
+			Ksqrtinv = Ksqrt.cwiseInverse();
+			Lsqrt = L.cwiseSqrt();
+			Lsqrtinv = Lsqrt.cwiseInverse();
+		}
 	};
 
 	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
@@ -199,10 +206,12 @@ class ObjNewtonBase: public ObjBase{ public:
 
 	using ObjBase::ObjBase;
 
-	void Calculate(std::vector<EigenMatrix> Cprimes_, int /*derivative*/) override{
-		ObjBase::Calculate(Cprimes_, 2);
-		Kinv = K.cwiseInverse();
-		Linv = L.cwiseInverse();
+	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
+		ObjBase::Calculate(Cprimes_, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
+			Kinv = K.cwiseInverse();
+			Linv = L.cwiseInverse();
+		}
 	};
 
 	virtual std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const = 0;
@@ -240,9 +249,11 @@ class ObjNewtonBase: public ObjBase{ public:
 class ObjNewton: public ObjNewtonBase{ public:
 	using ObjNewtonBase::ObjNewtonBase;
 
-	void Calculate(std::vector<EigenMatrix> Cprimes_, int /*derivative*/) override{
-		ObjNewtonBase::Calculate(Cprimes_, 2);
-		if (*xc) xc->Evaluate("f", *grid);
+	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
+		ObjNewtonBase::Calculate(Cprimes_, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 2) && *xc ){
+			xc->Evaluate("f", *grid);
+		}
 	};
 
 	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const override{
@@ -280,16 +291,18 @@ class ObjARH: public ObjNewtonBase{ public:
 
 	using ObjNewtonBase::ObjNewtonBase;
 
-	void Calculate(std::vector<EigenMatrix> Cprimes_, int /*derivative*/) override{
-		ObjNewtonBase::Calculate(Cprimes_, 2);
-		EigenMatrix Dprime = EigenZero(nbasis, nbasis * ntypes);
-		EigenMatrix Fprime = EigenZero(nbasis, nbasis * ntypes);
-		for ( int itype = 0; itype < ntypes; itype++ ){
-			Dprime(Eigen::placeholders::all, Eigen::seqN(itype * nbasis, nbasis)) = Dprimes[itype];
-			Fprime(Eigen::placeholders::all, Eigen::seqN(itype * nbasis, nbasis)) = Fprimes[itype] / 2;
+	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
+		ObjNewtonBase::Calculate(Cprimes_, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			EigenMatrix Dprime = EigenZero(nbasis, nbasis * ntypes);
+			EigenMatrix Fprime = EigenZero(nbasis, nbasis * ntypes);
+			for ( int itype = 0; itype < ntypes; itype++ ){
+				Dprime(Eigen::placeholders::all, Eigen::seqN(itype * nbasis, nbasis)) = Dprimes[itype];
+				Fprime(Eigen::placeholders::all, Eigen::seqN(itype * nbasis, nbasis)) = Fprimes[itype] / 2;
+			}
+			if (nd) Fprime.leftCols(nbasis) *= 2;
+			arh.Append(Dprime, Fprime);
 		}
-		if (nd) Fprime.leftCols(nbasis) *= 2;
-		arh.Append(Dprime, Fprime);
 	};
 
 	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const override{
@@ -348,7 +361,32 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 			) ) throw std::runtime_error("Convergence failed!");
 		}
 	}
-	return std::make_tuple(obj.Value, obj.epsilons, obj.C);
+
+	#define nv obj.nbasis - nd - na - nb
+	if ( nd && na ){ // Guest and Saunders averaged Fock matrix
+		EigenMatrix Cp_all = EigenZero(obj.nbasis, obj.nbasis);
+		Cp_all << obj.Cprime, obj.Cprime_perp;
+		EigenMatrix Fd = Cp_all.transpose() * obj.Fprimes[0] * Cp_all;
+		EigenMatrix Fa = 0.5 * Cp_all.transpose() * obj.Fprimes[1] * Cp_all;
+		EigenMatrix bigF = EigenZero(obj.nbasis, obj.nbasis);
+		// Diagonal
+		bigF.block(0, 0, nd, nd) = Fd.block(0, 0, nd, nd);
+		bigF.block(nd, nd, na, na) = Fd.block(nd, nd, na, na);
+		bigF.block(nd + na, nd + na, nv, nv) = Fd.block(nd + na, nd + na, nv, nv);
+		// Off-diagonal
+		bigF.block(0, nd, nd, na) = Fd.block(0, nd, nd, na) - Fa.block(0, nd, nd, na);
+		bigF.block(nd, 0, na, nd) = bigF.block(0, nd, nd, na).transpose();
+		bigF.block(0, nd + na, nd, nv) = Fd.block(0, nd + na, nd, nv);
+		bigF.block(nd + na, 0, nv, nd) = bigF.block(0, nd + na, nd, nv).transpose();
+		bigF.block(nd, nd + na, na, nv) = Fa.block(nd, nd + na, na, nv);
+		bigF.block(nd + na, nd, nv, na) = bigF.block(nd, nd + na, na, nv).transpose();
+		bigF = ( Cp_all * bigF * Cp_all.transpose() ).eval();
+		Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+		eigensolver.compute(bigF);
+		const EigenVector epsilons = eigensolver.eigenvalues();
+		const EigenMatrix C = Z * eigensolver.eigenvectors();
+		return std::make_tuple(obj.Value, epsilons, C);
+	}else return std::make_tuple(obj.Value, obj.epsilons, obj.C);
 }
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenLBFGS(

@@ -268,71 +268,75 @@ class ObjBase: public Maniverse::Objective{ public:
 
 	#define Occ_a_arr Occ_a.array()
 	#define Occ_oa_arr Occ_oa.array()
-	void Calculate(std::vector<EigenMatrix> X, int /*derivative*/){
-		Cprime_oa = X[0];
-		Occ_a = X.size() == 2 ? X[1] : Eigen::VectorXd::Zero(0);
-		Na = Occ_a.size(); No = Cprime_oa.cols() - Na; Nv = nbasis - No - Na;
-		Cprime_o = Cprime_oa.leftCols(No);
-		Cprime_a = Cprime_oa.rightCols(Na);
-		Eigen::HouseholderQR<EigenMatrix> qr(Cprime_oa);
-		Cprime_v = EigenMatrix(qr.householderQ()).rightCols(Nv);
-		Occ_oa = EigenMatrix::Ones(No + Na, 1);
-		Occ_oa.tail(Na) = Occ_a;
+	void Calculate(std::vector<EigenMatrix> X, std::vector<int> derivatives){
+		if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
+			Cprime_oa = X[0];
+			Occ_a = X.size() == 2 ? X[1] : Eigen::VectorXd::Zero(0);
+			Na = Occ_a.size(); No = Cprime_oa.cols() - Na; Nv = nbasis - No - Na;
+			Cprime_o = Cprime_oa.leftCols(No);
+			Cprime_a = Cprime_oa.rightCols(Na);
+			Eigen::HouseholderQR<EigenMatrix> qr(Cprime_oa);
+			Cprime_v = EigenMatrix(qr.householderQ()).rightCols(Nv);
+			Occ_oa = EigenMatrix::Ones(No + Na, 1);
+			Occ_oa.tail(Na) = Occ_a;
 
-		if (output>0){
-			std::printf("Fractional occupation:");
-			for ( int i = 0; i < Na; i++ ) std::printf(" %f", Occ_a(i));
-			std::printf("\n");
-		}
-		for ( int i = 0; i < Na; i++ ) if ( Occ_a(i) > 1. - Eta ) throw OneMoreOccupied();
-		for ( int i = 0; i < Na; i++ ) if ( Occ_a(i) < Eta ) throw OneMoreVirtual();
-		if (output>0) std::printf("Total number of electrons = %.10f\n", 2 * Occ_oa.sum() );
-
-		Dprime = Cprime_oa * Occ_oa.asDiagonal() * Cprime_oa.transpose();
-		const EigenMatrix D = Z * Dprime * Z.transpose();
-		const auto [Ghf, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
-		const EigenMatrix Fhf = Hcore + Ghf;
-		double Exc = 0;
-		EigenMatrix Gxc = EigenZero(nbasis, nbasis);
-		if (*xc){
-			grid->getDensity({ 2 * D });
-			xc->Evaluate("ev", *grid);
-			Exc = grid->getEnergy();
-			Gxc = grid->getFock()[0];
-		}
-		const EigenMatrix F = Fhf + Gxc;
-		Fprime = Z.transpose() * F * Z;
-
-		eigensolver.compute(Fprime);
-		Eps_oav = eigensolver.eigenvalues();
-
-		Value = D.cwiseProduct(Hcore + Fhf).sum() + Exc
-			+ 2 * T * (
-					Occ_a_arr.pow(Occ_a_arr).log() +
-					( 1. - Occ_a_arr ).pow( 1. - Occ_a_arr ).log()
-			).sum()
-			- 2 * Mu * Occ_oa_arr.sum();
-		EigenMatrix GradC = 4 * Fprime * Cprime_oa * Occ_oa.asDiagonal();
-		Gradient = { GradC };
-		if ( Na ){
-			const EigenVector GradOcc1 = ( Cprime_oa.transpose() * Fprime * Cprime_oa ).diagonal().tail(Na) * 2;
-			const EigenVector GradOcc2 = - 2 * ( T * ( 1. / Occ_a_arr - 1. ).log() + Mu ).matrix();
-			Gradient.push_back( GradOcc1 + GradOcc2 );
-		}
-
-		// Preconditioner
-		// https://doi.org/10.1016/j.cpc.2016.06.023
-		EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
-		for ( int i = 0; i < nbasis; i++ ){
-			const double occ_i = i < No + Na ? Occ_oa(i) : 0;
-			for ( int j = i; j < nbasis; j++ ){
-				const double occ_j = j < No + Na ? Occ_oa(j) : 0;
-				const double occ_diff = occ_i - occ_j;
-				if ( std::abs(occ_diff) > Eta ) A(i, j) = A(j, i) = - 2 * ( Eps_oav(i) - Eps_oav(j) ) * occ_diff;
+			if (output>0){
+				std::printf("Fractional occupation:");
+				for ( int i = 0; i < Na; i++ ) std::printf(" %f", Occ_a(i));
+				std::printf("\n");
 			}
+			for ( int i = 0; i < Na; i++ ) if ( Occ_a(i) > 1. - Eta ) throw OneMoreOccupied();
+			for ( int i = 0; i < Na; i++ ) if ( Occ_a(i) < Eta ) throw OneMoreVirtual();
+			if (output>0) std::printf("Total number of electrons = %.10f\n", 2 * Occ_oa.sum() );
+
+			Dprime = Cprime_oa * Occ_oa.asDiagonal() * Cprime_oa.transpose();
+			const EigenMatrix D = Z * Dprime * Z.transpose();
+			const auto [Ghf, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+			const EigenMatrix Fhf = Hcore + Ghf;
+			double Exc = 0;
+			EigenMatrix Gxc = EigenZero(nbasis, nbasis);
+			if (*xc){
+				grid->getDensity({ 2 * D });
+				xc->Evaluate("ev", *grid);
+				Exc = grid->getEnergy();
+				Gxc = grid->getFock()[0];
+			}
+			const EigenMatrix F = Fhf + Gxc;
+			Fprime = Z.transpose() * F * Z;
+			Value = D.cwiseProduct(Hcore + Fhf).sum() + Exc
+				+ 2 * T * (
+						Occ_a_arr.pow(Occ_a_arr).log() +
+						( 1. - Occ_a_arr ).pow( 1. - Occ_a_arr ).log()
+				).sum()
+				- 2 * Mu * Occ_oa_arr.sum();
 		}
-		K = A.topLeftCorner(No + Na, No + Na);
-		L = A.bottomLeftCorner(Nv, No + Na);
+
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			EigenMatrix GradC = 4 * Fprime * Cprime_oa * Occ_oa.asDiagonal();
+			Gradient = { GradC };
+			if ( Na ){
+				const EigenVector GradOcc1 = ( Cprime_oa.transpose() * Fprime * Cprime_oa ).diagonal().tail(Na) * 2;
+				const EigenVector GradOcc2 = - 2 * ( T * ( 1. / Occ_a_arr - 1. ).log() + Mu ).matrix();
+				Gradient.push_back( GradOcc1 + GradOcc2 );
+			}
+
+			eigensolver.compute(Fprime);
+			Eps_oav = eigensolver.eigenvalues();
+
+			// Preconditioner
+			// https://doi.org/10.1016/j.cpc.2016.06.023
+			EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
+			for ( int i = 0; i < nbasis; i++ ){
+				const double occ_i = i < No + Na ? Occ_oa(i) : 0;
+				for ( int j = i; j < nbasis; j++ ){
+					const double occ_j = j < No + Na ? Occ_oa(j) : 0;
+					const double occ_diff = occ_i - occ_j;
+					if ( std::abs(occ_diff) > Eta ) A(i, j) = A(j, i) = - 2 * ( Eps_oav(i) - Eps_oav(j) ) * occ_diff;
+				}
+			}
+			K = A.topLeftCorner(No + Na, No + Na);
+			L = A.bottomLeftCorner(Nv, No + Na);
+		}
 	};
 };
 
@@ -349,12 +353,14 @@ class ObjLBFGS: public ObjBase{ public:
 
 	using ObjBase::ObjBase;
 
-	void Calculate(std::vector<EigenMatrix> X, int /*derivative*/) override{
-		ObjBase::Calculate(X, 2);
-		Ksqrt = K.cwiseSqrt();
-		Ksqrtinv = Ksqrt.cwiseInverse();
-		Lsqrt = L.cwiseSqrt();
-		Lsqrtinv = Lsqrt.cwiseInverse();
+	void Calculate(std::vector<EigenMatrix> X, std::vector<int> derivatives) override{
+		ObjBase::Calculate(X, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			Ksqrt = K.cwiseSqrt();
+			Ksqrtinv = Ksqrt.cwiseInverse();
+			Lsqrt = L.cwiseSqrt();
+			Lsqrtinv = Lsqrt.cwiseInverse();
+		}
 	};
 
 	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
@@ -375,10 +381,12 @@ class ObjNewtonBase: public ObjBase{ public:
 
 	using ObjBase::ObjBase;
 
-	void Calculate(std::vector<EigenMatrix> X, int /*derivative*/) override{
-		ObjBase::Calculate(X, 2);
-		Kinv = K.cwiseInverse();
-		Linv = L.cwiseInverse();
+	void Calculate(std::vector<EigenMatrix> X, std::vector<int> derivatives) override{
+		ObjBase::Calculate(X, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
+			Kinv = K.cwiseInverse();
+			Linv = L.cwiseInverse();
+		}
 	};
 
 	virtual EigenMatrix DensityHessian(EigenMatrix dDprime) const = 0;
@@ -434,9 +442,11 @@ class ObjNewtonBase: public ObjBase{ public:
 class ObjNewton: public ObjNewtonBase{ public:
 	using ObjNewtonBase::ObjNewtonBase;
 
-	void Calculate(std::vector<EigenMatrix> X, int /*derivative*/) override{
-		ObjNewtonBase::Calculate(X, 2);
-		if (*xc) xc->Evaluate("f", *grid);
+	void Calculate(std::vector<EigenMatrix> X, std::vector<int> derivatives) override{
+		ObjNewtonBase::Calculate(X, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 2) && *xc ){
+			xc->Evaluate("f", *grid);
+		}
 	};
 
 	EigenMatrix DensityHessian(EigenMatrix dDprime) const override{
@@ -457,9 +467,11 @@ class ObjARH: public ObjNewtonBase{ public:
 
 	using ObjNewtonBase::ObjNewtonBase;
 
-	void Calculate(std::vector<EigenMatrix> X, int /*derivative*/) override{
-		ObjNewtonBase::Calculate(X, 2);
-		arh.Append(Dprime, Fprime);
+	void Calculate(std::vector<EigenMatrix> X, std::vector<int> derivatives) override{
+		ObjNewtonBase::Calculate(X, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			arh.Append(Dprime, Fprime);
+		}
 	};
 
 	EigenMatrix DensityHessian(EigenMatrix dDprime) const override{

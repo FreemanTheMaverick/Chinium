@@ -54,9 +54,9 @@ std::vector<std::vector<double>> ReadXYZ(std::string inp){
 	return atoms;
 }
 
-std::string ReadBasisSet(std::string inp){
+std::tuple<std::string, std::string> ReadBasisSet(std::string inp){
 	std::ifstream file(inp);
-	std::string basis;
+	std::string basis, pseudo;
 	std::string thisline;
 	bool found = 0;
 	while ( std::getline(file, thisline) && ! found ){
@@ -67,13 +67,13 @@ std::string ReadBasisSet(std::string inp){
 			std::string thisline_ = thisline;
 			__To_Upper__(thisline_);
 			if ( thisline_ == "READ" )
-				return "";
+				return std::make_tuple("", "");
 			std::stringstream ss(thisline);
-			ss >> basis;
+			ss >> basis >> pseudo;
 		}
 	}
 	if ( basis.length() == 0 ) throw std::runtime_error("Missing basis set name!");
-	return basis;
+	return std::make_tuple(basis, pseudo);
 }
 
 bool isInt(double x){
@@ -81,12 +81,10 @@ bool isInt(double x){
 	return std::abs( n - x ) < 1e-6;
 }
 
-std::tuple<double, double, double> ReadNumElectrons(std::string inp){
+std::tuple<double, double, double> ReadNumElectrons(std::string inp, int total_nuclear_charges){
 	std::ifstream file(inp);
 	std::vector<std::vector<double>> atoms = ReadXYZ(inp);
-	double ne = 0;
-	for ( std::vector<double>& atom : atoms )
-		ne += (double)std::lround(atom[0]);
+	double ne = total_nuclear_charges;
 	double charge = 0;
 	int spin1 = 0;
 	int spin2 = 0;

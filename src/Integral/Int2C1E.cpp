@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <libint2.hpp>
+#include <libecpint.hpp>
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -176,6 +177,113 @@ EigenMatrix getTwoCenter2(
 	return hessian + hessian.transpose() - (EigenMatrix)hessian.diagonal().asDiagonal();
 }
 
+std::vector<EigenMatrix> getPseudo(Mwfn& mwfn, int deriv_order){
+	const int n_shells = mwfn.getNumShells();
+	std::vector<double> g_coords, g_exps, g_coefs;
+	std::vector<int> g_ams, g_lengths;
+	int n_ecps = 0;
+	std::vector<double> u_coords, u_exps, u_coefs;
+	std::vector<int> u_ams, u_ns, u_lengths;
+	for ( int icenter = 0; icenter < mwfn.getNumCenters(); icenter++ ){
+		MwfnCenter& center = mwfn.Centers[icenter];
+		for ( int jshell = 0; jshell < center.getNumShells(); jshell++ ){
+			g_coords.push_back(center.Coordinates[0]);
+			g_coords.push_back(center.Coordinates[1]);
+			g_coords.push_back(center.Coordinates[2]);
+			MwfnShell& shell = center.Shells[jshell];
+			for ( int kprim = 0; kprim < shell.getNumPrims(); kprim++ ){
+				g_exps.push_back(shell.Exponents[kprim]);
+				g_coefs.push_back(shell.Coefficients[kprim]);
+			}
+			g_ams.push_back(std::abs(shell.Type));
+			g_lengths.push_back(shell.getNumPrims());
+		}
+		if ( center.getNumPseudos() > 0 ){
+			n_ecps++;
+			u_coords.push_back(center.Coordinates[0]);
+			u_coords.push_back(center.Coordinates[1]);
+			u_coords.push_back(center.Coordinates[2]);
+			int u_length = 0;
+			for ( int jpseudo = 0; jpseudo < center.getNumPseudos(); jpseudo++ ){
+				MwfnShell& pseudo = center.Pseudos[jpseudo];
+				for ( int kprim = 0; kprim < pseudo.getNumPrims(); kprim++ ){
+					u_exps.push_back(pseudo.Exponents[kprim]);
+					u_coefs.push_back(pseudo.Coefficients[kprim]);
+					u_ns.push_back(pseudo.NormalizedCoefficients[kprim]);
+					u_ams.push_back(pseudo.Type);
+					u_length++;
+				}
+			}
+			u_lengths.push_back(u_length);
+		}
+	}
+	libecpint::ECPIntegrator factory;
+	factory.set_gaussian_basis(n_shells, g_coords.data(), g_exps.data(), g_coefs.data(), g_ams.data(), g_lengths.data());
+	factory.set_ecp_basis(n_ecps, u_coords.data(), u_exps.data(), u_coefs.data(), u_ams.data(), u_ns.data(), u_lengths.data());
+	factory.init(deriv_order);
+	factory.compute_integrals();
+	std::vector<EigenMatrix> Vs;
+	if ( deriv_order == 0 ){
+		std::shared_ptr<std::vector<double>> integrals = factory.get_integrals();
+		const EigenMatrix V = Eigen::Map<EigenMatrix>(integrals->data(), factory.ncart, factory.ncart);
+		Vs = { V };
+	}
+
+	double p_transform[] = {
+		#include "P"
+	};
+	double d_transform[] = {
+		#include "D"
+	};
+	double f_transform[] = {
+		#include "F"
+	};
+	double g_transform[] = {
+		#include "G"
+	};
+	double h_transform[] = {
+		#include "H"
+	};
+	const EigenMatrix P_pure_cart = Eigen::Map<EigenMatrix>(p_transform, 3, 3);
+	const EigenMatrix D_pure_cart = Eigen::Map<EigenMatrix>(d_transform, 5, 6);
+	const EigenMatrix F_pure_cart = Eigen::Map<EigenMatrix>(f_transform, 7, 10);
+	const EigenMatrix G_pure_cart = Eigen::Map<EigenMatrix>(g_transform, 9, 15);
+	const EigenMatrix H_pure_cart = Eigen::Map<EigenMatrix>(h_transform, 11, 21);
+	EigenMatrix transform = EigenZero(mwfn.getNumBasis(), factory.ncart);
+	int cart = 0;
+	int pure = 0;
+	for ( MwfnCenter& center : mwfn.Centers ) for ( MwfnShell& shell : center.Shells ){
+		if ( shell.Type == -1 ){
+			transform.block(pure, cart, 3, 3) = P_pure_cart;
+			pure += 3;
+			cart += 3;
+		}else if ( shell.Type == -2 ){
+			transform.block(pure, cart, 5, 6) = D_pure_cart;
+			pure += 5;
+			cart += 6;
+		}else if ( shell.Type == -3 ){
+			transform.block(pure, cart, 7, 10) = F_pure_cart;
+			pure += 7;
+			cart += 10;
+		}else if ( shell.Type == -4 ){
+			transform.block(pure, cart, 9, 15) = G_pure_cart;
+			pure += 9;
+			cart += 15;
+		}else if ( shell.Type == -5 ){
+			transform.block(pure, cart, 11, 21) = H_pure_cart;
+			pure += 11;
+			cart += 21;
+		}else{
+			const int nbasis = shell.getSize();
+			transform.block(pure, cart, nbasis, nbasis ) = EigenOne(nbasis, nbasis);
+			pure += nbasis;
+			cart += nbasis;
+		}
+	}
+	for ( EigenMatrix& V : Vs ) V = transform * V * transform.transpose();
+	return Vs;
+}
+
 Int2C1E::Int2C1E(Mwfn& mwfn){
 	this->MWFN = &mwfn;
 	const int natoms = mwfn.getNumCenters();
@@ -221,7 +329,7 @@ void Int2C1E::CalculateIntegrals(int order, int output){
 		this->QuadrapoleYZ = matrices[8];
 		this->QuadrapoleZZ = matrices[9];
 		this->Kinetic = getTwoCenter0( obs, libint2charges, libint2::Operator::kinetic )[0];
-		this->Nuclear = getTwoCenter0( obs, libint2charges, libint2::Operator::nuclear )[0];
+		this->Nuclear = getTwoCenter0( obs, libint2charges, libint2::Operator::nuclear )[0] + getPseudo(*this->MWFN, 0)[0];
 		if (output>0) std::printf("Done in %f s\n", __duration__(start, __now__));
 	}else if ( order == 1 ){
 		if (output>0) std::printf("Calculating 2c-1e integral nuclear gradient ... ");

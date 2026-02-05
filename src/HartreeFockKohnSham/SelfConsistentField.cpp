@@ -136,6 +136,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			}
 			auto [E, epsilons, C] = RestrictedOpenLBFGS(int2c1e, int4c2e, xc, grid, nd, na, nb, Z, nthreads, output-1);
 			E_scf = E;
+			mwfn.setEnergy(epsilons, 1);
 			mwfn.setCoefficientMatrix(C, 1);
 		}
 	}else if ( scf == "NEWTON" ){
@@ -181,6 +182,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			EigenMatrix Cprime = EigenOne(Z.rows(), nd + na + nb);
 			auto [E, epsilons, C] = RestrictedOpenNewton(int2c1e, int4c2e, xc, grid, nd, na, nb, Z, nthreads, output-1);
 			E_scf = E;
+			mwfn.setEnergy(epsilons, 1);
 			mwfn.setCoefficientMatrix(C, 1);
 		}
 	}else if ( scf == "ARH" ){
@@ -225,6 +227,7 @@ double HartreeFockKohnSham(Mwfn& mwfn, Environment& env, Int2C1E& int2c1e, Int4C
 			}
 			auto [E, epsilons, C] = RestrictedOpenARH(int2c1e, int4c2e, xc, grid, nd, na, nb, Z, nthreads, output-1);
 			E_scf = E;
+			mwfn.setEnergy(epsilons, 1);
 			mwfn.setCoefficientMatrix(C, 1);
 		}
 	}

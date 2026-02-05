@@ -31,7 +31,6 @@ ADIIS::ADIIS(
 #define E this->Auxiliariess[index].back()(0, ncols - 1)
 #define D this->Auxiliariess[index].back().leftCols(ncols - 1)
 #define F this->Updatess[index].back()
-#include<iostream>
 
 EigenVector ADIIS::Extrapolate(int index){
 	const int size = this->getCurrentSize();

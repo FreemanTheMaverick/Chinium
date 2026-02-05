@@ -1,10 +1,10 @@
 std::vector<std::vector<double>> ReadXYZ(std::string inp);
 
-std::string ReadBasisSet(std::string inp);
+std::tuple<std::string, std::string> ReadBasisSet(std::string inp);
 
 bool isInt(double x);
 
-std::tuple<double, double, double> ReadNumElectrons(std::string inp);
+std::tuple<double, double, double> ReadNumElectrons(std::string inp, int total_nuclear_charges);
 
 int ReadWfnType(std::string inp);
 

@@ -163,7 +163,7 @@ void SphericalGrid(
 class CutFunc: public Maniverse::Objective{ public:
 	EigenMatrix P2;
 	CutFunc(EigenMatrix P2): P2(P2){};
-	void Calculate(std::vector<EigenMatrix> Ws, int /*derivative*/) override{
+	void Calculate(std::vector<EigenMatrix> Ws, std::vector<int> /*derivatives*/) override{
 		const EigenMatrix& W = Ws[0];
 		Value = - ( W.transpose() * P2 * W ).sum();
 		Gradient = { - 2 * P2 * W };
@@ -185,7 +185,7 @@ std::tuple<EigenMatrix, EigenMatrix> Cut(EigenMatrix P){
 	Maniverse::Iterate M(obj, {stiefel.Share()}, 1);
 	Maniverse::TrustRegion tr;
 	Maniverse::TruncatedNewton(
-			M, tr, {1.e-8, 1, 1},
+			M, tr, {1.e-6, 1, 1},
 			0.001, 100, 0
 	);
 	const double A = M.Point(0);

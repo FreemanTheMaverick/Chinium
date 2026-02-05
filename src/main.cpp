@@ -16,6 +16,7 @@
 #include "ExchangeCorrelation.h"
 #include "HartreeFockKohnSham/HartreeFockKohnSham.h"
 //#include "Localization/Localize.h"
+#include<iostream>
 
 #define Round(x) (int)( isInt(x) ? std::lround(x) : std::floor(x) )
 
@@ -31,8 +32,7 @@ int main(int /*argc*/, char* argv[]){
 
 	// Reading input file
 	const std::vector<std::vector<double>> atoms = ReadXYZ(inp);
-	const std::string basis = ReadBasisSet(inp);
-	auto [na, nb, nd] = ReadNumElectrons(inp);
+	const auto [basis, pseudo] = ReadBasisSet(inp);
 	const int wfntype = ReadWfnType(inp);
 	const int nthreads = ReadNumThreads(inp);
 	const std::string jobtype = ReadJobType(inp);
@@ -53,12 +53,13 @@ int main(int /*argc*/, char* argv[]){
 
 	// Atoms and basis
 	std::string basis_file_path_name = (std::string)std::getenv("CHINIUM_PATH") + "/BasisSets/" + basis + ".gbs";
+	std::string pseudo_file_path_name = pseudo.empty() ? "" : (std::string)std::getenv("CHINIUM_PATH") + "/BasisSets/" + pseudo + ".ecp";
 	if ( !atoms.empty() ){
 		if ( !basis.empty() ){
 			std::printf("Setting atomic coordinates given by input file ...\n");
 			mwfn.setCenters(atoms);
-			std::printf("Reading basis set file %s ...\n", basis_file_path_name.c_str());
-			mwfn.setBasis(basis_file_path_name);
+			std::printf("Reading basis set file %s and %s ...\n", basis_file_path_name.c_str(), pseudo_file_path_name.c_str());
+			mwfn.setBasis(basis_file_path_name, pseudo_file_path_name);
 		}else{
 			assert( mwfn.getNumCenters() == (int)atoms.size() && "Different numbers of atoms between the input file and the read mwfn file!" );
 			for ( int iatom = 0; iatom < mwfn.getNumCenters(); iatom++ ){
@@ -71,11 +72,14 @@ int main(int /*argc*/, char* argv[]){
 		}
 	}else{ // If atoms are not specified in the input file
 		if ( !basis.empty() ){
-			mwfn.setBasis(basis_file_path_name);
+			mwfn.setBasis(basis_file_path_name, pseudo_file_path_name);
 		} // Else do nothing (just keep the existent atoms and basis in the mwfn)
 	}
 	Normalize(&mwfn);
 	mwfn.PrintCenters();
+	int total_nuclear_charges = 0;
+	for ( MwfnCenter& center : mwfn.Centers ) total_nuclear_charges += center.Nuclear_charge;
+	auto [na, nb, nd] = ReadNumElectrons(inp, total_nuclear_charges);
 
 	// FT-DFT related
 	Environment env(temperature, chemicalpotential);
