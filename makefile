@@ -1,5 +1,5 @@
 # --- Compiler ---
-CXX = __CXX__
+CXX            = __CXX__
 # Note: MAKE is implicitly defined, no need to export unless overriding
 
 # --- Paths to Dependencies ---
@@ -9,6 +9,8 @@ LIBINT2_PATH   = __LIBINT2__
 # LIBINT2: The path where you can find "include/", "lib/" and "share/".
 LIBXC_PATH     = __LIBXC__
 # LIBXC: The path where you can find "bin/", "include/" and "lib/".
+LIBECPINT_PATH = __LIBECPINT__
+# LIBECPINT: The path where you can find "include/", "lib/", "lib64/" and "share/".
 LIBMWFN_PATH   = __LIBMWFN__
 MANIVERSE_PATH = __MANIVERSE__
 

@@ -363,7 +363,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 	}
 
 	#define nv obj.nbasis - nd - na - nb
-	if ( nd && na ){ // Guest and Saunders averaged Fock matrix
+	/*if ( nd && na ){ // Guest and Saunders averaged Fock matrix
 		EigenMatrix Cp_all = EigenZero(obj.nbasis, obj.nbasis);
 		Cp_all << obj.Cprime, obj.Cprime_perp;
 		EigenMatrix Fd = Cp_all.transpose() * obj.Fprimes[0] * Cp_all;
@@ -386,7 +386,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		const EigenVector epsilons = eigensolver.eigenvalues();
 		const EigenMatrix C = Z * eigensolver.eigenvectors();
 		return std::make_tuple(obj.Value, epsilons, C);
-	}else return std::make_tuple(obj.Value, obj.epsilons, obj.C);
+	}else */return std::make_tuple(obj.Value, obj.epsilons, obj.C);
 }
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenLBFGS(

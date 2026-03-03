@@ -178,6 +178,45 @@ EigenMatrix getTwoCenter2(
 }
 
 std::vector<EigenMatrix> getPseudo(Mwfn& mwfn, int deriv_order){
+	EigenVector norm;
+	{
+		std::vector<std::pair<double, std::array<double, 3>>> libint2charges = {};\
+		for ( MwfnCenter& center : mwfn.Centers )\
+			libint2charges.push_back(std::make_pair(\
+				center.Nuclear_charge,\
+				std::experimental::make_array(\
+					center.Coordinates[0],\
+					center.Coordinates[1],\
+					center.Coordinates[2])));
+		std::vector<libint2::Shell> libint2shells = {};\
+		std::vector<int> shell2atom = {};\
+		int iatom = 0;\
+		for ( MwfnCenter& center : mwfn.Centers ){\
+		   	for ( MwfnShell& shell : center.Shells ){\
+				const int l = std::abs(shell.Type);\
+				const bool pure = ( shell.Type < 0 );\
+				libint2::svector<double> exponents = {};\
+				libint2::svector<double> coefficients = {};\
+				for ( int i = 0; i < shell.getNumPrims(); i++ ){\
+					exponents.push_back(shell.Exponents[i]);\
+					coefficients.push_back(shell.Coefficients[i]);\
+				}\
+				libint2shells.push_back(libint2::Shell(\
+						exponents, {{l, 0, coefficients}}, {\
+						center.Coordinates[0],\
+						center.Coordinates[1],\
+						center.Coordinates[2]\
+				}, 0));\
+				shell2atom.push_back(iatom);\
+			}\
+			iatom++;\
+		}\
+		libint2::BasisSet obs(libint2shells);
+		const EigenMatrix unnormed_overlap = getTwoCenter0( obs, libint2charges, libint2::Operator::overlap )[0];
+		norm = unnormed_overlap.diagonal().cwiseInverse().cwiseSqrt();
+		std::cout<<"norm"<<std::endl;
+		std::cout<<norm<<std::endl;
+	}
 	const int n_shells = mwfn.getNumShells();
 	std::vector<double> g_coords, g_exps, g_coefs;
 	std::vector<int> g_ams, g_lengths;
@@ -226,6 +265,13 @@ std::vector<EigenMatrix> getPseudo(Mwfn& mwfn, int deriv_order){
 	if ( deriv_order == 0 ){
 		std::shared_ptr<std::vector<double>> integrals = factory.get_integrals();
 		EigenMatrix V = Eigen::Map<EigenMatrix>(integrals->data(), factory.ncart, factory.ncart);
+		for ( int i = 0; i < V.rows(); i++ ){
+			for ( int j = 0; j < V.cols(); j++ ){
+				//V(i, j) *= norm(i) * norm(j);
+			}
+		}
+		std::cout<<V<<std::endl;
+		std::cout<<V.diagonal()<<std::endl;
 		Vs = { V };
 	}
 
@@ -281,6 +327,7 @@ std::vector<EigenMatrix> getPseudo(Mwfn& mwfn, int deriv_order){
 		}
 	}
 	for ( EigenMatrix& V : Vs ) V = transform * V * transform.transpose();
+	//std::cout<<Vs[0]<<std::endl;
 	return Vs;
 }
 

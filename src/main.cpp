@@ -105,15 +105,14 @@ int main(int /*argc*/, char* argv[]){
 	EigenMatrix Hessian = EigenZero(3 * mwfn.getNumCenters(), 3 * mwfn.getNumCenters());
 
 	// Nuclear repulsion
-	std::printf("Calculating nuclear repulsion energy ...\n");
+	std::printf("Calculating nuclear repulsion energy ... ");
 	const auto [E_nuc, G_nuc, H_nuc] = mwfn.NuclearRepulsion();
+	std::printf("%10.17f\n", E_nuc);
 	E_tot += E_nuc;
 	Gradient += G_nuc;
 	Hessian += H_nuc;
 
-	if ( guess == "READ" ){ // Orthogonalizing the orbitals read from mwfn.
-		mwfn.Orthogonalize("Lowdin");
-	}else{
+	if ( guess != "READ" ){
 		if ( mwfn.Wfntype == 0 ){
 			mwfn.Orbitals.resize(mwfn.getNumBasis());
 			EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
@@ -154,6 +153,7 @@ int main(int /*argc*/, char* argv[]){
 	Grid grid(&mwfn, grid_str, nthreads, 1);
 	int2c1e.CalculateIntegrals(0, 1);
 	mwfn.Overlap = int2c1e.Overlap;
+	if ( guess == "READ" ) mwfn.Orthogonalize("Lowdin"); // Orthogonalizing the orbitals read from mwfn.
 	if ( jobtype == "SCF" ){
 		int4c2e.getRepulsionDiag(1);
 		int4c2e.getRepulsionLength(1);
