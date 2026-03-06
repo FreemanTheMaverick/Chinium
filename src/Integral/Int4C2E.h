@@ -1,3 +1,12 @@
+#pragma once
+
+#include <Eigen/Core>
+#include <vector>
+#include <tuple>
+#include <libmwfn.h>
+
+#include "../Macro.h"
+
 class Int4C2E{ public:
 	Mwfn* MWFN;
 	double Threshold;
@@ -24,6 +33,7 @@ class Int4C2E{ public:
 	std::vector<std::vector<std::vector<double>>> RepulsionHesss;
 	std::vector<std::tuple<EigenMatrix, std::vector<EigenMatrix>>> GradCache;
 
+	Int4C2E(){};
 	Int4C2E(Mwfn& mwfn, double exx, double threshold);
 	void getRepulsionDiag(int output); // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
 	void getRepulsionLength(int output); // Numbers of nonequivalent two-electron integrals and shell quartets after Cauchy-Schwarz screening.

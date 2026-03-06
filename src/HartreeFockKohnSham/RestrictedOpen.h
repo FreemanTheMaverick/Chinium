@@ -1,17 +1,16 @@
-std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenLBFGS(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nd, int na, int nb, EigenMatrix Z,
-		int nthreads, int output);
+#pragma once
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenNewton(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nd, int na, int nb, EigenMatrix Z,
-		int nthreads, int output);
+#include <string>
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenARH(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nd, int na, int nb, EigenMatrix Z,
-		int nthreads, int output);
+#include "../Job.h"
+#include "../Representation.h"
+
+#include "SelfConsistentField.h"
+
+class RO_SCF: public Job, public RepRO, public SCF{ public:
+	RO_SCF(std::string inp): Job(inp), RepRO(inp), SCF(inp, mwfn, int2c1e){};
+	virtual void Calculate0() override;
+	virtual void PostProcess0() override{ __PostProcess0__(energy) };
+	virtual void PostProcess1() override{ __PostProcess1__ };
+	virtual void PostProcess2() override{ __PostProcess2__ };
+};

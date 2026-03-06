@@ -1,3 +1,12 @@
+#pragma once
+
+#include <Eigen/Core>
+#include <unsupported/Eigen/CXX11/Tensor>
+#include <string>
+#include <vector>
+#include <memory>
+#include <libmwfn.h>
+
 #include "Tensor.h"
 
 enum D_t{ s_t, u_t };
@@ -80,6 +89,7 @@ class SubGrid{ public:
 
 class Grid{ public:
 	std::vector<std::vector<std::unique_ptr<SubGrid>>> SubGridBatches;
+	Grid(){};
 	Grid(Mwfn* mwfn, std::string grid, int nthreads, int output);
 	int getNumThreads(){ return (int)this->SubGridBatches.size(); };
 	void setType(int type);

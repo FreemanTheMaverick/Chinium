@@ -1,40 +1,17 @@
-std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedDIIS(
-		double T, double Mu,
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix Fa, EigenMatrix Fb,
-		EigenVector Occa, EigenVector Occb,
-		EigenMatrix Za, EigenMatrix Zb,
-		int output, int nthreads
-);
+#pragma once
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedLBFGS(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc1, int nocc2,
-		EigenMatrix Z1, EigenMatrix Z2,
-		int nthreads, int output
-);
+#include <string>
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedNewton(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc1, int nocc2,
-		EigenMatrix Z1, EigenMatrix Z2,
-		int nthreads, int output
-);
+#include "../Job.h"
+#include "../Representation.h"
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedARH(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc1, int nocc2,
-		EigenMatrix Z1, EigenMatrix Z2,
-		int nthreads, int output
-);
+#include "SelfConsistentField.h"
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedRiemannARH_villain(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		EigenMatrix D1prime, EigenMatrix D2prime,
-		EigenMatrix Z1, EigenMatrix Z2,
-		int output, int nthreads
-);
+class U_SCF: public Job, public RepU, public SCF{ public:
+	U_SCF(std::string inp): Job(inp), RepU(inp), SCF(inp, mwfn, int2c1e){};
+	virtual void Calculate0() override;
+	virtual void PostProcess0() override{ __PostProcess0__(energy) };
+	virtual void PostProcess1() override{ __PostProcess1__ };
+	virtual void PostProcess2() override{ __PostProcess2__ };
+};
+

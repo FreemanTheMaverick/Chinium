@@ -1,3 +1,11 @@
+#pragma once
+
+#include <Eigen/Core>
+#include <vector>
+#include <functional>
+
+#include "../Macro.h"
+
 #include "DIIS.h"
 
 class CDIIS: public DIIS{ public:

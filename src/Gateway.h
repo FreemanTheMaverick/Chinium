@@ -1,3 +1,9 @@
+#pragma once
+
+#include <vector>
+#include <string>
+#include <tuple>
+
 std::vector<std::vector<double>> ReadXYZ(std::string inp);
 
 std::tuple<std::string, std::string> ReadBasisSet(std::string inp);

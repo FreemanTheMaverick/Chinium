@@ -1,28 +1,23 @@
-std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
-		int nocc,
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		EigenMatrix F, EigenMatrix Z,
-		int output, int nthreads
-);
+#pragma once
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedLBFGS(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc, EigenMatrix Z,
-		int nthreads, int output
-);
+#include <Eigen/Core>
+#include <vector>
+#include <string>
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedNewton(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc, EigenMatrix Z,
-		int nthreads, int output
-);
+#include "../Macro.h"
+#include "../Job.h"
+#include "../Representation.h"
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedARH(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc, EigenMatrix Z,
-		int nthreads, int output
-);
+#include "SelfConsistentField.h"
+
+class R_SCF: public Job, public RepR, public SCF{ public:
+	std::vector<EigenVector> dEs;
+	std::vector<EigenMatrix> dFs; // For reusing the intermediate CPSCF results of R_SCF in RGC_SCF
+    R_SCF(std::string inp): Job(inp), RepR(inp), SCF(inp, mwfn, int2c1e){};
+	virtual void Calculate0() override;
+	virtual void Calculate1() override;
+	virtual void Calculate2() override;
+	virtual void PostProcess0() override{ __PostProcess0__(energy) };
+	virtual void PostProcess1() override{ __PostProcess1__ };
+	virtual void PostProcess2() override{ __PostProcess2__ };
+};

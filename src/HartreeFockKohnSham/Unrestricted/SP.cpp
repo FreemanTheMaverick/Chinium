@@ -1,39 +1,30 @@
 #include <Eigen/Dense>
-#include <unsupported/Eigen/CXX11/Tensor>
 #include <vector>
-#include <string>
-#include <cmath>
 #include <functional>
 #include <tuple>
-#include <deque>
-#include <cassert>
-#include <chrono>
 #include <cstdio>
-#include <memory>
 #include <Maniverse/Manifold/Grassmann.h>
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/Optimizer/TruncatedNewton.h>
 #include <libmwfn.h>
 
-#include "../Macro.h"
-#include "../Integral/Int2C1E.h"
-#include "../Integral/Int4C2E.h"
-#include "../Grid/Grid.h"
-#include "../ExchangeCorrelation.h"
-#include "../DIIS/CDIIS.h"
-#include "../DIIS/EDIIS.h"
-#include "../DIIS/ADIIS.h"
-#include "AugmentedRoothaanHall.h"
+#include "../../Macro.h"
+#include "../../Integral.h"
+#include "../../Grid.h"
+#include "../../ExchangeCorrelation.h"
+#include "../../DIIS.h"
 
-#define S (int2c1e.Overlap)
-#define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
+#include "../AugmentedRoothaanHall.h"
+#include "../Unrestricted.h"
 
-std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedDIIS(
-		double T, double Mu,
+#define S ( int2c1e.Overlap)
+#define Hcore ( int2c1e.Kinetic + int2c1e.Nuclear )
+
+std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedDIIS(
+		int na, int nb,
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		EigenMatrix Fa, EigenMatrix Fb,
-		EigenVector Occa, EigenVector Occb,
 		EigenMatrix Za, EigenMatrix Zb,
 		int output, int nthreads){
 	double oldE = 0;
@@ -41,8 +32,6 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 	const int nbasis = Fa.rows();
 	EigenVector epsa = EigenZero(Za.cols(), 1);
 	EigenVector epsb = EigenZero(Zb.cols(), 1);
-	EigenVector occa = Occa;
-	EigenVector occb = Occb;
 	EigenMatrix Ca = EigenZero(Za.rows(), Za.cols());
 	EigenMatrix Cb = EigenZero(Zb.rows(), Zb.cols());
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
@@ -68,26 +57,8 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		Cb = Zb * eigensolver.eigenvectors();
 		oldE = E;
 		E = 0;
-		if ( T ){
-			const EigenArray nas = 1. / ( 1. + ( ( epsa.array() - Mu ) / T ).exp() );
-			const EigenArray nbs = 1. / ( 1. + ( ( epsb.array() - Mu ) / T ).exp() );
-			occa = nas.matrix();
-			occb = nbs.matrix();
-			E += (
-					T * (
-						nas.pow(nas).log() + ( 1. - nas ).pow( 1. - nas ).log()
-					).sum()
-					- Mu * nas.sum()
-			);
-			E += (
-					T * (
-						nbs.pow(nbs).log() + ( 1. - nbs ).pow( 1. - nbs ).log()
-					).sum()
-					- Mu * nbs.sum()
-			);
-		}
-		const EigenMatrix Da_ = Ca * occa.asDiagonal() * Ca.transpose();
-		const EigenMatrix Db_ = Cb * occb.asDiagonal() * Cb.transpose();
+		const EigenMatrix Da_ = Ca.leftCols(na) * Ca.leftCols(na).transpose();
+		const EigenMatrix Db_ = Cb.leftCols(nb) * Cb.leftCols(nb).transpose();
 		const auto [_, Ghfa_, Ghfb_] = int4c2e.ContractInts(EigenZero(0, 0), Da_, Db_, nthreads, 1);
 		const EigenMatrix Fhfa_ = Hcore + Ghfa_;
 		const EigenMatrix Fhfb_ = Hcore + Ghfb_;
@@ -107,8 +78,7 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 
 		E += 0.5 * ( Dot(Da_, Hcore + Fhfa_) + Dot(Db_, Hcore + Fhfb_) ) + Exc_;
 		if (output>0){
-			if ( T == 0 ) std::printf("Electronic energy = %.10f\n", E);
-			else std::printf("Electronic grand potential = %.10f\n", E);
+			std::printf("Electronic energy = %.10f\n", E);
 			std::printf("Changed by %E from the last step\n", E - oldE);
 		}
 		const EigenMatrix Ga_ = sinvsqrt * (Fnewa_ * Da_ * S - S * Da_ * Fnewa_ ) * sinvsqrt;
@@ -130,12 +100,11 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 	F << Fa, Fb;
 	std::vector<EigenMatrix> Fs = {F};
 	ADIIS adiis(&update_func, 1, 20, 1e-1, 300, output>0 ? 2 : 0);
-	if ( T == 0 ) if ( !adiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
+	if ( !adiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
 	CDIIS cdiis(&update_func, 1, 20, 1e-6, 300, output>0 ? 2 : 0);
-	if ( T > 0 ) cdiis.Damps.push_back(std::make_tuple(0.1, 100, 0.75));
 	cdiis.Steal(adiis);
 	if ( !cdiis.Run(Fs) ) throw std::runtime_error("Convergence failed!");
-	return std::make_tuple(E, epsa, epsb, occa, occb, Ca, Cb);
+	return std::make_tuple(E, epsa, epsb, Ca, Cb);
 }
 
 namespace{
@@ -396,29 +365,21 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	return std::make_tuple(obj.Value, obj.epsilon1s, obj.epsilon2s, obj.C1, obj.C2);
 }
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedLBFGS(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc1, int nocc2,
-		EigenMatrix Z1, EigenMatrix Z2,
-		int nthreads, int output){
-	return UnrestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, output);
-}
-
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedNewton(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc1, int nocc2,
-		EigenMatrix Z1, EigenMatrix Z2,
-		int nthreads, int output){
-	return UnrestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, output);
-}
-
-std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> UnrestrictedARH(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc1, int nocc2,
-		EigenMatrix Z1, EigenMatrix Z2,
-		int nthreads, int output){
-	return UnrestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, output);
+void U_SCF::Calculate0(){
+	const int nocc1 = mwfn.getNumElec(1); 
+	const int nocc2 = mwfn.getNumElec(2); 
+	const EigenMatrix Z1 = mwfn.getCoefficientMatrix(1);
+	const EigenMatrix Z2 = mwfn.getCoefficientMatrix(2);
+	const EigenMatrix F1 = mwfn.getFock(1);
+	const EigenMatrix F2 = mwfn.getFock(2);
+	auto [E, eps1, eps2, C1, C2] =
+		scftype == "DIIS" ? UnrestrictedDIIS(nocc1, nocc2, int2c1e, int4c2e, xc, grid, F1, F2, Z1, Z1, 1, nthreads) :
+		scftype == "LBFGS" ? UnrestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1) :
+		scftype == "ARH" ? UnrestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ UnrestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1);
+	Energy += E;
+	mwfn.setEnergy(eps1, 1);
+	mwfn.setEnergy(eps2, 2);
+	mwfn.setCoefficientMatrix(C1, 1);
+	mwfn.setCoefficientMatrix(C2, 2);
 }

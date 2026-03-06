@@ -1,29 +1,23 @@
 #include <Eigen/Dense>
-#include <unsupported/Eigen/CXX11/Tensor>
 #include <vector>
-#include <string>
-#include <cmath>
 #include <functional>
 #include <tuple>
-#include <deque>
-#include <cassert>
-#include <chrono>
 #include <cstdio>
-#include <memory>
 #include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/Optimizer/TruncatedNewton.h>
 #include <libmwfn.h>
 
-#include "../Macro.h"
-#include "../Integral/Int2C1E.h"
-#include "../Integral/Int4C2E.h"
-#include "../Grid/Grid.h"
-#include "../ExchangeCorrelation.h"
-#include "AugmentedRoothaanHall.h"
+#include "../../Macro.h"
+#include "../../Integral.h"
+#include "../../Grid.h"
+#include "../../ExchangeCorrelation.h"
 
-#define S (int2c1e->Overlap)
-#define Hcore (int2c1e->Kinetic + int2c1e->Nuclear )
+#include "../AugmentedRoothaanHall.h"
+#include "../RestrictedOpen.h"
+
+#define S ( int2c1e->Overlap)
+#define Hcore ( int2c1e->Kinetic + int2c1e->Nuclear )
 
 namespace{
 
@@ -389,26 +383,21 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 	}else */return std::make_tuple(obj.Value, obj.epsilons, obj.C);
 }
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenLBFGS(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nd, int na, int nb, EigenMatrix Z,
-		int nthreads, int output){
-	return RestrictedOpenRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, nd, na, nb, Z, nthreads, output);
-}
-
-std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenNewton(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nd, int na, int nb, EigenMatrix Z,
-		int nthreads, int output){
-	return RestrictedOpenRiemann<newton_t>(int2c1e, int4c2e, xc, grid, nd, na, nb, Z, nthreads, output);
-}
-
-std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenARH(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nd, int na, int nb, EigenMatrix Z,
-		int nthreads, int output){
-	return RestrictedOpenRiemann<arh_t>(int2c1e, int4c2e, xc, grid, nd, na, nb, Z, nthreads, output);
+void RO_SCF::Calculate0(){
+	int nd = 0; int na = 0; int nb = 0;
+	for ( auto& orbital : mwfn.Orbitals ){
+		if ( orbital.Occ > 0 ) switch (orbital.Type){
+			case 0: nd++; break;
+			case 1: na++; break;
+			case 2: nb++; break;
+		}
+	}
+	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
+	auto [E, epsilons, C] =
+		scftype == "LBFGS" ? RestrictedOpenRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, nd, na, nb, Z, nthreads, 1) :
+		scftype == "ARH" ? RestrictedOpenRiemann<arh_t>(int2c1e, int4c2e, xc, grid, nd, na, nb, Z, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ RestrictedOpenRiemann<newton_t>(int2c1e, int4c2e, xc, grid, nd, na, nb, Z, nthreads, 1);
+	Energy += E;
+	mwfn.setEnergy(epsilons, 1);
+	mwfn.setCoefficientMatrix(C, 1);
 }

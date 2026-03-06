@@ -12,7 +12,7 @@ extern "C"{
 #include <libmwfn.h>
 
 #include "Macro.h"
-#include "Grid/Grid.h"
+#include "Grid.h"
 #include "ExchangeCorrelation.h"
 
 void ExchangeCorrelation::Read(std::string df, bool output){

@@ -1,32 +1,24 @@
 #include <Eigen/Dense>
-#include <unsupported/Eigen/CXX11/Tensor>
 #include <vector>
-#include <string>
-#include <cmath>
 #include <functional>
 #include <tuple>
-#include <deque>
-#include <cassert>
-#include <chrono>
 #include <cstdio>
-#include <memory>
 #include <Maniverse/Manifold/Grassmann.h>
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/Optimizer/TruncatedNewton.h>
 #include <libmwfn.h>
 
-#include "../Macro.h"
-#include "../Integral/Int2C1E.h"
-#include "../Integral/Int4C2E.h"
-#include "../Grid/Grid.h"
-#include "../ExchangeCorrelation.h"
-#include "../DIIS/CDIIS.h"
-#include "../DIIS/EDIIS.h"
-#include "../DIIS/ADIIS.h"
-#include "AugmentedRoothaanHall.h"
+#include "../../Macro.h"
+#include "../../Integral.h"
+#include "../../Grid.h"
+#include "../../ExchangeCorrelation.h"
+#include "../../DIIS.h"
 
-#define S (int2c1e.Overlap)
-#define Hcore (int2c1e.Kinetic + int2c1e.Nuclear )
+#include "../AugmentedRoothaanHall.h"
+#include "../Restricted.h"
+
+#define S ( int2c1e.Overlap)
+#define Hcore ( int2c1e.Kinetic + int2c1e.Nuclear )
 
 std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 		int nocc,
@@ -47,7 +39,6 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 			std::vector<EigenMatrix>
 			>(std::vector<EigenMatrix>&, std::vector<bool>&)
 	> update_func = [&](std::vector<EigenMatrix>& Fs_, std::vector<bool>&){
-		assert(Fs_.size() == 1 && "Only one Fock matrix should be optimized in spin-restricted SCF!");
 		const EigenMatrix F_ = Fs_[0];
 		const EigenMatrix Fprime_ = Z.transpose() * F_ * Z;
 		eigensolver.compute(Fprime_);
@@ -67,12 +58,12 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 		}
 		const EigenMatrix Fhf_ = Hcore + Ghf_;
 		const EigenMatrix Fnew_ = Fhf_ + Gxc_;
-		E += (D_ * ( Hcore + Fhf_ )).trace() + Exc_;
+		E += D_.cwiseProduct( Hcore + Fhf_ ).sum() + Exc_;
 		if (output>0){
 			std::printf("Electronic energy = %.10f\n", E);
 			std::printf("Changed by %E from the last step\n", E - oldE);
 		}
-		EigenMatrix G_ = Fnew_ * D_ * S - S * D_ * Fnew_;
+		EigenMatrix G_ = 2 * ( Fnew_ * D_ * S - S * D_ * Fnew_ );
 		EigenMatrix Aux_ = EigenZero(F.rows(), F.cols() + 1);
 		Aux_ << D_, EigenZero(F.rows(), 1);
 		Aux_(0, F.cols()) = E;
@@ -142,18 +133,18 @@ class ObjBase: public Maniverse::Objective{ public:
 			}
 			const EigenMatrix Fhf = Hcore + Ghf;
 			const EigenMatrix F = Fhf + Gxc;
-			Value = 0.5 * ( ( D * ( Hcore + Fhf ) ).trace() + Exc );
+			Value = D.cwiseProduct( Hcore + Fhf ).sum() + Exc;
 			Fprime = Z.transpose() * F * Z; // Euclidean gradient
 		}
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			Gradient = { Fprime };
+			Gradient = { 2 * Fprime };
 			eigensolver.compute(Fprime);
 			epsilons = eigensolver.eigenvalues();
 			C = Z * eigensolver.eigenvectors();
 			A = EigenMatrix::Ones(nbasis, nbasis);
 			for ( int o = 0; o < nocc; o++ ){
 				for ( int v = nocc; v < nbasis; v++ ){
-					A(o, v) = A(v, o) = 2 * ( epsilons(v) - epsilons(o) );
+					A(o, v) = A(v, o) = 4 * ( epsilons(v) - epsilons(o) );
 				}
 			}
 		}
@@ -226,7 +217,7 @@ class ObjNewton: public ObjNewtonBase{ public:
 			FxcU = grid->getFockU<u_t>()[0][0];
 		}
 		const EigenMatrix FU = FhfU + FxcU;
-		return std::vector<EigenMatrix>{ Z.transpose() * FU * Z };
+		return std::vector<EigenMatrix>{ 2 * Z.transpose() * FU * Z };
 	};
 };
 
@@ -290,26 +281,16 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	return std::make_tuple(obj.Value, obj.epsilons, obj.C);
 }
 
-std::tuple<double, EigenVector, EigenMatrix> RestrictedLBFGS(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc, EigenMatrix Z,
-		int nthreads, int output){
-	return RestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, nocc, Z, nthreads, output);
-}
-
-std::tuple<double, EigenVector, EigenMatrix> RestrictedNewton(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc, EigenMatrix Z,
-		int nthreads, int output){
-	return RestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, nocc, Z, nthreads, output);
-}
-
-std::tuple<double, EigenVector, EigenMatrix> RestrictedARH(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		int nocc, EigenMatrix Z,
-		int nthreads, int output){
-	return RestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, nocc, Z, nthreads, output);
+void R_SCF::Calculate0(){
+	const int nocc = mwfn.getNumElec(1);
+	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
+	const EigenMatrix F = mwfn.getFock(1);
+	auto [E, epsilons, C] = 
+		scftype == "DIIS" ? RestrictedDIIS(nocc, int2c1e, int4c2e, xc, grid, F, Z, 1, nthreads) :
+		scftype == "LBFGS" ? RestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, nocc, Z, nthreads, 1) :
+		scftype == "ARH" ? RestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, nocc, Z, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ RestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, nocc, Z, nthreads, 1);
+	Energy += E;
+	mwfn.setEnergy(epsilons, 1);
+	mwfn.setCoefficientMatrix(C, 1);
 }

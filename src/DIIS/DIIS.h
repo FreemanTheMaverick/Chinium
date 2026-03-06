@@ -1,5 +1,13 @@
 #pragma once
 
+#include <Eigen/Core>
+#include <vector>
+#include <tuple>
+#include <deque>
+#include <functional>
+
+#include "../Macro.h"
+
 class DIIS{ public:
 	std::string Name;
 	int Verbose;
@@ -28,7 +36,6 @@ class DIIS{ public:
 		int nmatrices, int max_size, double tolerance,
 		int max_iter, int verbose
 	);
-	virtual ~DIIS() = default;
 
 	int getNumMatrices();
 	int getCurrentSize();

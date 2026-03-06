@@ -1,3 +1,10 @@
+#pragma once
+
+#include <Eigen/Core>
+#include <vector>
+
+#include "../Macro.h"
+
 std::vector<std::vector<EigenArray>> Matrices2Arrays(std::vector<EigenMatrix>& matrices, int nmatrices_redun);
 
 std::vector<std::vector<EigenArray>> Matrices2Arrays(std::vector<EigenMatrix>& matrices);

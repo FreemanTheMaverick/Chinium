@@ -1,3 +1,10 @@
+#pragma once
+
+#include <vector>
+#include <string>
+
+#include "Grid.h"
+
 class ExchangeCorrelation{ public:
 	std::vector<int> Codes;
 	double EXX = 1;

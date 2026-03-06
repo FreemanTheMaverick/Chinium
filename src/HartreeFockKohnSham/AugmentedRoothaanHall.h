@@ -1,3 +1,11 @@
+#pragma once
+
+#include <Eigen/Core>
+#include <deque>
+#include <vector>
+
+#include "../Macro.h"
+
 class AugmentedRoothaanHall{ public:
 	int MaxSize;
 	bool Verbose;

@@ -1,3 +1,8 @@
+#pragma once
+
+#include <Eigen/Core>
+#include <unsupported/Eigen/CXX11/Tensor>
+
 template<int ndim>
 using EigenTensor = Eigen::Tensor<double, ndim>;
 

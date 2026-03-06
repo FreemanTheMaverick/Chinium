@@ -1,3 +1,12 @@
+#pragma once
+
+#include <Eigen/Core>
+#include <vector>
+#include <tuple>
+#include <libmwfn.h>
+
+#include "../Macro.h"
+
 class Int2C1E{ public:
 	Mwfn* MWFN;
 
@@ -25,6 +34,7 @@ class Int2C1E{ public:
 	std::vector<std::vector<EigenMatrix>> KineticHesss;
 	std::vector<std::vector<EigenMatrix>> NuclearHesss;
 
+	Int2C1E(){};
 	Int2C1E(Mwfn& mwfn);
 	void CalculateIntegrals(int order, int output);
 	std::tuple<
