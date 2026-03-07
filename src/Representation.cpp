@@ -5,6 +5,7 @@
 #include <typeinfo>
 #include <stdexcept>
 #include <libmwfn.h>
+#include <iostream>
 
 #include "Macro.h"
 #include "Gateway.h"
@@ -102,7 +103,7 @@ RepU::RepU(std::string inp): Representation(inp){
 
 RepRO::RepRO(std::string inp): Representation(inp){
 	mwfn.Wfntype = 2;
-	Np = Nb;
+	if ( Np == 0 ) Np = Nb;
 	if ( ReadGuess(inp) != "READ" ){
 		mwfn.Orbitals.resize(mwfn.getNumBasis());
 		const int np_int = std::lround(Np);

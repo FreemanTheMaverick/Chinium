@@ -3,7 +3,6 @@
 #include <functional>
 #include <tuple>
 #include <map>
-#include <cstdio>
 #include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/Optimizer/TruncatedNewton.h>
