@@ -2,6 +2,7 @@
 #include <vector>
 #include <functional>
 #include <tuple>
+#include <map>
 #include <cstdio>
 #include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Optimizer/LBFGS.h>
@@ -16,10 +17,21 @@
 #include "../AugmentedRoothaanHall.h"
 #include "../RestrictedOpen.h"
 
-#define S ( int2c1e->Overlap)
+#define S ( int2c1e->Overlap )
 #define Hcore ( int2c1e->Kinetic + int2c1e->Nuclear )
 
 namespace{
+
+#define ntypes (int)occ.size()
+#define __Make_Block_View__(Mat, Mats){\
+	int _ncols_ = 0;\
+	if (nd) Mats.emplace(0, Mat.middleCols(_ncols_, nd));\
+	_ncols_ += nd;\
+	if (na) Mats.emplace(1, Mat.middleCols(_ncols_, na));\
+	_ncols_ += na;\
+	if (nb) Mats.emplace(2, Mat.middleCols(_ncols_, nb));\
+	_ncols_ += nb;\
+}
 
 class ObjBase: public Maniverse::Objective{ public:
 	Int2C1E* int2c1e;
@@ -33,21 +45,19 @@ class ObjBase: public Maniverse::Objective{ public:
 	int nthreads;
 
 	int nbasis;
-	std::vector<int> types;
-	std::vector<int> space_sizes;
 
 	EigenMatrix Cprime;
 	EigenMatrix Cprime_perp;
-	std::vector<EigenMatrix> Cprimes;
-	std::vector<EigenMatrix> Dprimes;
-	std::vector<EigenMatrix> Fprimes;
+	std::map<int, int> occ;
+	std::map<int, Eigen::Ref<EigenMatrix>> Cprimes;
+	std::map<int, Eigen::Ref<EigenMatrix>> Gradients;
+	std::map<int, EigenMatrix> Dprimes;
+	std::map<int, EigenMatrix> Fprimes;
 	EigenVector epsilons;
 	EigenMatrix C;
 	EigenMatrix K;
 	EigenMatrix L;
 
-	#define ntypes (int)types.size()
-	#define type types[itype]
 	ObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
@@ -55,14 +65,26 @@ class ObjBase: public Maniverse::Objective{ public:
 		int nthreads
 	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), nd(nd), na(na), nb(nb), Z(Z), nthreads(nthreads){
 		nbasis = Z.rows();
-		space_sizes = {nd, na, nb};
-		types = {};
-		if (nd) types.push_back(0);
-		if (na) types.push_back(1);
-		if (nb) types.push_back(2);
-		Cprimes.resize(ntypes);
-		Dprimes.resize(ntypes);
-		Fprimes.resize(ntypes);
+		Cprime = EigenZero(nbasis, nd + na + nb);
+		Gradient = {Cprime};
+		int ncols = 0;
+		if (nd){
+			occ[0] = 2;
+			Dprimes[0] = Fprimes[0] = EigenZero(nbasis, nbasis);
+			ncols += nd;
+		}
+		if (na){
+			occ[1] = 1;
+			Dprimes[1] = Fprimes[1] = EigenZero(nbasis, nbasis);
+			ncols += na;
+		}
+		if (nb){
+			occ[2] = 1;
+			Dprimes[2] = Fprimes[2] = EigenZero(nbasis, nbasis);
+			ncols += nb;
+		}
+		__Make_Block_View__(Cprime, Cprimes);
+		__Make_Block_View__(Gradient[0], Gradients);
 		epsilons = EigenZero(nbasis, 1);
 	};
 
@@ -70,71 +92,51 @@ class ObjBase: public Maniverse::Objective{ public:
 		if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
 			Cprime = Cprimes_[0];
 			std::vector<EigenMatrix> Ds(3, EigenZero(0, 0));
-			int ncols = 0;
-			for ( int itype = 0; itype < ntypes; itype++ ){
-				Cprimes[itype] = Cprime(Eigen::placeholders::all, Eigen::seqN(ncols, space_sizes[type]));
-				ncols += space_sizes[type];
-				Dprimes[itype] = Cprimes[itype] * Cprimes[itype].transpose();
+			for ( int type = 0; type < 3; type++ ) if ( occ.count(type) ){
+				Dprimes[type] = Cprimes.at(type) * Cprimes.at(type).transpose();
 				Ds[type].resize(nbasis, nbasis);
-				Ds[type] = Z * Dprimes[itype] * Z.transpose();
+				Ds[type] = Z * Dprimes[type] * Z.transpose();
 			}
 			std::vector<EigenMatrix> Ghfs(3, EigenZero(nbasis, nbasis));
 			std::tie(Ghfs[0], Ghfs[1], Ghfs[2]) = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
-			std::vector<EigenMatrix> Fhfs(ntypes, EigenZero(nbasis, nbasis));
-			for ( int itype = 0; itype < ntypes; itype++ ){
-				Fhfs[itype] = Hcore + Ghfs[type];
+			Value = 0;
+			for ( int type = 0; type < 3; type++ ) if ( occ.count(type) ){
+				const EigenMatrix Fhf = Hcore + Ghfs[type];
+				Value += 0.5 * occ[type] * Ds[type].cwiseProduct( Hcore + Fhf ).sum();
+				Fprimes[type] = Z.transpose() * Fhf * Z;
 			}
 
-			Ds[0] *= 2;
+			if (nd) Ds[0] *= 2;
 			Ds.erase(
 					std::remove_if(
 						Ds.begin(), Ds.end(),
 						[](const EigenMatrix& D){ return D.size() == 0; }
 					), Ds.end()
 			);
-			double Exc = 0;
-			std::vector<EigenMatrix> Gxcs(ntypes, EigenZero(nbasis, nbasis));
 			if (*xc){
 				grid->getDensity(Ds);
 				xc->Evaluate("ev", *grid);
-				Exc = grid->getEnergy();
-				Gxcs = grid->getFock();
-			}
-
-			std::vector<EigenMatrix> Fs(ntypes, EigenZero(nbasis, nbasis));
-			Value = Exc;
-			for ( int itype = 0; itype < ntypes; itype++ ){
-				Fs[itype] = Fhfs[itype] + Gxcs[itype];
-				Fprimes[itype] = Z.transpose() * Fs[itype] * Z;
-				Value += 0.5 * Ds[itype].cwiseProduct( Hcore + Fhfs[itype] ).sum();
+				Value += grid->getEnergy();
+				const std::vector<EigenMatrix> Gxcs = grid->getFock();
+				for ( int type = 0, itype = 0; type < 3; type++ ) if ( occ.count(type) ){
+					Fprimes[type] += Z.transpose() * Gxcs[itype++] * Z;
+				}
 			}
 		}
 
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			Gradient = { EigenZero(nbasis, nd + na + nb) };
-			int itype = 0;
-			if (nd){
-				Gradient[0](Eigen::placeholders::all, Eigen::seqN(0, nd)) = 4 * Fprimes[itype] * Cprimes[itype];
-				itype++;
-			}
-			if (na){
-				Gradient[0](Eigen::placeholders::all, Eigen::seqN(nd, na)) = 2 * Fprimes[itype] * Cprimes[itype];
-				itype++;
-			}
-			if (nb){
-				Gradient[0](Eigen::placeholders::all, Eigen::seqN(nd + na, nb)) = 2 * Fprimes[itype] * Cprimes[itype];
-				itype++;
+			for ( int type = 0; type < 3; type++ ) if ( occ.count(type) ){
+				Gradients.at(type) = 2 * occ[type] * Fprimes[type] * Cprimes.at(type);
 			}
 
 			Eigen::HouseholderQR<EigenMatrix> qr(Cprime);
 			const EigenMatrix Call = qr.householderQ();
 			C = Z * Call;
 			Cprime_perp = Call.rightCols(nbasis - nd - na - nb);
-			std::vector<EigenMatrix> Fmos(4, EigenZero(0, 0));
-			itype = 0;
-			if (nd) Fmos[0] = Call.transpose() * Fprimes[itype++] * Call;
-			if (na) Fmos[1] = Call.transpose() * Fprimes[itype++] * Call;
-			if (nb) Fmos[2] = Call.transpose() * Fprimes[itype++] * Call;
+			std::map<int, EigenMatrix> Fmos;
+			for ( int type = 0; type < 3; type++ ) if ( occ.count(type) ){
+				Fmos[type] = Call.transpose() * Fprimes[type] * Call;
+			}
 			Fmos[3] = EigenZero(nbasis, nbasis);
 			EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
 			for ( int i = 0; i < nbasis; i++ ){
@@ -208,30 +210,25 @@ class ObjNewtonBase: public ObjBase{ public:
 		}
 	};
 
-	virtual std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const = 0;
+	virtual std::map<int, EigenMatrix> DensityHessian(std::map<int, EigenMatrix> dDprimes) const = 0;
 
 	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vprimes) const override{
-		std::vector<EigenMatrix> dCprimes = Cprimes;
-		std::vector<EigenMatrix> dDprimes = Dprimes;
-		int ncols = 0;
-		for ( int itype = 0; itype < ntypes; itype++ ){
-			dCprimes[itype] = Vprimes[0](Eigen::placeholders::all, Eigen::seqN(ncols, space_sizes[type]));
-			ncols += space_sizes[type];
-			dDprimes[itype] = Cprimes[itype] * dCprimes[itype].transpose();
-			dDprimes[itype] += dDprimes[itype].transpose().eval();
+		std::map<int, Eigen::Ref<EigenMatrix>> dCprimes;
+		__Make_Block_View__(Vprimes[0], dCprimes);
+		std::map<int, EigenMatrix> dDprimes;
+		for ( int type = 0; type < 3; type++ ) if ( occ.count(type) ){
+			dDprimes[type] = Cprimes.at(type) * dCprimes.at(type).transpose();
+			dDprimes[type] += dDprimes[type].transpose().eval();
 		}
 
-		const std::vector<EigenMatrix> HdDprimes = DensityHessian(dDprimes);
+		const std::map<int, EigenMatrix> HdDprimes = DensityHessian(dDprimes);
 
-		std::vector<EigenMatrix> HdCprimes = Cprimes;
-		for ( int itype = 0; itype < ntypes; itype++ ){
-			HdCprimes[itype] = HdDprimes[itype] * Cprimes[itype] + Fprimes[itype] * dCprimes[itype];
-		}
-		int itype = 0;
 		EigenMatrix HdCprime = EigenZero(nbasis, nd + na + nb);
-		if (nd) HdCprime(Eigen::placeholders::all, Eigen::seqN(0, nd)) = 4 * HdCprimes[itype++];
-		if (na) HdCprime(Eigen::placeholders::all, Eigen::seqN(nd, na)) = 2 * HdCprimes[itype++];
-		if (nb) HdCprime(Eigen::placeholders::all, Eigen::seqN(nd + na, nb)) = 2 * HdCprimes[itype++];
+		std::map<int, Eigen::Ref<EigenMatrix>> HdCprimes;
+		__Make_Block_View__(HdCprime, HdCprimes);
+		for ( int type = 0; type < 3; type++ ) if ( occ.count(type) ){
+			HdCprimes.at(type) = 2 * occ.at(type) * ( HdDprimes.at(type) * Cprimes.at(type) + Fprimes.at(type) * dCprimes.at(type) );
+		}
 		return std::vector<EigenMatrix>{ HdCprime };
 	};
 
@@ -250,10 +247,10 @@ class ObjNewton: public ObjNewtonBase{ public:
 		}
 	};
 
-	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const override{
+	std::map<int, EigenMatrix> DensityHessian(std::map<int, EigenMatrix> dDprimes) const override{
 		std::vector<std::vector<EigenMatrix>> dDs(3, {EigenZero(0, 0)});
-		for ( int itype = 0; itype < ntypes; itype++ ){
-			dDs[type][0] = Z * dDprimes[itype] * Z.transpose();
+		for ( int type = 0; type < 3; type++ ) if ( occ.count(type) ){
+			dDs[type][0] = Z * dDprimes[type] * Z.transpose();
 		}
 		std::vector<EigenMatrix> dGs(3, EigenZero(nbasis, nbasis));
 		std::tie(dGs[0], dGs[1], dGs[2]) = int4c2e->ContractInts(dDs[0][0], dDs[1][0], dDs[2][0], nthreads, 0);
@@ -268,13 +265,13 @@ class ObjNewton: public ObjNewtonBase{ public:
 		if (*xc){
 			grid->getDensityU(dDs);
 			const std::vector<std::vector<EigenMatrix>> dGxcs = grid->getFockU<u_t>();
-			for ( int itype = 0; itype < ntypes; itype++ ){
-				dGs[type] += dGxcs[itype][0];
+			for ( int type = 0, itype = 0; type < 3; type++ ) if ( occ.count(type) ){
+				dGs[type] += dGxcs[itype++][0];
 			}
 		}
-		std::vector<EigenMatrix> HdDprimes(ntypes, EigenZero(nbasis, nbasis));
-		for ( int itype = 0; itype < ntypes; itype++ ){
-			HdDprimes[itype] = Z.transpose() * dGs[type] * Z;
+		std::map<int, EigenMatrix> HdDprimes;
+		for ( int type = 0; type < 3; type++ ) if ( occ.count(type) ){
+			HdDprimes[type] = Z.transpose() * dGs[type] * Z;
 		}
 		return HdDprimes;
 	};
@@ -299,15 +296,15 @@ class ObjARH: public ObjNewtonBase{ public:
 		}
 	};
 
-	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const override{
+	std::map<int, EigenMatrix> DensityHessian(std::map<int, EigenMatrix> dDprimes) const override{
 		EigenMatrix dDprime = EigenZero(nbasis, nbasis * ntypes);
-		for ( int itype = 0; itype < ntypes; itype++ ){
-			dDprime(Eigen::placeholders::all, Eigen::seqN(itype * nbasis, nbasis)) = dDprimes[itype];
+		for ( int type = 0, itype = 0; type < 3; type++ ) if ( occ.count(type) ){
+			dDprime.middleCols((itype++) * nbasis, nbasis) = dDprimes[type];
 		}
 		const EigenMatrix HdDprime = arh.Hessian(dDprime);
-		std::vector<EigenMatrix> HdDprimes = dDprimes;
-		for ( int itype = 0; itype < ntypes; itype++ ){
-			HdDprimes[itype] = HdDprime(Eigen::placeholders::all, Eigen::seqN(itype * nbasis, nbasis));
+		std::map<int, EigenMatrix> HdDprimes = dDprimes;
+		for ( int type = 0, itype = 0; type < 3; type++ ) if ( occ.count(type) ){
+			HdDprimes[type] = HdDprime.middleCols((itype++) * nbasis, nbasis);
 		}
 		return HdDprimes;
 	};
