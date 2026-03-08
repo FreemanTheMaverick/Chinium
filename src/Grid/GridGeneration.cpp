@@ -307,3 +307,24 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
 		}
 	}
 }
+
+Grid::Grid(const Grid& grid){
+	const int nthreads = grid.getNumThreads();
+	this->SubGridBatches.reserve(nthreads);
+	for ( int i = 0; i < nthreads; i++ ){
+		this->SubGridBatches.push_back({});
+		const int nbatches = grid.SubGridBatches[i].size();
+		this->SubGridBatches.back().reserve(nbatches);
+		for ( int j = 0; j < nbatches; j++ ){
+			this->SubGridBatches.back().emplace_back(std::make_unique<SubGrid>(*(grid.SubGridBatches[i][j])));
+		}
+	}
+}
+
+Grid& Grid::operator=(const Grid& grid){
+	if ( this != &grid ){
+		Grid temp(grid);
+		std::swap(SubGridBatches, temp.SubGridBatches);
+	}
+	return *this;
+}

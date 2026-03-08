@@ -90,8 +90,10 @@ class SubGrid{ public:
 class Grid{ public:
 	std::vector<std::vector<std::unique_ptr<SubGrid>>> SubGridBatches;
 	Grid(){};
+	Grid(const Grid& grid);
+	Grid& operator=(const Grid& grid);
 	Grid(Mwfn* mwfn, std::string grid, int nthreads, int output);
-	int getNumThreads(){ return (int)this->SubGridBatches.size(); };
+	int getNumThreads() const{ return (int)this->SubGridBatches.size(); };
 	void setType(int type);
 
 	void getAO(int derivative, int output);

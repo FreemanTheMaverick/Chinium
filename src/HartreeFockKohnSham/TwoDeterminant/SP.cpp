@@ -1,3 +1,4 @@
+#include<iostream>
 #include <Eigen/Dense>
 #include <vector>
 #include <functional>
@@ -21,11 +22,15 @@
 
 namespace{
 
+#define One ( grid2->SubGridBatches.size() > 0 )
+#define __Make_Block_View__(Mat, Mats) Mats = {Mat.middleCols(0, Np), Mat.middleCols(Np, 1), Mat.middleCols(Np + 1, 1)};
+
 class ObjBase: public Maniverse::Objective{ public:
 	Int2C1E* int2c1e;
 	Int4C2E* int4c2e;
 	ExchangeCorrelation* xc;
 	Grid* grid;
+	Grid* grid2;
 	int Np;
 	EigenMatrix Z;
 	int nthreads;
@@ -44,13 +49,12 @@ class ObjBase: public Maniverse::Objective{ public:
 	EigenMatrix K;
 	EigenMatrix L;
 
-	#define __Make_Block_View__(Mat, Mats) Mats = {Mat.middleCols(0, Np), Mat.middleCols(Np, 1), Mat.middleCols(Np + 1, 1)};
 	ObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
+		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
 		int Np, EigenMatrix Z,
 		int nthreads
-	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), Np(Np), Z(Z), nthreads(nthreads){
+	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), grid2(&grid2), Np(Np), Z(Z), nthreads(nthreads){
 		nbasis = Z.rows();
 		Cprime = EigenZero(nbasis, Np + 2);
 		Gradient = {Cprime};
@@ -85,16 +89,30 @@ class ObjBase: public Maniverse::Objective{ public:
 				FprimeTs[type] = Z.transpose() * FhfTs[type] * Z;
 			}
 
-			EigenMatrix Gxc = EigenZero(nbasis, nbasis);
 			if (*xc){
-				grid->getDensity({ 2 * Ds[0] + Ds[1] + Ds[2] });
-				xc->Evaluate("ev", *grid);
-				Value += grid->getEnergy();
-				Gxc = grid->getFock()[0];
-				for ( int type = 0; type < 3; type++ ){
-					const EigenMatrix tmp = Z.transpose() * Gxc * Z;
-					FprimeMs[type] += tmp;
-					FprimeTs[type] += tmp;
+				if (One){
+					grid->getDensity({ 2 * Ds[0], Ds[1], Ds[2] });
+					grid2->getDensity({ 2 * Ds[0], Ds[1] + Ds[2] });
+					xc->Evaluate("ev", *grid);
+					xc->Evaluate("ev", *grid2);
+					Value += 2 * grid->getEnergy() - grid2->getEnergy();
+					const std::vector<EigenMatrix> GxcMs = grid->getFock();
+					std::vector<EigenMatrix> GxcTs = grid2->getFock();
+					GxcTs.push_back(GxcTs[1]);
+					for ( int type = 0; type < 3; type++ ){
+						FprimeMs[type] += Z.transpose() * GxcMs[type] * Z;
+						FprimeTs[type] += Z.transpose() * GxcTs[type] * Z;
+					}
+				}else{
+					grid->getDensity({ 2 * Ds[0] + Ds[1] + Ds[2] });
+					xc->Evaluate("ev", *grid);
+					Value += grid->getEnergy();
+					const EigenMatrix Gxc = grid->getFock()[0];
+					for ( int type = 0; type < 3; type++ ){
+						const EigenMatrix tmp = Z.transpose() * Gxc * Z;
+						FprimeMs[type] += tmp;
+						FprimeTs[type] += tmp;
+					}
 				}
 			}
 		}
@@ -218,6 +236,7 @@ class ObjNewton: public ObjNewtonBase{ public:
 		ObjNewtonBase::Calculate(Cprimes_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 2) && *xc ){
 			xc->Evaluate("f", *grid);
+			xc->Evaluate("f", *grid2);
 		}
 	};
 
@@ -239,11 +258,23 @@ class ObjNewton: public ObjNewtonBase{ public:
 		};
 
 		if (*xc){
-			grid->getDensityU({{ 2 * dDs[0][0] + dDs[1][0] + dDs[2][0] }});
-			const std::vector<std::vector<EigenMatrix>> dGxcs = grid->getFockU<u_t>();
-			for ( int type = 0; type < 3; type++ ){
-				dFMs[type] += dGxcs[0][0];
-				dFTs[type] += dGxcs[0][0];
+			if (One){
+				grid->getDensityU({ { 2 * dDs[0][0] }, { dDs[1][0] }, { dDs[2][0] } });
+				grid2->getDensityU({ { 2 * dDs[0][0] }, { dDs[1][0] + dDs[2][0] } });
+				const std::vector<std::vector<EigenMatrix>> dGxcMs = grid->getFockU<u_t>();
+				std::vector<std::vector<EigenMatrix>> dGxcTs = grid2->getFockU<u_t>();
+				dGxcTs.push_back(dGxcTs.back());
+				for ( int type = 0; type < 3; type++ ){
+					dFMs[type] += dGxcMs[type][0];
+					dFTs[type] += dGxcTs[type][0];
+				}
+			}else{
+				grid->getDensityU({{ 2 * dDs[0][0] + dDs[1][0] + dDs[2][0] }});
+				const EigenMatrix dGxcs = grid->getFockU<u_t>()[0][0];
+				for ( int type = 0; type < 3; type++ ){
+					dFMs[type] += dGxcs;
+					dFTs[type] += dGxcs;
+				}
 			}
 		}
 		std::vector<EigenMatrix> HdDprimes(3, EigenZero(nbasis, nbasis));
@@ -292,7 +323,7 @@ enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
 std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
+		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
 		int Np, EigenMatrix Z,
 		int nthreads, int output){
 	std::conditional_t< scf_t == lbfgs_t,
@@ -301,7 +332,7 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 							ObjNewton,
 							ObjARH
 				>
-	> obj(int2c1e, int4c2e, xc, grid, Np, Z, nthreads);
+	> obj(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads);
 	Maniverse::Flag flag(EigenOne(Z.rows(), Np + 2)); flag.setBlockParameters({Np, 1, 1});
 	Maniverse::Iterate M(obj, {flag.Share()}, 1);
 	std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
@@ -331,9 +362,9 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 void TwoDet::Calculate0(){
 	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
 	auto [E, C] =
-		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, Np, Z, nthreads, 1) :
-		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(int2c1e, int4c2e, xc, grid, Np, Z, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(int2c1e, int4c2e, xc, grid, Np, Z, nthreads, 1);
+		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, 1) :
+		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, 1);
 	Energy += E;
 	mwfn.setCoefficientMatrix(C, 1);
 }
