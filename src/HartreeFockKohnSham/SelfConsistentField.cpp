@@ -25,9 +25,8 @@ SCF::SCF(std::string inp, Mwfn& mwfn, Int2C1E& int2c1e){
 	// Grid, exchange-correlation functional and initial guess
 	const std::string grid_str = ReadGrid(inp);
 	grid = Grid(&mwfn, grid_str, nthreads, 1);
-	xc.Spin = mwfn.Wfntype == 0 ? 1 : 2;
 	if ( method != "HF" || guess == "SAP" ){
-		if ( grid.SubGridBatches[0][0]->NumGrids == 0 ) throw std::runtime_error("For DFT or SAP, you must specify the grid!");
+		if ( grid.SubGridBatches[0][0]->NumGrids == 0 ) throw std::runtime_error("For DFT and SAP, you must specify the grid!");
 		if ( method != "HF" ){
 			xc.Read(method, 1);
 			grid.setType( xc.Family == "LDA" ? 0 : xc.Family == "GGA" ? 1 : 2 );

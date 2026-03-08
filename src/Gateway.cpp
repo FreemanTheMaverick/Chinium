@@ -195,7 +195,6 @@ std::string ReadJobType(std::string inp){
 			ss >> jobtype;
 		}
 	}
-	if ( jobtype != "SCF" && jobtype != "LOCALIZATION" ) throw std::runtime_error("Invalid job type!");
 	return jobtype;
 }
 

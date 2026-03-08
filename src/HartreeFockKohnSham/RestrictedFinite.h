@@ -11,6 +11,7 @@ class RGC_SCF: public R_SCF{ public:
 	RGC_SCF(std::string inp): R_SCF(inp){
 		Temperature = ReadTemperature(inp);
 		ChemicalPotential = ReadChemicalPotential(inp);
+		xc.Spin = 1;
 	};
 	void Calculate0() override;
 	// Calculate1() of R_SCF is reused.

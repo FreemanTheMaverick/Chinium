@@ -59,9 +59,9 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 		E = 0;
 		const EigenMatrix Da_ = Ca.leftCols(na) * Ca.leftCols(na).transpose();
 		const EigenMatrix Db_ = Cb.leftCols(nb) * Cb.leftCols(nb).transpose();
-		const auto [_, Ghfa_, Ghfb_] = int4c2e.ContractInts(EigenZero(0, 0), Da_, Db_, nthreads, 1);
-		const EigenMatrix Fhfa_ = Hcore + Ghfa_;
-		const EigenMatrix Fhfb_ = Hcore + Ghfb_;
+		const auto [J_, _, Ka_, Kb_] = int4c2e.ContractInts(EigenZero(0, 0), Da_, Db_, nthreads, 1);
+		const EigenMatrix Fhfa_ = Hcore + J_ - Ka_;
+		const EigenMatrix Fhfb_ = Hcore + J_ - Kb_;
 		double Exc_ = 0;
 		EigenMatrix Gxca_ = EigenZero(nbasis, nbasis);
 		EigenMatrix Gxcb_ = EigenZero(nbasis, nbasis);
@@ -156,7 +156,9 @@ class ObjBase: public Maniverse::Objective{ public:
 			D2prime = Dprimes[1];
 			const EigenMatrix D1 = Z1 * D1prime * Z1.transpose();
 			const EigenMatrix D2 = Z2 * D2prime * Z2.transpose();
-			const auto [_, Ghf1, Ghf2] = int4c2e->ContractInts(EigenZero(0, 0), D1, D2, nthreads, 1);
+			const auto [J, _, K1, K2] = int4c2e->ContractInts(EigenZero(0, 0), D1, D2, nthreads, 1);
+			const EigenMatrix Fhf1 = Hcore + J - K1;
+			const EigenMatrix Fhf2 = Hcore + J - K2;
 			double Exc = 0;
 			EigenMatrix Gxc1 = EigenZero(Z1.rows(), Z1.rows());
 			EigenMatrix Gxc2 = EigenZero(Z1.rows(), Z1.rows());
@@ -168,8 +170,6 @@ class ObjBase: public Maniverse::Objective{ public:
 				Gxc1 = Gxc[0];
 				Gxc2 = Gxc[1];
 			}
-			const EigenMatrix Fhf1 = Hcore + Ghf1;
-			const EigenMatrix Fhf2 = Hcore + Ghf2;
 			const EigenMatrix F1 = Fhf1 + Gxc1;
 			const EigenMatrix F2 = Fhf2 + Gxc2;
 			Value = 0.5 * ( Dot(D1, Hcore + Fhf1) + Dot(D2, Hcore + Fhf2) ) + Exc;
@@ -277,16 +277,18 @@ class ObjNewton: public ObjNewtonBase{ public:
 		const EigenMatrix V2prime = Vprimes[1];
 		const EigenMatrix V1 = Z1 * V1prime * Z1.transpose();
 		const EigenMatrix V2 = Z2 * V2prime * Z2.transpose();
-		auto [_, Gtmp1, Gtmp2] = int4c2e->ContractInts(EigenZero(0, 0), V1, V2, nthreads, 0);
+		auto [J, _, K1, K2] = int4c2e->ContractInts(EigenZero(0, 0), V1, V2, nthreads, 0);
+		EigenMatrix F1U = J - K1;
+		EigenMatrix F2U = J - K2;
 		if (*xc){
 			grid->getDensityU({ {V1}, {V2} });
 			const std::vector<std::vector<EigenMatrix>> Gtmpxc = grid->getFockU<u_t>();
-			Gtmp1 += Gtmpxc[0][0];
-			Gtmp2 += Gtmpxc[1][0];
+			F1U += Gtmpxc[0][0];
+			F2U += Gtmpxc[1][0];
 		}
 		return std::vector<EigenMatrix>{
-				Z1.transpose() * Gtmp1 * Z1,
-				Z2.transpose() * Gtmp2 * Z2
+				Z1.transpose() * F1U * Z1,
+				Z2.transpose() * F2U * Z2
 		};
 	};
 };

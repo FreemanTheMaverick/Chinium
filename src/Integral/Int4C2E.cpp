@@ -598,7 +598,7 @@ std::vector<long int> getThreadPointers(long int nitems, int nthreads){
 	return heads;
 }
 
-std::tuple<EigenMatrix, EigenMatrix, EigenMatrix> Gunified(
+std::tuple<EigenMatrix, EigenMatrix, EigenMatrix, EigenMatrix> Gunified(
 		short int* is, short int* js, short int* ks, short int* ls,
 		double* ints, long int length,
 		EigenMatrix Dd, EigenMatrix Da, EigenMatrix Db,
@@ -662,17 +662,18 @@ std::tuple<EigenMatrix, EigenMatrix, EigenMatrix> Gunified(
 	const EigenMatrix Kd = 0.125 * ( rawKd + rawKd.transpose() );
 	const EigenMatrix Ka = 0.125 * ( rawKa + rawKa.transpose() );
 	const EigenMatrix Kb = 0.125 * ( rawKb + rawKb.transpose() );
-	return std::make_tuple(
+	/*return std::make_tuple(
 			J - kscale * ( Kd + 0.5 * ( Ka + Kb ) ),
 			J - kscale * ( Kd + Ka ),
 			J - kscale * ( Kd + Kb )
-	);
+	);*/
+	return std::make_tuple(J, kscale * Kd, kscale * Ka, kscale * Kb);
 }
 
-std::tuple<EigenMatrix, EigenMatrix, EigenMatrix> Int4C2E::ContractInts(EigenMatrix Dd, EigenMatrix Da, EigenMatrix Db, int nthreads, int output){
+std::tuple<EigenMatrix, EigenMatrix, EigenMatrix, EigenMatrix> Int4C2E::ContractInts(EigenMatrix Dd, EigenMatrix Da, EigenMatrix Db, int nthreads, int output){
 	if (output>0) std::printf("Contracting 4c-2e repulsion integrals with 1 matrix ... ");
 	const auto start = __now__;
-	const std::tuple<EigenMatrix, EigenMatrix, EigenMatrix> G = Gunified(
+	const std::tuple<EigenMatrix, EigenMatrix, EigenMatrix, EigenMatrix> G = Gunified(
 		this->BasisIs.data(), this->BasisJs.data(),
 		this->BasisKs.data(), this->BasisLs.data(),
 		this->RepulsionInts.data(), this->RepulsionLength,

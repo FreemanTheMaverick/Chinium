@@ -69,7 +69,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteDIIS(
 				- Mu * ns.sum()
 		);
 		const EigenMatrix D_ = C * occupations.asDiagonal() * C.transpose();
-		const auto [Ghf_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+		const auto [J_, K_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+		const EigenMatrix Ghf_ = J_ - K_;
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
 		if (xc){
@@ -153,7 +154,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteLoopDI
 				- Mu * ns.sum()
 		);
 		const EigenMatrix D_ = C * occupations.asDiagonal() * C.transpose();
-		const auto [Ghf_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+		const auto [J_, K_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+		const EigenMatrix Ghf_ = J_ - K_;
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
 		if (xc){
@@ -285,8 +287,8 @@ class ObjBase: public Maniverse::Objective{ public:
 
 			Dprime = Cprime_oa * Occ_oa.asDiagonal() * Cprime_oa.transpose();
 			const EigenMatrix D = Z * Dprime * Z.transpose();
-			const auto [Ghf, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
-			const EigenMatrix Fhf = Hcore + Ghf;
+			const auto [J, K, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+			const EigenMatrix Fhf = Hcore + J - K;
 			double Exc = 0;
 			EigenMatrix Gxc = EigenZero(nbasis, nbasis);
 			if (*xc){
@@ -445,7 +447,8 @@ class ObjNewton: public ObjNewtonBase{ public:
 
 	EigenMatrix DensityHessian(EigenMatrix dDprime) const override{
 		const EigenMatrix D = Z * dDprime * Z.transpose();
-		const auto [FhfU, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
+		const auto [J, K, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
+		const EigenMatrix FhfU = J - K;
 		EigenMatrix FxcU = EigenZero(nbasis, nbasis);
 		if (*xc){
 			grid->getDensityU({{ 2 * D }});

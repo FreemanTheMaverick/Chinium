@@ -80,9 +80,9 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 		}
 		const EigenMatrix Da_ = Ca * occa.asDiagonal() * Ca.transpose();
 		const EigenMatrix Db_ = Cb * occb.asDiagonal() * Cb.transpose();
-		const auto [_, Ghfa_, Ghfb_] = int4c2e.ContractInts(EigenZero(0, 0), Da_, Db_, nthreads, 1);
-		const EigenMatrix Fhfa_ = Hcore + Ghfa_;
-		const EigenMatrix Fhfb_ = Hcore + Ghfb_;
+		const auto [J_, _, Ka_, Kb_] = int4c2e.ContractInts(EigenZero(0, 0), Da_, Db_, nthreads, 1);
+		const EigenMatrix Fhfa_ = Hcore + J_ - Ka_;
+		const EigenMatrix Fhfb_ = Hcore + J_ - Kb_;
 		double Exc_ = 0;
 		EigenMatrix Gxca_ = EigenZero(nbasis, nbasis);
 		EigenMatrix Gxcb_ = EigenZero(nbasis, nbasis);

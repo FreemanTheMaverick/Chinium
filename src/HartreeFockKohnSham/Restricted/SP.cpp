@@ -47,7 +47,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 		oldE = E;
 		E = 0;
 		const EigenMatrix D_ = C.leftCols(nocc) * C.leftCols(nocc).transpose();
-		const auto [Ghf_, _, __] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+		const auto [J_, K_, __, ___] = int4c2e.ContractInts(D_, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+		const EigenMatrix Ghf_ = J_ - K_;
 		double Exc_ = 0;
 		EigenMatrix Gxc_ = EigenZero(nbasis, nbasis);
 		if (xc){
@@ -122,7 +123,8 @@ class ObjBase: public Maniverse::Objective{ public:
 		if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
 			Dprime = Dprimes[0];
 			const EigenMatrix D = Z * Dprime * Z.transpose();
-			const auto [Ghf, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+			const auto [J, K, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
+			const EigenMatrix Ghf = J - K;
 			double Exc = 0;
 			EigenMatrix Gxc = EigenZero(nbasis, nbasis);
 			if (*xc){
@@ -210,7 +212,8 @@ class ObjNewton: public ObjNewtonBase{ public:
 	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vprimes) const override{
 		const EigenMatrix Vprime = Vprimes[0];
 		const EigenMatrix V = Z * Vprime * Z.transpose();
-		const auto [FhfU, _, __] = int4c2e->ContractInts(V, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
+		const auto [J, K, _, __] = int4c2e->ContractInts(V, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
+		const EigenMatrix FhfU = J - K;
 		EigenMatrix FxcU = EigenZero(nbasis, nbasis);
 		if (*xc){
 			grid->getDensityU({{ 2 * V }});

@@ -36,12 +36,12 @@ int main(int /*argc*/, char* argv[]){
 			else __Bad_Input__;
 		}else if ( wfntype == 2 ) job = std::make_unique<RO_SCF>(inp);
 		else __Bad_Input__;
+	}else if ( jobtype == "TWODET" && wfntype == 2 ){
+		job = std::make_unique<TwoDet>(inp);
 	//}else if ( jobtype == "LOCALIZATION" ){
 	//	if ( wfntype == 0 ) job = std::make_unique<R_Localization>(inp);
 	//	else if ( wfntype == 1 ) job = std::make_unique<U_Localization>(inp);
 	//	else __Bad_Input__;
-	//}else if ( jobtype == "TWODET" && wfntype == 2 ){
-	//	job = std::make_unique<TwoDet>(inp);
 	}else __Bad_Input__;
 
 	// Running the job
