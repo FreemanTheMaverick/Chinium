@@ -236,7 +236,7 @@ class ObjNewton: public ObjNewtonBase{ public:
 		ObjNewtonBase::Calculate(Cprimes_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 2) && *xc ){
 			xc->Evaluate("f", *grid);
-			xc->Evaluate("f", *grid2);
+			if (One) xc->Evaluate("f", *grid2);
 		}
 	};
 
