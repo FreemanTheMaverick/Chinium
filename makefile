@@ -31,6 +31,7 @@ DEPS        = $(OBJECTS:.o=.d)
 CPPFLAGS    = -isystem $(EIGEN3_PATH) \
               -isystem $(LIBINT2_PATH)/include \
               -isystem $(LIBXC_PATH)/include \
+              -isystem $(LIBECPINT_PATH)/include \
               -isystem $(LIBMWFN_PATH)/include \
               -isystem $(MANIVERSE_PATH)/include \
               -DEIGEN_INITIALIZE_MATRICES_BY_ZERO \
@@ -47,11 +48,15 @@ CXXFLAGS    = -std=c++2a \
 LDFLAGS     = -L$(LIBINT2_PATH)/lib \
               -L$(LIBXC_PATH)/lib \
               -L$(LIBXC_PATH)/lib64 \
+              -L$(LIBECPINT_PATH)/lib \
+              -L$(LIBECPINT_PATH)/lib64 \
               -L$(LIBMWFN_PATH)/lib \
               -L$(MANIVERSE_PATH)/lib \
               -Wl,-rpath,$(LIBINT2_PATH)/lib \
               -Wl,-rpath,$(LIBXC_PATH)/lib \
               -Wl,-rpath,$(LIBXC_PATH)/lib64 \
+              -Wl,-rpath,$(LIBECPINT_PATH)/lib \
+              -Wl,-rpath,$(LIBECPINT_PATH)/lib64 \
               -Wl,-rpath,$(LIBMWFN_PATH)/lib \
               -Wl,-rpath,$(MANIVERSE_PATH)/lib \
               -fopenmp # Often needed for linking OpenMP code too
@@ -59,6 +64,9 @@ LDFLAGS     = -L$(LIBINT2_PATH)/lib \
 # Libraries to Link
 LDLIBS      = -lint2 \
               -lxc \
+              -lecpint \
+              -lpugixml \
+              -lFaddeeva \
               -l:libmwfn.a \
               -l:libmaniverse.a # Explicitly link the static archive
 
