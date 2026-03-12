@@ -46,6 +46,7 @@ CXXFLAGS    = -std=c++2a \
 # -L flags specify paths for the *linker* to search during the build
 # -Wl,-rpath, flags embed paths into the executable for the *runtime dynamic linker*
 LDFLAGS     = -L$(LIBINT2_PATH)/lib \
+			  -L$(LIBINT2_PATH)/lib64 \
               -L$(LIBXC_PATH)/lib \
               -L$(LIBXC_PATH)/lib64 \
               -L$(LIBECPINT_PATH)/lib \

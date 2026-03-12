@@ -74,8 +74,8 @@ class ObjBase: public Maniverse::Objective{ public:
 			const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
 			const std::vector<EigenMatrix> FhfMs = {
 				Hcore + J - Kd - 0.5 * ( Ka + Kb ),
-				Hcore + J - Kd - Ka,
-				Hcore + J - Kd - Kb
+				Hcore + J - Kd - Ka + Kb,
+				Hcore + J - Kd + Ka - Kb
 			};
 			const std::vector<EigenMatrix> FhfTs = {
 				Hcore + J - Kd - 0.5 * ( Ka + Kb ),
@@ -248,8 +248,8 @@ class ObjNewton: public ObjNewtonBase{ public:
 		const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(dDs[0][0], dDs[1][0], dDs[2][0], nthreads, 0);
 		std::vector<EigenMatrix> dFMs = {
 			J - Kd - 0.5 * ( Ka + Kb ),
-			J - Kd - Ka,
-			J - Kd - Kb
+			J - Kd - Ka + Kb,
+			J - Kd + Ka - Kb
 		};
 		std::vector<EigenMatrix> dFTs = {
 			J - Kd - 0.5 * ( Ka + Kb ),

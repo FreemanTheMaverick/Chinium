@@ -40,6 +40,7 @@ class ObjBase: public Maniverse::Objective{ public:
 	int Np;
 	int Na;
 	int Nb;
+	double Coupling;
 	EigenMatrix Z;
 	int nthreads;
 
@@ -60,9 +61,9 @@ class ObjBase: public Maniverse::Objective{ public:
 	ObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		int Np, int Na, int Nb, EigenMatrix Z,
+		int Np, int Na, int Nb, double Coupling, EigenMatrix Z,
 		int nthreads
-	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), Np(Np), Na(Na), Nb(Nb), Z(Z), nthreads(nthreads){
+	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), Np(Np), Na(Na), Nb(Nb), Coupling(Coupling), Z(Z), nthreads(nthreads){
 		nbasis = Z.rows();
 		Cprime = EigenZero(nbasis, Np + Na + Nb);
 		Gradient = {Cprime};
@@ -101,8 +102,8 @@ class ObjBase: public Maniverse::Objective{ public:
 			for ( int type = 0; type < 3; type++ ) if ( occ.count(type) ){
 				const EigenMatrix Fhf =
 					type == 0 ? ( Hcore + J - Kd - 0.5 * Ka - 0.5 * Kb ).eval() :
-					type == 1 ? ( Hcore + J - Kd - Ka ).eval() :
-					/* type == 2 ? */ ( Hcore + J - Kd - Kb ).eval();
+					type == 1 ? ( Hcore + J - Kd - Ka + Coupling * Kb ).eval() :
+					/* type == 2 ? */ ( Hcore + J - Kd - Kb + Coupling * Ka ).eval();
 				Value += 0.5 * occ[type] * Ds[type].cwiseProduct( Hcore + Fhf ).sum();
 				Fprimes[type] = Z.transpose() * Fhf * Z;
 			}
@@ -258,8 +259,8 @@ class ObjNewton: public ObjNewtonBase{ public:
 		for ( int type = 0; type < 3; type++ ) if ( occ.count(type) ){
 			dGs[type] =
 				type == 0 ? ( J - Kd - 0.5 * Ka - 0.5 * Kb ).eval() :
-				type == 1 ? ( J - Kd - Ka ).eval() :
-				/* type == 2 ? */ ( J - Kd - Kb ).eval();
+				type == 1 ? ( J - Kd - Ka + Coupling * Kb ).eval() :
+				/* type == 2 ? */ ( J - Kd - Kb + Coupling * Ka ).eval();
 		}
 
 		dDs[0][0] *= 2;
@@ -324,7 +325,7 @@ template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
-		int Np, int Na, int Nb, EigenMatrix Z,
+		int Np, int Na, int Nb, double Coupling, EigenMatrix Z,
 		int nthreads, int output){
 	std::conditional_t< scf_t == lbfgs_t,
 				ObjLBFGS,
@@ -332,7 +333,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 							ObjNewton,
 							ObjARH
 				>
-	> obj(int2c1e, int4c2e, xc, grid, Np, Na, Nb, Z, nthreads);
+	> obj(int2c1e, int4c2e, xc, grid, Np, Na, Nb, Coupling, Z, nthreads);
 	std::vector<int> space = {};
 	if (Np) space.push_back(Np);
 	if (Na) space.push_back(Na);
@@ -390,9 +391,9 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 void RO_SCF::Calculate0(){
 	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
 	auto [E, epsilons, C] =
-		scftype == "LBFGS" ? RestrictedOpenRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, Np, Na, Nb, Z, nthreads, 1) :
-		scftype == "ARH" ? RestrictedOpenRiemann<arh_t>(int2c1e, int4c2e, xc, grid, Np, Na, Nb, Z, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ RestrictedOpenRiemann<newton_t>(int2c1e, int4c2e, xc, grid, Np, Na, Nb, Z, nthreads, 1);
+		scftype == "LBFGS" ? RestrictedOpenRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, Np, Na, Nb, Coupling, Z, nthreads, 1) :
+		scftype == "ARH" ? RestrictedOpenRiemann<arh_t>(int2c1e, int4c2e, xc, grid, Np, Na, Nb, Coupling, Z, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ RestrictedOpenRiemann<newton_t>(int2c1e, int4c2e, xc, grid, Np, Na, Nb, Coupling, Z, nthreads, 1);
 	Energy += E;
 	mwfn.setEnergy(epsilons, 1);
 	mwfn.setCoefficientMatrix(C, 1);
