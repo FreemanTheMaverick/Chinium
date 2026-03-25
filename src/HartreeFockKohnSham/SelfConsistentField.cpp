@@ -39,15 +39,17 @@ SCF::SCF(std::string inp, Mwfn& mwfn, Int2C1E& int2c1e){
 		if ( guess != "READ" ) GuessSCF(mwfn, int2c1e, grid, guess, 1);
 	}
 
-	// Two-electron integrals
-	int4c2e = Int4C2E(mwfn, 1, -1);
-	if (xc) int4c2e.EXX = xc.EXX;
-	int4c2e.getRepulsionDiag(1);
-	int4c2e.getRepulsionLength(1);
-	int4c2e.getRepulsionIndices(1);
-	int4c2e.getThreadPointers(nthreads, 1);
-	int4c2e.CalculateIntegrals(0, 1);
-
 	// SCF type
 	scftype = ReadSCF(inp);
+
+	// Two-electron integrals
+	if ( scftype != "DRY" ){
+		int4c2e = Int4C2E(mwfn, 1, -1);
+		if (xc) int4c2e.EXX = xc.EXX;
+		int4c2e.getRepulsionDiag(1);
+		int4c2e.getRepulsionLength(1);
+		int4c2e.getRepulsionIndices(1);
+		int4c2e.getThreadPointers(nthreads, 1);
+		int4c2e.CalculateIntegrals(0, 1);
+	}
 }

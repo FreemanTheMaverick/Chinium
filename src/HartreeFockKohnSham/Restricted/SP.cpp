@@ -232,7 +232,7 @@ class ObjARH: public ObjNewtonBase{ public:
 	void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
 		ObjNewtonBase::Calculate(Dprimes, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			arh.Append(Dprime, Fprime);
+			arh.Append(Dprime, 2 * Fprime);
 		}
 	};
 
@@ -265,7 +265,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
 					M, tol,
-					20, 300, 0.1, 0.75, 100, output
+					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
 		Maniverse::TrustRegion tr;
@@ -285,6 +285,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 }
 
 void R_SCF::Calculate0(){
+	if ( scftype == "DRY" ) return;
 	const int nocc = mwfn.getNumElec(1);
 	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
 	const EigenMatrix F = mwfn.getFock(1);

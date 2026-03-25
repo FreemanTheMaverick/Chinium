@@ -131,6 +131,7 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 }
 
 void UGC_SCF::Calculate0(){
+	if ( scftype == "DRY" ) return;
 	EigenMatrix Z = mwfn.getCoefficientMatrix(1);
 	EigenMatrix Fa = mwfn.getFock(1);
 	EigenMatrix Fb = mwfn.getFock(2);

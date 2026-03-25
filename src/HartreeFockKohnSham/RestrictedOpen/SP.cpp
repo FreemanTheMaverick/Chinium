@@ -297,9 +297,8 @@ class ObjARH: public ObjNewtonBase{ public:
 			EigenMatrix Fprime = EigenZero(nbasis, nbasis * ntypes);
 			for ( int itype = 0; itype < ntypes; itype++ ){
 				Dprime.middleCols(itype * nbasis, nbasis) = Dprimes[itype];
-				Fprime.middleCols(itype * nbasis, nbasis) = 0.5 * Fprimes[itype];
+				Fprime.middleCols(itype * nbasis, nbasis) = Fprimes[itype];
 			}
-			if (Np) Fprime.leftCols(nbasis) *= 2;
 			arh.Append(Dprime, Fprime);
 		}
 	};
@@ -344,7 +343,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
 					M, tol,
-					20, 300, 0.1, 0.75, 100, output
+					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
 		Maniverse::TrustRegion tr;
@@ -389,6 +388,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedOpenRiemann(
 }
 
 void RO_SCF::Calculate0(){
+	if ( scftype == "DRY" ) return;
 	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
 	auto [E, epsilons, C] =
 		scftype == "LBFGS" ? RestrictedOpenRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, Np, Na, Nb, Coupling, Z, nthreads, 1) :

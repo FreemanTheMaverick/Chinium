@@ -348,7 +348,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
 					M, tol,
-					20, 300, 0.1, 0.75, 100, output
+					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
 		Maniverse::TrustRegion tr;
@@ -368,6 +368,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 }
 
 void U_SCF::Calculate0(){
+	if ( scftype == "DRY" ) return;
 	const int nocc1 = mwfn.getNumElec(1); 
 	const int nocc2 = mwfn.getNumElec(2); 
 	const EigenMatrix Z1 = mwfn.getCoefficientMatrix(1);

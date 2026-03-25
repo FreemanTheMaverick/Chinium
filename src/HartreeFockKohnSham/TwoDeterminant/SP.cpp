@@ -1,4 +1,3 @@
-#include<iostream>
 #include <Eigen/Dense>
 #include <vector>
 #include <functional>
@@ -74,8 +73,8 @@ class ObjBase: public Maniverse::Objective{ public:
 			const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
 			const std::vector<EigenMatrix> FhfMs = {
 				Hcore + J - Kd - 0.5 * ( Ka + Kb ),
-				Hcore + J - Kd - Ka + Kb,
-				Hcore + J - Kd + Ka - Kb
+				Hcore + J - Kd - Ka + Kb*0,
+				Hcore + J - Kd + Ka*0 - Kb
 			};
 			const std::vector<EigenMatrix> FhfTs = {
 				Hcore + J - Kd - 0.5 * ( Ka + Kb ),
@@ -248,8 +247,8 @@ class ObjNewton: public ObjNewtonBase{ public:
 		const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(dDs[0][0], dDs[1][0], dDs[2][0], nthreads, 0);
 		std::vector<EigenMatrix> dFMs = {
 			J - Kd - 0.5 * ( Ka + Kb ),
-			J - Kd - Ka + Kb,
-			J - Kd + Ka - Kb
+			J - Kd - Ka + Kb*0,
+			J - Kd + Ka*0 - Kb
 		};
 		std::vector<EigenMatrix> dFTs = {
 			J - Kd - 0.5 * ( Ka + Kb ),
@@ -297,7 +296,7 @@ class ObjARH: public ObjNewtonBase{ public:
 			EigenMatrix Fprime = EigenZero(nbasis, nbasis * 3);
 			for ( int type = 0; type < 3; type++ ){
 				Dprime.middleCols(type * nbasis, nbasis) = Dprimes[type];
-				Fprime.middleCols(type * nbasis, nbasis) = 0.5 * occ[type] * ( 2 * FprimeMs[type] - FprimeTs[type] );
+				Fprime.middleCols(type * nbasis, nbasis) = 2 * FprimeMs[type] - FprimeTs[type];
 			}
 			arh.Append(Dprime, Fprime);
 		}
@@ -339,7 +338,7 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
 					M, tol,
-					20, 300, 0.1, 0.75, 100, output
+					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
 		Maniverse::TrustRegion tr;
@@ -360,6 +359,7 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 }
 
 void TwoDet::Calculate0(){
+	if ( scftype == "DRY" ) return;
 	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
 	auto [E, C] =
 		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, 1) :

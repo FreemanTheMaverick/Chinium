@@ -534,7 +534,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		if constexpr ( scf_t == lbfgs_t ){
 			if ( ! Maniverse::LBFGS(
 					M, tol,
-					20, 300, 0.1, 0.75, 100, output
+					20, 300, 0.1, 0.75, 10, output
 			) ) throw std::runtime_error("Convergence failed!");
 		}else{
 			Maniverse::TrustRegion tr;
@@ -609,34 +609,8 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 	return std::make_tuple(obj.Value, obj.Eps_oav, all_occ, C);
 }
 
-std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteLBFGS(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		double T, double Mu,
-		EigenVector all_occ, EigenMatrix Z,
-		int nthreads, int output){
-	return RestrictedFiniteRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, T, Mu, all_occ, Z, nthreads, output);
-}
-
-std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteNewton(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		double T, double Mu,
-		EigenVector all_occ, EigenMatrix Z,
-		int nthreads, int output){
-	return RestrictedFiniteRiemann<newton_t>(int2c1e, int4c2e, xc, grid, T, Mu, all_occ, Z, nthreads, output);
-}
-
-std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteARH(
-		Int2C1E& int2c1e, Int4C2E& int4c2e,
-		ExchangeCorrelation& xc, Grid& grid,
-		double T, double Mu,
-		EigenVector all_occ, EigenMatrix Z,
-		int nthreads, int output){
-	return RestrictedFiniteRiemann<arh_t>(int2c1e, int4c2e, xc, grid, T, Mu, all_occ, Z, nthreads, output);
-}
-
 void RGC_SCF::Calculate0(){
+	if ( scftype == "DRY" ) return;
 	const EigenVector occ_guess = mwfn.getOccupation(1);
 	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
 	const EigenMatrix F = mwfn.getFock(1);
