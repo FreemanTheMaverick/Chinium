@@ -74,8 +74,9 @@ Representation::Representation(std::string inp){
 RepR::RepR(std::string inp): Representation(inp){
 	mwfn.Wfntype = 0;
 	if ( typeid(*this) == typeid(RepR) )
-		for ( int occ : mwfn.getOccupation(1) )
-			if ( occ != 0 || occ != 2 ) throw std::runtime_error("Bad occupation number!");
+		for ( auto& orb : mwfn.Orbitals )
+			if ( orb.Occ != 0 && orb.Occ != 2 )
+				throw std::runtime_error("Bad occupation number!");
 	if ( ReadGuess(inp) != "READ" ){
 		mwfn.Orbitals.resize(mwfn.getNumBasis());
 		EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
@@ -89,7 +90,7 @@ RepU::RepU(std::string inp): Representation(inp){
 	mwfn.Wfntype = 1;
 	if ( typeid(*this) == typeid(RepR) )
 		for ( int occ : mwfn.getOccupation(1) )
-			if ( occ != 0 || occ != 1 ) throw std::runtime_error("Bad occupation number!");
+			if ( occ != 0 && occ != 1 ) throw std::runtime_error("Bad occupation number!");
 	if ( ReadGuess(inp) != "READ" ){
 		mwfn.Orbitals.resize(mwfn.getNumBasis() * 2);
 		EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
