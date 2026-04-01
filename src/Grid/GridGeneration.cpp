@@ -257,7 +257,7 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
 	for ( int i = 0; i < (int)subgrids.size(); i++ ){
 		SubGrid& subgrid = subgrids[i] = SubGrid(batches[i]);
 		subgrid.MWFN = mwfn;
-		subgrid.Spin = mwfn->getNumSpins();
+		subgrid.Spin = mwfn->getNumSpins() > 1 ? 2 : 1;
 		subgrid.NumGrids = subgrid.W.dimension(0);
 		subgrid.BasisList.resize(mwfn->getNumBasis()); for ( int k = 0; k < mwfn->getNumBasis(); k++ ) subgrid.BasisList[k] = k;
 		subgrid.getAO(0);

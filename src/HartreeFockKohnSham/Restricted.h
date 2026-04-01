@@ -1,21 +1,17 @@
 #pragma once
 
-#include <Eigen/Core>
-#include <vector>
 #include <string>
 
-#include "../Macro.h"
 #include "../Job.h"
 #include "../Representation.h"
 
 #include "SelfConsistentField.h"
 
 class R_SCF: public Job, public RepR, public SCF{ public:
+	double Coupling = 0;
 	std::vector<EigenVector> dEs;
 	std::vector<EigenMatrix> dFs; // For reusing the intermediate CPSCF results of R_SCF in RGC_SCF
-    R_SCF(std::string inp): Job(inp), RepR(inp), SCF(inp, mwfn, int2c1e){
-		xc.Spin = 1;
-	};
+	R_SCF(std::string inp);
 	virtual void Calculate0() override;
 	virtual void Calculate1() override;
 	virtual void Calculate2() override;

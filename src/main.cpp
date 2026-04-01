@@ -26,7 +26,7 @@ int main(int /*argc*/, char* argv[]){
 	const double temperature = ReadTemperature(inp);
 	std::unique_ptr<Job> job;
 	if ( jobtype == "SCF" ){
-		if ( wfntype == 0 ){
+		if ( wfntype == 0 || wfntype == 2 ){
 			if ( temperature == 0 ) job = std::make_unique<R_SCF>(inp);
 			else if ( temperature > 0 ) job = std::make_unique<RGC_SCF>(inp);
 			else __Bad_Input__;
@@ -34,8 +34,7 @@ int main(int /*argc*/, char* argv[]){
 			if ( temperature == 0 ) job = std::make_unique<U_SCF>(inp);
 			else if ( temperature > 0 ) job = std::make_unique<UGC_SCF>(inp);
 			else __Bad_Input__;
-		}else if ( wfntype == 2 ) job = std::make_unique<RO_SCF>(inp);
-		else __Bad_Input__;
+		}else __Bad_Input__;
 	}else if ( jobtype == "TWODET" && wfntype == 2 ){
 		job = std::make_unique<TwoDet>(inp);
 	//}else if ( jobtype == "LOCALIZATION" ){

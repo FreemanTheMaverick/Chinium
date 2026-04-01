@@ -90,14 +90,23 @@ class ObjBase: public Maniverse::Objective{ public:
 
 			if (*xc){
 				if (One){
-					grid->getDensity({ 2 * Ds[0], Ds[1], Ds[2] });
-					grid2->getDensity({ 2 * Ds[0], Ds[1] + Ds[2] });
+					grid->getDensity({ Ds[0] + Ds[1], Ds[0] + Ds[2] });
+					grid2->getDensity({ Ds[0] + Ds[1] + Ds[2], Ds[0] });
 					xc->Evaluate("ev", *grid);
 					xc->Evaluate("ev", *grid2);
 					Value += 2 * grid->getEnergy() - grid2->getEnergy();
-					const std::vector<EigenMatrix> GxcMs = grid->getFock();
+					std::vector<EigenMatrix> GxcMs = grid->getFock();
+					GxcMs = {
+						0.5 * ( GxcMs[0] + GxcMs[1] ),
+						GxcMs[0],
+						GxcMs[1]
+					};
 					std::vector<EigenMatrix> GxcTs = grid2->getFock();
-					GxcTs.push_back(GxcTs[1]);
+					GxcTs = {
+						0.5 * ( GxcTs[0] + GxcTs[1] ),
+						GxcTs[0],
+						GxcTs[0]
+					};
 					for ( int type = 0; type < 3; type++ ){
 						FprimeMs[type] += Z.transpose() * GxcMs[type] * Z;
 						FprimeTs[type] += Z.transpose() * GxcTs[type] * Z;
@@ -258,11 +267,20 @@ class ObjNewton: public ObjNewtonBase{ public:
 
 		if (*xc){
 			if (One){
-				grid->getDensityU({ { 2 * dDs[0][0] }, { dDs[1][0] }, { dDs[2][0] } });
-				grid2->getDensityU({ { 2 * dDs[0][0] }, { dDs[1][0] + dDs[2][0] } });
-				const std::vector<std::vector<EigenMatrix>> dGxcMs = grid->getFockU<u_t>();
+				grid->getDensityU({ { dDs[0][0] + dDs[1][0] }, { dDs[0][0] + dDs[2][0] } });
+				grid2->getDensityU({ { dDs[0][0] + dDs[1][0] + dDs[2][0] }, { dDs[0][0] } });
+				std::vector<std::vector<EigenMatrix>> dGxcMs = grid->getFockU<u_t>();
+				dGxcMs = {
+					{ 0.5 * ( dGxcMs[0][0] + dGxcMs[1][0] ) },
+					{ dGxcMs[0][0] },
+					{ dGxcMs[1][0] }
+				};
 				std::vector<std::vector<EigenMatrix>> dGxcTs = grid2->getFockU<u_t>();
-				dGxcTs.push_back(dGxcTs.back());
+				dGxcTs = {
+					{ 0.5 * ( dGxcTs[0][0] + dGxcTs[1][0] ) },
+					{ dGxcTs[0][0] },
+					{ dGxcTs[0][0] }
+				};
 				for ( int type = 0; type < 3; type++ ){
 					dFMs[type] += dGxcMs[type][0];
 					dFTs[type] += dGxcTs[type][0];

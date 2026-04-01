@@ -19,7 +19,3 @@ class RepR: public Representation{ public:
 class RepU: public Representation{ public:
 	RepU(std::string inp);
 };
-
-class RepRO: public Representation{ public:
-	RepRO(std::string inp);
-};

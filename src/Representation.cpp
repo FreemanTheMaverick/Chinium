@@ -72,17 +72,32 @@ Representation::Representation(std::string inp){
 
 #define Round(x) (int)( isInt(x) ? std::lround(x) : std::floor(x) )
 RepR::RepR(std::string inp): Representation(inp){
-	mwfn.Wfntype = 0;
-	if ( typeid(*this) == typeid(RepR) )
-		for ( auto& orb : mwfn.Orbitals )
-			if ( orb.Occ != 0 && orb.Occ != 2 )
-				throw std::runtime_error("Bad occupation number!");
+	mwfn.Wfntype = 2;
 	if ( ReadGuess(inp) != "READ" ){
-		mwfn.Orbitals.resize(mwfn.getNumBasis());
-		EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
-		for ( int i = 0; i < Round(Na); i++ ) occ(i) = 1;
-		occ( Round(Na) ) = Na - Round(Na);
-		mwfn.setOccupation(occ, 1);
+		if ( isInt(Na) ){
+			if ( Np == 0 ) Np = Nb;
+			mwfn.Orbitals.resize(mwfn.getNumBasis());
+			const int np_int = std::lround(Np);
+			const int na_int = std::lround(Na);
+			const int nb_int = std::lround(Nb);
+			for ( int i = 0; i < na_int + nb_int - np_int; i++ ){
+				auto& orbital_i = mwfn.Orbitals[i];
+				if ( i < np_int ){
+					orbital_i.Occ = 2;
+					orbital_i.Type = 0;
+				}else{
+					orbital_i.Occ = 1;
+					if ( i < na_int ) orbital_i.Type = 1;
+					else orbital_i.Type = 2;
+				}
+			}
+		}else{
+			mwfn.Orbitals.resize(mwfn.getNumBasis());
+			EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
+			for ( int i = 0; i < Round(Na); i++ ) occ(i) = 1;
+			occ( Round(Na) ) = Na - Round(Na);
+			mwfn.setOccupation(occ, 1);
+		}
 	}
 }
 
@@ -99,27 +114,5 @@ RepU::RepU(std::string inp): Representation(inp){
 		occ.setZero();
 		for ( int i = 0; i < Nb; i++ ) occ(i) = 1;
 		mwfn.setOccupation(occ, 2);
-	}
-}
-
-RepRO::RepRO(std::string inp): Representation(inp){
-	mwfn.Wfntype = 2;
-	if ( Np == 0 ) Np = Nb;
-	if ( ReadGuess(inp) != "READ" ){
-		mwfn.Orbitals.resize(mwfn.getNumBasis());
-		const int np_int = std::lround(Np);
-		const int na_int = std::lround(Na);
-		const int nb_int = std::lround(Nb);
-		for ( int i = 0; i < na_int + nb_int - np_int; i++ ){
-			auto& orbital_i = mwfn.Orbitals[i];
-			if ( i < np_int ){
-				orbital_i.Occ = 2;
-				orbital_i.Type = 0;
-			}else{
-				orbital_i.Occ = 1;
-				if ( i < na_int ) orbital_i.Type = 1;
-				else orbital_i.Type = 2;
-			}
-		}
 	}
 }

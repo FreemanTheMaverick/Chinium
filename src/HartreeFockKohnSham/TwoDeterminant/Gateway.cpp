@@ -33,16 +33,12 @@ int ReadType(std::string inp){
 
 }
 
-TwoDet::TwoDet(std::string inp): RO_SCF(inp){
+TwoDet::TwoDet(std::string inp): R_SCF(inp){
 	if ( Na != 1 && Nb != 1 ) throw std::runtime_error("Two-determinant ROKS requires exactly one unpaired alpha electron and one unpaired beta electron! (Keyword: spin 2 2)");
 	TwoDetType = ReadType(inp);
 	if ( TwoDetType == 1 ){
 		grid2 = grid;
-		for ( auto& subgridbatch : grid2.SubGridBatches ) for ( auto& subgrid : subgridbatch )
-			subgrid->Spin = 2;
 	}else{
 		xc.Spin = 1;
-		for ( auto& subgridbatch : grid.SubGridBatches ) for ( auto& subgrid : subgridbatch )
-			subgrid->Spin = 1;
 	}
 }

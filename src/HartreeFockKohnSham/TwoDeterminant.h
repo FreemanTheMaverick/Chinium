@@ -5,9 +5,9 @@
 #include "../Macro.h"
 #include "../Grid.h"
 
-#include "RestrictedOpen.h"
+#include "Restricted.h"
 
-class TwoDet: public RO_SCF{ public:
+class TwoDet: public R_SCF{ public:
 	int TwoDetType = 1;
 	Grid grid2;
 	TwoDet(std::string inp);

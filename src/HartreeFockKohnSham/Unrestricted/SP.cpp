@@ -1,20 +1,16 @@
 #include <Eigen/Dense>
 #include <vector>
-#include <functional>
 #include <tuple>
 #include <cstdio>
-#include <Maniverse/Manifold/Grassmann.h>
+#include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/Optimizer/TruncatedNewton.h>
 #include <libmwfn.h>
 
 #include "../../Macro.h"
-#include "../../Integral.h"
-#include "../../Grid.h"
-#include "../../ExchangeCorrelation.h"
 #include "../../DIIS.h"
 
-#include "../AugmentedRoothaanHall.h"
+#include "../Universal.h"
 #include "../Unrestricted.h"
 
 #define S ( int2c1e.Overlap)
@@ -114,211 +110,106 @@ namespace{
 #define S (int2c1e->Overlap)
 #define Hcore (int2c1e->Kinetic + int2c1e->Nuclear )
 
-class ObjBase: public Maniverse::Objective{ public:
-	Int2C1E* int2c1e;
-	Int4C2E* int4c2e;
-	ExchangeCorrelation* xc;
-	Grid* grid;
-	int nocc1;
-	int nocc2;
-	EigenMatrix Z1;
-	EigenMatrix Z2;
-	int nthreads;
+class ObjBase: public UniversalObjBase{ public:
+	std::vector<EigenMatrix> Cprime_perps = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
+	std::vector<EigenMatrix> Ks = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
+	std::vector<EigenMatrix> Ls = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 
-	int nbasis;
+	using UniversalObjBase::UniversalObjBase;
 
-	EigenMatrix D1prime;
-	EigenMatrix D2prime;
-	EigenMatrix F1prime;
-	EigenMatrix F2prime;
-	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-	EigenVector epsilon1s;
-	EigenVector epsilon2s;
-	EigenMatrix C1;
-	EigenMatrix C2;
-	EigenMatrix A1;
-	EigenMatrix A2;
-
-	ObjBase(
-			Int2C1E& int2c1e, Int4C2E& int4c2e,
-			ExchangeCorrelation& xc, Grid& grid,
-			int nocc1, int nocc2, EigenMatrix Z1, EigenMatrix Z2,
-			int nthreads
-	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), nocc1(nocc1), nocc2(nocc2), Z1(Z1), Z2(Z2), nthreads(nthreads){
-		nbasis = Z1.rows();
-		epsilon1s = epsilon2s = EigenZero(nbasis, 1);
-		C1 = C2 = A1 = A2 = EigenZero(nbasis, nbasis);
-	};
-
-	virtual void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
-		if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
-			D1prime = Dprimes[0];
-			D2prime = Dprimes[1];
-			const EigenMatrix D1 = Z1 * D1prime * Z1.transpose();
-			const EigenMatrix D2 = Z2 * D2prime * Z2.transpose();
-			const auto [J, _, K1, K2] = int4c2e->ContractInts(EigenZero(0, 0), D1, D2, nthreads, 1);
-			const EigenMatrix Fhf1 = Hcore + J - K1;
-			const EigenMatrix Fhf2 = Hcore + J - K2;
-			double Exc = 0;
-			EigenMatrix Gxc1 = EigenZero(Z1.rows(), Z1.rows());
-			EigenMatrix Gxc2 = EigenZero(Z1.rows(), Z1.rows());
-			if (*xc){
-				grid->getDensity({ D1, D2 });
-				xc->Evaluate("ev", *grid);
-				Exc = grid->getEnergy();
-				const std::vector<EigenMatrix> Gxc = grid->getFock();
-				Gxc1 = Gxc[0];
-				Gxc2 = Gxc[1];
-			}
-			const EigenMatrix F1 = Fhf1 + Gxc1;
-			const EigenMatrix F2 = Fhf2 + Gxc2;
-			Value = 0.5 * ( Dot(D1, Hcore + Fhf1) + Dot(D2, Hcore + Fhf2) ) + Exc;
-			F1prime = Z1.transpose() * F1 * Z1; // Euclidean gradient
-			F2prime = Z2.transpose() * F2 * Z2;
-		}
-
+	virtual void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
+		Cprimes_.insert(Cprimes_.begin(), EigenZero(0, 0));
+		UniversalObjBase::Calculate(Cprimes_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			Gradient = { F1prime, F2prime };
-			eigensolver.compute(F1prime);
-			epsilon1s = eigensolver.eigenvalues();
-			C1 = Z1 * eigensolver.eigenvectors();
-			eigensolver.compute(F2prime);
-			epsilon2s = eigensolver.eigenvalues();
-			C2 = Z2 * eigensolver.eigenvectors();
-			A1 = EigenMatrix::Ones(nbasis, nbasis);
-			for ( int o = 0; o < nocc1; o++ ){
-				for ( int v = nocc1; v < nbasis; v++ ){
-					A1(o, v) = A1(v, o) = 2 * ( epsilon1s(v) - epsilon1s(o) );
+			Gradient = Gradients;
+			Gradient.erase(Gradient.begin());
+			for ( int type = 1; type < 3; type++ ){
+				Eigen::HouseholderQR<EigenMatrix> qr(Cprimes[type]);
+				const EigenMatrix Call = qr.householderQ();
+				Cprime_perps[type] = Call.rightCols(nbasis - Norbs[type]);
+				EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
+				const EigenMatrix Fmo = Call.transpose() * Fprimes[type] * Call;
+				for ( int o = 0; o < Norbs[type]; o++ ){
+					for ( int v = Norbs[type]; v < nbasis; v++ ){
+						A(o, v) = A(v, o) = 2 * std::abs( Fmo(v, v) - Fmo(o, o) );
+					}
 				}
-			}
-			A2 = EigenMatrix::Ones(nbasis, nbasis);
-			for ( int o = 0; o < nocc2; o++ ){
-				for ( int v = nocc2; v < nbasis; v++ ){
-					A2(o, v) = A2(v, o) = 2 * ( epsilon2s(v) - epsilon2s(o) );
-				}
+				Ks[type] = A.topLeftCorner(Norbs[type], Norbs[type]);
+				Ls[type] = A.bottomLeftCorner(nbasis - Norbs[type], Norbs[type]);
 			}
 		}
 	};
 };
 
-EigenMatrix Preconditioner(EigenMatrix D, EigenMatrix A, EigenMatrix V){
-	EigenMatrix W = D * V - V * D;
-	W = W.cwiseProduct(A);
-	return D * W - W * D;
-}
-
 class ObjLBFGS: public ObjBase{ public:
-	EigenMatrix A1sqrt;
-	EigenMatrix A2sqrt;
-	EigenMatrix A1sqrtinv;
-	EigenMatrix A2sqrtinv;
+	std::vector<EigenMatrix> Ksqrts = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
+	std::vector<EigenMatrix> Ksqrtinvs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
+	std::vector<EigenMatrix> Lsqrts = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
+	std::vector<EigenMatrix> Lsqrtinvs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 
 	using ObjBase::ObjBase;
 
 	void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
 		ObjBase::Calculate(Dprimes, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			A1sqrt = A1.cwiseSqrt();
-			A2sqrt = A2.cwiseSqrt();
-			A1sqrtinv = A1sqrt.cwiseInverse();
-			A2sqrtinv = A2sqrt.cwiseInverse();
+			for ( int type = 1; type < 3; type++ ){
+				Ksqrts[type] = Ks[type].cwiseSqrt();
+				Ksqrtinvs[type] = Ksqrts[type].cwiseInverse();
+				Lsqrts[type] = Ls[type].cwiseSqrt();
+				Lsqrtinvs[type] = Lsqrts[type].cwiseInverse();
+			}
 		}
 	};
 
 	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
 		return std::vector<EigenMatrix>{
-				::Preconditioner(D1prime, A1sqrtinv, Vs[0]),
-				::Preconditioner(D2prime, A2sqrtinv, Vs[1])
+			UniversalPreconditioner(Cprimes[1], Cprime_perps[1], Ksqrtinvs[1], Lsqrtinvs[1], Vs[0]),
+			UniversalPreconditioner(Cprimes[2], Cprime_perps[2], Ksqrtinvs[2], Lsqrtinvs[2], Vs[1])
 		};
-	}
+	};
 
 	std::vector<EigenMatrix> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
 		return std::vector<EigenMatrix>{
-				::Preconditioner(D1prime, A1sqrt, Vs[0]),
-				::Preconditioner(D2prime, A2sqrt, Vs[1])
+			UniversalPreconditioner(Cprimes[1], Cprime_perps[1], Ksqrts[1], Lsqrts[1], Vs[0]),
+			UniversalPreconditioner(Cprimes[2], Cprime_perps[2], Ksqrts[2], Lsqrts[2], Vs[1])
 		};
 	};
 };
 
-class ObjNewtonBase: public ObjBase{ public:
-	EigenMatrix A1inv;
-	EigenMatrix A2inv;
+class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
+	std::vector<EigenMatrix> Kinvs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
+	std::vector<EigenMatrix> Linvs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 
-	using ObjBase::ObjBase;
+	using UniversalObjNewtonBase<ObjBase>::UniversalObjNewtonBase;
 
-	virtual void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
-		ObjBase::Calculate(Dprimes, derivatives);
+	virtual void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
+		ObjBase::Calculate(Cprimes_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
-			A1inv = A1.cwiseInverse();
-			A2inv = A2.cwiseInverse();
+			for ( int type = 1; type < 3; type++ ){
+				Kinvs[type] = Ks[type].cwiseInverse();
+				Linvs[type] = Ls[type].cwiseInverse();
+			}
 		}
+	};
+
+	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCprimes) const override{
+		dCprimes.insert(dCprimes.begin(), EigenZero(0, 0));
+		std::vector<EigenMatrix> HdCprimes = UniversalObjNewtonBase<ObjBase>::Hessian(dCprimes);
+		HdCprimes.erase(HdCprimes.begin());
+		return HdCprimes;
 	};
 
 	std::vector<EigenMatrix> Preconditioner(std::vector<EigenMatrix> Vs) const override{
 		return std::vector<EigenMatrix>{
-				::Preconditioner(D1prime, A1inv, Vs[0]),
-				::Preconditioner(D2prime, A2inv, Vs[1])
+			UniversalPreconditioner(Cprimes[1], Cprime_perps[1], Kinvs[1], Linvs[1], Vs[0]),
+			UniversalPreconditioner(Cprimes[2], Cprime_perps[2], Kinvs[2], Linvs[2], Vs[1])
 		};
 	};
 };
 
-class ObjNewton: public ObjNewtonBase{ public:
-	using ObjNewtonBase::ObjNewtonBase;
+using ObjNewton = UniversalObjNewton<ObjNewtonBase>;
 
-	void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
-		ObjNewtonBase::Calculate(Dprimes, derivatives);
-		if ( std::count(derivatives.begin(), derivatives.end(), 2) && *xc ){
-			xc->Evaluate("f", *grid);
-		}
-	};
-
-	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vprimes) const override{
-		const EigenMatrix V1prime = Vprimes[0];
-		const EigenMatrix V2prime = Vprimes[1];
-		const EigenMatrix V1 = Z1 * V1prime * Z1.transpose();
-		const EigenMatrix V2 = Z2 * V2prime * Z2.transpose();
-		auto [J, _, K1, K2] = int4c2e->ContractInts(EigenZero(0, 0), V1, V2, nthreads, 0);
-		EigenMatrix F1U = J - K1;
-		EigenMatrix F2U = J - K2;
-		if (*xc){
-			grid->getDensityU({ {V1}, {V2} });
-			const std::vector<std::vector<EigenMatrix>> Gtmpxc = grid->getFockU<u_t>();
-			F1U += Gtmpxc[0][0];
-			F2U += Gtmpxc[1][0];
-		}
-		return std::vector<EigenMatrix>{
-				Z1.transpose() * F1U * Z1,
-				Z2.transpose() * F2U * Z2
-		};
-	};
-};
-
-class ObjARH: public ObjNewtonBase{ public:
-	AugmentedRoothaanHall arh = AugmentedRoothaanHall(20, 1);
-
-	using ObjNewtonBase::ObjNewtonBase;
-
-	void Calculate(std::vector<EigenMatrix> Dprimes, std::vector<int> derivatives) override{
-		ObjNewtonBase::Calculate(Dprimes, derivatives);
-		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			EigenMatrix Dprime = EigenZero(nbasis, 2 * nbasis);
-			Dprime << D1prime, D2prime;
-			EigenMatrix Fprime = EigenZero(nbasis, 2 * nbasis);
-			Fprime << F1prime, F2prime;
-			arh.Append(Dprime, Fprime);
-		}
-	};
-
-	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vprimes) const override{
-		EigenMatrix Vprime = EigenZero(nbasis, 2 * nbasis);
-		Vprime << Vprimes[0], Vprimes[1];
-		const EigenMatrix HVprime = arh.Hessian(Vprime);
-		return std::vector<EigenMatrix>{
-				HVprime.leftCols(nbasis),
-				HVprime.rightCols(nbasis)
-		};
-	};
-};
+using ObjARH = UniversalObjARH<ObjNewtonBase>;
 
 } // namespace
 
@@ -336,14 +227,10 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 							ObjNewton,
 							ObjARH
 				>
-	> obj(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads);
-	EigenMatrix D1prime = EigenZero(Z1.cols(), Z1.cols());
-	for ( int i = 0; i < nocc1; i++ ) D1prime(i, i) = 1;
-	Maniverse::Grassmann grassmann1(D1prime);
-	EigenMatrix D2prime = EigenZero(Z1.cols(), Z1.cols());
-	for ( int i = 0; i < nocc2; i++ ) D2prime(i, i) = 1;
-	Maniverse::Grassmann grassmann2(D2prime);
-	Maniverse::Iterate M(obj, {grassmann1.Share(), grassmann2.Share()}, 1);
+	> obj(int2c1e, int4c2e, xc, grid, {0, nocc1, nocc2}, 0, {EigenZero(0, 0), Z1, Z2}, nthreads);
+	 Maniverse::Flag flag1(EigenOne(Z1.rows(), nocc1)); flag1.setBlockParameters({nocc1});
+	 Maniverse::Flag flag2(EigenOne(Z2.rows(), nocc2)); flag2.setBlockParameters({nocc2});
+	Maniverse::Iterate M(obj, {flag1.Share(), flag2.Share()}, 1);
 	std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
@@ -364,7 +251,14 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 			) ) throw std::runtime_error("Convergence failed!");
 		}
 	}
-	return std::make_tuple(obj.Value, obj.epsilon1s, obj.epsilon2s, obj.C1, obj.C2);
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+	eigensolver.compute(obj.Fprimes[1]);
+	const EigenVector eps1 = eigensolver.eigenvalues();
+	const EigenMatrix C1 = Z1 * eigensolver.eigenvectors();
+	eigensolver.compute(obj.Fprimes[2]);
+	const EigenVector eps2 = eigensolver.eigenvalues();
+	const EigenMatrix C2 = Z2 * eigensolver.eigenvectors();
+	return std::make_tuple(obj.Value, eps1, eps2, C1, C2);
 }
 
 void U_SCF::Calculate0(){
