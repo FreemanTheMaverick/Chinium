@@ -311,6 +311,7 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
 Grid::Grid(const Grid& grid){
 	const int nthreads = grid.getNumThreads();
 	this->SubGridBatches.reserve(nthreads);
+	#pragma omp parallel for schedule(static) num_threads(nthreads)
 	for ( int i = 0; i < nthreads; i++ ){
 		this->SubGridBatches.push_back({});
 		const int nbatches = grid.SubGridBatches[i].size();
