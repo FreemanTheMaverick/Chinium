@@ -1,3 +1,4 @@
+#include<iostream>
 #include <Eigen/Core>
 #include <unsupported/Eigen/CXX11/Tensor>
 #include <Maniverse/Manifold/Stiefel.h>
@@ -310,14 +311,13 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
 
 Grid::Grid(const Grid& grid){
 	const int nthreads = grid.getNumThreads();
-	this->SubGridBatches.reserve(nthreads);
+	this->SubGridBatches = std::vector<std::vector<std::unique_ptr<SubGrid>>>(nthreads);
 	#pragma omp parallel for schedule(static) num_threads(nthreads)
 	for ( int i = 0; i < nthreads; i++ ){
-		this->SubGridBatches.push_back({});
 		const int nbatches = grid.SubGridBatches[i].size();
-		this->SubGridBatches.back().reserve(nbatches);
+		this->SubGridBatches[i].reserve(nbatches);
 		for ( int j = 0; j < nbatches; j++ ){
-			this->SubGridBatches.back().emplace_back(std::make_unique<SubGrid>(*(grid.SubGridBatches[i][j])));
+			this->SubGridBatches[i].emplace_back(std::make_unique<SubGrid>(*(grid.SubGridBatches[i][j])));
 		}
 	}
 }

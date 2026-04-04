@@ -218,13 +218,10 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 							ObjARH
 				>
 	> obj(int2c1e, int4c2e, xc, grid, Norbs, Coupling, {Z, Z, Z}, nthreads);
-	Norbs.erase(
-			std::remove_if(
-				Norbs.begin(), Norbs.end(),
-				[](const int n){ return n == 0; }
-			), Norbs.end()
-	);
-	Maniverse::Flag flag(EigenOne(Z.rows(), Norbs[0] + Norbs[1] + Norbs[2])); flag.setBlockParameters(Norbs);
+	Maniverse::Flag flag(EigenOne(Z.rows(), Norbs[0] + Norbs[1] + Norbs[2]));
+	std::vector<int> space = {};
+	for ( int Norb : Norbs ) if ( Norb > 0 ) space.push_back(Norb);
+	flag.setBlockParameters(space);
 	Maniverse::Iterate M(obj, {flag.Share()}, 1);
 	std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
 	if constexpr ( scf_t == lbfgs_t ){
