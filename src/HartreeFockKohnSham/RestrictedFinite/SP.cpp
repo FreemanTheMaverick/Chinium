@@ -6,7 +6,8 @@
 #include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Manifold/Euclidean.h>
 #include <Maniverse/Optimizer/LBFGS.h>
-#include <Maniverse/Optimizer/TruncatedNewton.h>
+#include <Maniverse/LinearSolver/ConjugateGradient.h>
+#include <Maniverse/Optimizer/Newton.h>
 #include <libmwfn.h>
 
 #include "../../Macro.h"
@@ -528,7 +529,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 				>
 	> obj(int2c1e, int4c2e, xc, grid, T, Mu, Z, nthreads, output);
 	if constexpr ( scf_t == arh_t ) obj.arh = arh;
-	Maniverse::Iterate M(obj, ms, 1);
+	Maniverse::Iterate M(obj, ms);
 
 	try{
 		if constexpr ( scf_t == lbfgs_t ){
@@ -538,18 +539,12 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 			) ) throw std::runtime_error("Convergence failed!");
 		}else{
 			Maniverse::TrustRegion tr;
-			if constexpr ( scf_t == newton_t ){
-				if ( ! Maniverse::TruncatedNewton(
-							M, tr, tol,
-							0.001, 300, output
-				) ) throw std::runtime_error("Convergence failed!");
-			}else{
-				if ( ! Maniverse::TruncatedNewton(
-							M, tr, tol,
-							0.01, 300, output
-				) ) throw std::runtime_error("Convergence failed!");
-				arh = obj.arh;
-			}
+			static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
+			Maniverse::ConjugateGradient cg(M, 0, 1, {ls_tol, ls_tol}, M.getDimension(), 1);
+			if ( ! Maniverse::Newton(
+					M, tr, cg, tol, 300, output
+			) ) throw std::runtime_error("Convergence failed!");
+			if constexpr ( scf_t == arh_t ) arh = obj.arh;
 		}
 	}catch (OneMoreOccupied&){
 		if (output) std::printf("One active orbital is set to occupied!\n");

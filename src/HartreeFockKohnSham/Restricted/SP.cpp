@@ -3,7 +3,8 @@
 #include <tuple>
 #include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Optimizer/LBFGS.h>
-#include <Maniverse/Optimizer/TruncatedNewton.h>
+#include <Maniverse/LinearSolver/ConjugateGradient.h>
+#include <Maniverse/Optimizer/Newton.h>
 #include <libmwfn.h>
 
 #include "../../Macro.h"
@@ -222,7 +223,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	std::vector<int> space = {};
 	for ( int Norb : Norbs ) if ( Norb > 0 ) space.push_back(Norb);
 	flag.setBlockParameters(space);
-	Maniverse::Iterate M(obj, {flag.Share()}, 1);
+	Maniverse::Iterate M(obj, {flag.Share()});
 	std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
@@ -231,17 +232,11 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
 		Maniverse::TrustRegion tr;
-		if constexpr ( scf_t == newton_t ){
-			if ( ! Maniverse::TruncatedNewton(
-						M, tr, tol,
-						0.001, 300, output
-			) ) throw std::runtime_error("Convergence failed!");
-		}else{
-			if ( ! Maniverse::TruncatedNewton(
-						M, tr, tol,
-						0.01, 300, output
-			) ) throw std::runtime_error("Convergence failed!");
-		}
+		static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
+		Maniverse::ConjugateGradient cg(M, 0, 1, {ls_tol, ls_tol}, M.getDimension(), 1);
+		if ( ! Maniverse::Newton(
+					M, tr, cg, tol, 300, output
+		) ) throw std::runtime_error("Convergence failed!");
 	}
 
 	EigenVector eps = EigenZero(Z.cols(), 1);

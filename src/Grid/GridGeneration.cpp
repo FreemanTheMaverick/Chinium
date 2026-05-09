@@ -2,7 +2,8 @@
 #include <Eigen/Core>
 #include <unsupported/Eigen/CXX11/Tensor>
 #include <Maniverse/Manifold/Stiefel.h>
-#include <Maniverse/Optimizer/TruncatedNewton.h>
+#include <Maniverse/LinearSolver/ConjugateGradient.h>
+#include <Maniverse/Optimizer/Newton.h>
 #include <cmath>
 #include <vector>
 #include <chrono>
@@ -183,11 +184,11 @@ std::tuple<EigenMatrix, EigenMatrix> Cut(EigenMatrix P){
 	}
 	CutFunc obj(Pcentered * Pcentered.transpose());
 	Maniverse::Stiefel stiefel(EigenMatrix::Ones(3, 1) / std::sqrt(3));
-	Maniverse::Iterate M(obj, {stiefel.Share()}, 1);
+	Maniverse::Iterate M(obj, {stiefel.Share()});
 	Maniverse::TrustRegion tr;
-	Maniverse::TruncatedNewton(
-			M, tr, {1.e-6, 1, 1},
-			0.001, 100, 0
+	Maniverse::ConjugateGradient cg(M, 0, 1, {0.001, 0.001}, M.getDimension(), 0);
+	Maniverse::Newton(
+			M, tr, cg, {1e-6, 1, 1}, 100, 0
 	);
 	const double A = M.Point(0);
 	const double B = M.Point(1);

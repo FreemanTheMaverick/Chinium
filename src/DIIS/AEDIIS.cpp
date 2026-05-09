@@ -1,7 +1,8 @@
 #include <Eigen/Dense>
 #include <tuple>
 #include <Maniverse/Manifold/Simplex.h>
-#include <Maniverse/Optimizer/TruncatedNewton.h>
+#include <Maniverse/LinearSolver/ConjugateGradient.h>
+#include <Maniverse/Optimizer/Newton.h>
 
 #include "../Macro.h"
 
@@ -32,13 +33,13 @@ EigenVector AEDIIS::Extrapolate(int index){
 	for ( int i = 0; i < size - 1; i++ )
 		p(i) = ( 1. - p(size - 1) ) / ( size - 1 );
 	Maniverse::Simplex simplex(p);
-	Maniverse::Iterate M(obj, {simplex.Share()}, 1);
+	Maniverse::Iterate M(obj, {simplex.Share()});
 
 	if ( this->Verbose > 1 ) std::printf("| Calling Maniverse for optimization on the Simplex manifold\n");
 	Maniverse::TrustRegion tr;
-	const bool converged = Maniverse::TruncatedNewton(
-				M, tr, {1.e-4, 1.e-6, 1e-2},
-				0.001, 1000, 0
+	Maniverse::ConjugateGradient cg(M, 0, 1, {0.001, 0.001}, M.getDimension(), 0);
+	const bool converged = Maniverse::Newton(
+				M, tr, cg, {1.e-4, 1.e-6, 1e-2}, 1000, 0
 	);
 	if ( this->Verbose > 1 && !converged ){
 		std::printf("| Warning: Optimization of weights did not fully converged!\n");
