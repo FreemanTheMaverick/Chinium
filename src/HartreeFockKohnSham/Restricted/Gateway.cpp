@@ -1,5 +1,6 @@
 #include <vector>
 #include <string>
+#include <cstdio>
 
 #include "../Restricted.h"
 
@@ -59,12 +60,11 @@ std::vector<std::vector<double>> getCouplingCoefficient(std::vector<int> shell_s
 }
 
 R_SCF::R_SCF(std::string inp): Job(inp), RepR(inp), SCF(inp, mwfn, int2c1e){
-	if ( Np == Na && Np == Nb ) xc.Spin = 1;
+	if ( Na + Nb == 0 ) xc.Spin = 1;
 	else xc.Spin = 2;
-	Na -= Np;
-	Nb -= Np;
 
 	if ( Na > 0 && Nb > 0 ) Coupling = getCouplingCoefficient({ Na, Nb })[1][0];
+	std::printf("Restricted open-shell spin-coupling factor: %f\n", Coupling);
 
 	if ( scftype == "DIIS" && ( Na > 0 || Nb > 0 ) ) throw std::runtime_error("DIIS for RO-SCF is not implemented yet!");
 }

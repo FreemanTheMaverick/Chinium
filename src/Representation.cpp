@@ -56,7 +56,14 @@ Representation::Representation(std::string inp){
 	// Numbers of electrons
 	int total_nuclear_charges = 0;
 	for ( MwfnCenter& center : mwfn.Centers ) total_nuclear_charges += center.Nuclear_charge;
-	std::tie(Na, Nb, Np) = ReadNumElectrons(inp, total_nuclear_charges);
+	if ( guess == "READ" ){
+		Na = Nb = Np = 0;
+		for ( auto& orb : mwfn.Orbitals ){
+			if ( orb.Occ == 2 && orb.Type == 0 ) Np++;
+			else if ( orb.Occ == 1 && orb.Type == 1 ) Na++;
+			else if ( orb.Occ == 1 && orb.Type == 2 ) Nb++;
+		}
+	}else std::tie(Na, Nb, Np) = ReadNumElectrons(inp, total_nuclear_charges);
 
 	// One-electron integrals
 	int2c1e = Int2C1E(mwfn);
@@ -91,6 +98,8 @@ RepR::RepR(std::string inp): Representation(inp){
 					else orbital_i.Type = 2;
 				}
 			}
+			Na -= Np;
+			Nb -= Np;
 		}else{
 			mwfn.Orbitals.resize(mwfn.getNumBasis());
 			EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
@@ -103,9 +112,6 @@ RepR::RepR(std::string inp): Representation(inp){
 
 RepU::RepU(std::string inp): Representation(inp){
 	mwfn.Wfntype = 1;
-	if ( typeid(*this) == typeid(RepR) )
-		for ( int occ : mwfn.getOccupation(1) )
-			if ( occ != 0 && occ != 1 ) throw std::runtime_error("Bad occupation number!");
 	if ( ReadGuess(inp) != "READ" ){
 		mwfn.Orbitals.resize(mwfn.getNumBasis() * 2);
 		EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
