@@ -13,6 +13,8 @@
 
 int main(int /*argc*/, char* argv[]){
 	std::printf("*** Chinium started ***\n");
+	const std::string path = std::getenv("CHINIUM_PATH");
+	std::printf("Environment variable CHINIUM_PATH is %s. Check whether it is correct.\n", path.c_str());
 
 	// File names
 	std::string inp = argv[1];
@@ -26,7 +28,7 @@ int main(int /*argc*/, char* argv[]){
 	const double temperature = ReadTemperature(inp);
 	std::unique_ptr<Job> job;
 	if ( jobtype == "SCF" ){
-		if ( wfntype == 0 || wfntype == 2 ){
+		if ( wfntype == 0 ){
 			if ( temperature == 0 ) job = std::make_unique<R_SCF>(inp);
 			else if ( temperature > 0 ) job = std::make_unique<RGC_SCF>(inp);
 			else __Bad_Input__;
@@ -35,7 +37,7 @@ int main(int /*argc*/, char* argv[]){
 			else if ( temperature > 0 ) job = std::make_unique<UGC_SCF>(inp);
 			else __Bad_Input__;
 		}else __Bad_Input__;
-	}else if ( jobtype == "TWODET" && wfntype == 2 ){
+	}else if ( jobtype == "TWODET" && wfntype == 0 ){
 		job = std::make_unique<TwoDet>(inp);
 	//}else if ( jobtype == "LOCALIZATION" ){
 	//	if ( wfntype == 0 ) job = std::make_unique<R_Localization>(inp);

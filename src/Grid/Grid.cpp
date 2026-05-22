@@ -19,6 +19,14 @@ void Grid::setType(int type){
 	}
 }
 
+void Grid::setSpin(int spin){
+	for ( std::vector<std::unique_ptr<SubGrid>>& subgrids : this->SubGridBatches ){
+		for ( std::unique_ptr<SubGrid>& subgrid : subgrids ){
+			subgrid->Spin = spin;
+		}
+	}
+}
+
 void Grid::getAO(int derivative, int output){
 	const int order = derivative + this->SubGridBatches[0][0]->Type;
 	if (output) std::printf("Generating grids to order %d of basis functions ... ", order);

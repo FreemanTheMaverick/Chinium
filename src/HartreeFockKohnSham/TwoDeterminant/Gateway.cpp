@@ -34,11 +34,14 @@ int ReadType(std::string inp){
 }
 
 TwoDet::TwoDet(std::string inp): R_SCF(inp){
-	if ( Na != 1 && Nb != 1 ) throw std::runtime_error("Two-determinant ROKS requires exactly one unpaired alpha electron and one unpaired beta electron! (Keyword: spin 2 2)");
+	Coupling = 0;
+	std::printf("Restricted open-shell spin-coupling factor is reset to zero.\n");
+	if ( !( Na == 1 && Nb == 1 ) ) throw std::runtime_error("Two-determinant ROKS requires exactly one unpaired alpha electron and one unpaired beta electron! (Keyword: spin 2 2)");
 	TwoDetType = ReadType(inp);
 	if ( TwoDetType == 1 ){
 		grid2 = grid;
 	}else{
 		xc.Spin = 1;
+		grid.setSpin(1);
 	}
 }

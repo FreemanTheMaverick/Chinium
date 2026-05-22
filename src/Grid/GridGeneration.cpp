@@ -1,4 +1,3 @@
-#include<iostream>
 #include <Eigen/Core>
 #include <unsupported/Eigen/CXX11/Tensor>
 #include <Maniverse/Manifold/Stiefel.h>

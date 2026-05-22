@@ -95,6 +95,7 @@ class Grid{ public:
 	Grid(Mwfn* mwfn, std::string grid, int nthreads, int output);
 	int getNumThreads() const{ return (int)this->SubGridBatches.size(); };
 	void setType(int type);
+	void setSpin(int type);
 
 	void getAO(int derivative, int output);
 
