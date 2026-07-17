@@ -6,7 +6,7 @@
 #include "Integral.h"
 
 class Representation{ public:
-	Mwfn mwfn;
+	libmwfn::Mwfn mwfn;
 	int Np, Na, Nb;
 	Int2C1E int2c1e;
 	Representation(std::string inp);

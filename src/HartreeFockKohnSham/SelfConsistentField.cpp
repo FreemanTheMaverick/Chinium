@@ -12,7 +12,7 @@
 #include "SelfConsistentField.h"
 #include "GuessSCF.h"
 
-SCF::SCF(std::string inp, Mwfn& mwfn, Int2C1E& int2c1e){
+SCF::SCF(std::string inp, libmwfn::Mwfn& mwfn, Int2C1E& int2c1e){
 	nthreads = ReadNumThreads(inp);
 
 	// Nuclear repulsion

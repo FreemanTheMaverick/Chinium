@@ -7,7 +7,6 @@
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/LinearSolver/ConjugateGradient.h>
 #include <Maniverse/Optimizer/Newton.h>
-#include <libmwfn.h>
 
 #include "../../Macro.h"
 #include "../../Integral.h"
@@ -373,11 +372,11 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 
 void TwoDet::Calculate0(){
 	if ( scftype == "DRY" ) return;
-	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
+	const EigenMatrix Z = mwfn.getCoefficientMatrix({.Set=0});
 	auto [E, C] =
 		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, 1) :
 		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, 1) :
 		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, 1);
 	Energy += E;
-	mwfn.setCoefficientMatrix(C, 1);
+	mwfn.setCoefficientMatrix(C, {.Set=0});
 }

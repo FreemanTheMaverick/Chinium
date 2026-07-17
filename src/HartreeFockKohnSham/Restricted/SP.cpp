@@ -252,14 +252,14 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 
 void R_SCF::Calculate0(){
 	if ( scftype == "DRY" ) return;
-	const EigenMatrix Z = mwfn.getCoefficientMatrix(1);
-	const EigenMatrix F = mwfn.getFock(1);
+	const EigenMatrix Z = mwfn.getCoefficientMatrix({.Set=0});
+	const EigenMatrix F = mwfn.getFock({.Set=0});
 	auto [E, eps, C] =
 		scftype == "DIIS" ? RestrictedDIIS(Np, int2c1e, int4c2e, xc, grid, F, Z, 1, nthreads) :
 		scftype == "LBFGS" ? RestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, nthreads, 1) :
 		scftype == "ARH" ? RestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, nthreads, 1) :
 		/* scftype == "NEWTON" ? */ RestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, nthreads, 1);
 	Energy += E;
-	mwfn.setEnergy(eps, 1);
-	mwfn.setCoefficientMatrix(C, 1);
+	mwfn.setEnergy(eps, {.Set=0});
+	mwfn.setCoefficientMatrix(C, {.Set=0});
 }

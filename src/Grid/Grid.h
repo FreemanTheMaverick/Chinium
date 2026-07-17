@@ -12,7 +12,7 @@
 enum D_t{ s_t, u_t };
 
 class SubGrid{ public:
-	Mwfn* MWFN;
+	libmwfn::Mwfn* MWFN;
 	int NumGrids;
 	int Type = 0; // 0 - LDA, 1 - GGA, 2 - mGGA
 	int Spin = -1;
@@ -92,7 +92,7 @@ class Grid{ public:
 	Grid(){};
 	Grid(const Grid& grid);
 	Grid& operator=(const Grid& grid);
-	Grid(Mwfn* mwfn, std::string grid, int nthreads, int output);
+	Grid(libmwfn::Mwfn* mwfn, std::string grid, int nthreads, int output);
 	int getNumThreads() const{ return (int)this->SubGridBatches.size(); };
 	void setType(int type);
 	void setSpin(int type);

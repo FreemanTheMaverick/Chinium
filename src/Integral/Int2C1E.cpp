@@ -177,7 +177,7 @@ EigenMatrix getTwoCenter2(
 	return hessian + hessian.transpose() - (EigenMatrix)hessian.diagonal().asDiagonal();
 }
 
-std::vector<EigenMatrix> getPseudo(Mwfn& mwfn, int deriv_order){
+std::vector<EigenMatrix> getPseudo(libmwfn::Mwfn& mwfn, int deriv_order){
 	const int n_shells = mwfn.getNumShells();
 	std::vector<double> g_coords, g_exps, g_coefs;
 	std::vector<int> g_ams, g_lengths;
@@ -185,12 +185,12 @@ std::vector<EigenMatrix> getPseudo(Mwfn& mwfn, int deriv_order){
 	std::vector<double> u_coords, u_exps, u_coefs;
 	std::vector<int> u_ams, u_ns, u_lengths;
 	for ( int icenter = 0; icenter < mwfn.getNumCenters(); icenter++ ){
-		MwfnCenter& center = mwfn.Centers[icenter];
+		libmwfn::Center& center = mwfn.Centers[icenter];
 		for ( int jshell = 0; jshell < center.getNumShells(); jshell++ ){
 			g_coords.push_back(center.Coordinates[0]);
 			g_coords.push_back(center.Coordinates[1]);
 			g_coords.push_back(center.Coordinates[2]);
-			MwfnShell& shell = center.Shells[jshell];
+			libmwfn::Shell& shell = center.Shells[jshell];
 			for ( int kprim = 0; kprim < shell.getNumPrims(); kprim++ ){
 				g_exps.push_back(shell.Exponents[kprim]);
 				g_coefs.push_back(shell.NormalizedCoefficients[kprim]);
@@ -205,7 +205,7 @@ std::vector<EigenMatrix> getPseudo(Mwfn& mwfn, int deriv_order){
 			u_coords.push_back(center.Coordinates[2]);
 			int u_length = 0;
 			for ( int jpseudo = 0; jpseudo < center.getNumPseudos(); jpseudo++ ){
-				MwfnPseudo& pseudo = center.Pseudos[jpseudo];
+				libmwfn::Pseudo& pseudo = center.Pseudos[jpseudo];
 				for ( int kprim = 0; kprim < pseudo.getNumPrims(); kprim++ ){
 					u_exps.push_back(pseudo.Exponents[kprim]);
 					u_coefs.push_back(pseudo.Coefficients[kprim]);
@@ -252,7 +252,7 @@ std::vector<EigenMatrix> getPseudo(Mwfn& mwfn, int deriv_order){
 	EigenMatrix transform = EigenZero(mwfn.getNumBasis(), factory.ncart);
 	int cart = 0;
 	int pure = 0;
-	for ( MwfnCenter& center : mwfn.Centers ) for ( MwfnShell& shell : center.Shells ){
+	for ( libmwfn::Center& center : mwfn.Centers ) for ( libmwfn::Shell& shell : center.Shells ){
 		if ( shell.Type == -1 ){
 			transform.block(pure, cart, 3, 3) = P_pure_cart;
 			pure += 3;
@@ -284,7 +284,7 @@ std::vector<EigenMatrix> getPseudo(Mwfn& mwfn, int deriv_order){
 	return Vs;
 }
 
-Int2C1E::Int2C1E(Mwfn& mwfn){
+Int2C1E::Int2C1E(libmwfn::Mwfn& mwfn){
 	this->MWFN = &mwfn;
 	const int natoms = mwfn.getNumCenters();
 	this->OverlapGrads.resize(3 * natoms);
@@ -302,7 +302,7 @@ Int2C1E::Int2C1E(Mwfn& mwfn){
 
 #define __Make_Point_Charges__\
 	std::vector<std::pair<double, std::array<double, 3>>> libint2charges = {};\
-	for ( MwfnCenter& center : this->MWFN->Centers )\
+	for ( libmwfn::Center& center : this->MWFN->Centers )\
 		libint2charges.push_back(std::make_pair(\
 			center.Nuclear_charge,\
 			std::experimental::make_array(\

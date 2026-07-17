@@ -9,7 +9,6 @@ extern "C"{
 #include <cassert>
 #include <string>
 #include <vector>
-#include <libmwfn.h>
 
 #include "Macro.h"
 #include "Grid.h"

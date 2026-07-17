@@ -491,7 +491,7 @@ EigenMatrix getRepulsion2(
 	return rawhessian + rawhessian.transpose() - (EigenMatrix)rawhessian.diagonal().asDiagonal();
 }
 
-Int4C2E::Int4C2E(Mwfn& mwfn, double exx, double threshold){
+Int4C2E::Int4C2E(libmwfn::Mwfn& mwfn, double exx, double threshold){
 	this->MWFN = &mwfn;
 	this->EXX = exx;
 	this->Threshold = threshold;

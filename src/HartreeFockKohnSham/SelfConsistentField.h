@@ -19,7 +19,7 @@ class SCF{ public:
 	ExchangeCorrelation xc;
 	Grid grid;
 	std::string scftype = "DIIS";
-	SCF(std::string inp, Mwfn& mwfn, Int2C1E& int2c1e);
+	SCF(std::string inp, libmwfn::Mwfn& mwfn, Int2C1E& int2c1e);
 };
 
 #define __PostProcess0__(quantity)\

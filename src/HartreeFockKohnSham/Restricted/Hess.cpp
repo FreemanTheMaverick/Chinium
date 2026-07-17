@@ -59,8 +59,8 @@ void R_SCF::Calculate2(){
 		for ( int jbasis = 0; jbasis < mwfn.Centers[iatom].getNumBasis(); jbasis++, kbasis++ )
 			bf2atom[kbasis] = iatom;
 
-	const EigenMatrix D = mwfn.getDensity(1);
-	const EigenMatrix W = mwfn.getEnergyDensity(1);
+	const EigenMatrix D = mwfn.getDensity({.Set=0});
+	const EigenMatrix W = mwfn.getEnergyDensity({.Set=0});
 	std::vector<EigenMatrix> Fskeletons(3 * natoms, EigenMatrix(nbasis, nbasis));
 
 	auto [SWhesss, KDhesss, VDhesss] = int2c1e.ContractHesss(D, W, 1); // std::vector<std::vector<double>>
@@ -101,9 +101,9 @@ void R_SCF::Calculate2(){
 	std::printf("Non-Idempotent coupled-perturbed self-consistent-field ...\n");
 	auto start = __now__;
 	auto [Us, dDs, dEs, dWs, dFs] = NonIdempotent( // std::vector<EigenMatrix>
-			mwfn.getCoefficientMatrix(1),
-			mwfn.getEnergy(1),
-			mwfn.getOccupation() / 2.,
+			mwfn.getCoefficientMatrix({.Set=0}),
+			mwfn.getEnergy({.Set=0}),
+			mwfn.getOccupation({.Set=0}) / 2.,
 			int2c1e.OverlapGrads, Fskeletons,
 			int4c2e, grid,
 			1, nthreads

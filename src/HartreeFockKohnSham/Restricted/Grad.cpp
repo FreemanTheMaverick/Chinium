@@ -59,8 +59,8 @@ void R_SCF::Calculate1(){
 		for ( int jbasis = 0; jbasis < mwfn.Centers[iatom].getNumBasis(); jbasis++, kbasis++ )
 			bf2atom[kbasis] = iatom;
 
-	const EigenMatrix D = mwfn.getDensity(1);
-	const EigenMatrix W = mwfn.getEnergyDensity(1);
+	const EigenMatrix D = mwfn.getDensity({.Set=0});
+	const EigenMatrix W = mwfn.getEnergyDensity({.Set=0});
 
 	auto [SWgrads, KDgrads, VDgrads] = int2c1e.ContractGrads(D, W, 1); // std::vector<double>
 	const std::vector<double> DGDgrads = int4c2e.ContractGrads(D, D, 1);

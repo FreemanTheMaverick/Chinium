@@ -8,7 +8,7 @@
 #include "../Macro.h"
 
 class Int2C1E{ public:
-	Mwfn* MWFN;
+	libmwfn::Mwfn* MWFN;
 
 	// Zeroth order
 	EigenMatrix Overlap;
@@ -35,7 +35,7 @@ class Int2C1E{ public:
 	std::vector<std::vector<EigenMatrix>> NuclearHesss;
 
 	Int2C1E(){};
-	Int2C1E(Mwfn& mwfn);
+	Int2C1E(libmwfn::Mwfn& mwfn);
 	void CalculateIntegrals(int order, int output);
 	std::tuple<
 		std::vector<double>,

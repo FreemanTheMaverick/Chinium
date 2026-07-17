@@ -11,7 +11,6 @@
 #include <chrono>
 #include <cassert>
 #include <omp.h>
-#include <libmwfn.h>
 
 #include "../Macro.h"
 #include "../Integral/Int4C2E.h"

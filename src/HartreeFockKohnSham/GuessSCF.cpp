@@ -14,7 +14,7 @@
 #include "../Grid/Grid.h"
 #include "SAP.h"
 
-EigenMatrix SuperpositionAtomicPotential(std::vector<MwfnCenter>& centers, Grid& grid){
+EigenMatrix SuperpositionAtomicPotential(std::vector<libmwfn::Center>& centers, Grid& grid){
 	// Pretending LDA and saving data
 	const int old_type = grid.SubGridBatches[0][0]->Type;
 	const int old_spin = grid.SubGridBatches[0][0]->Spin;
@@ -35,7 +35,7 @@ EigenMatrix SuperpositionAtomicPotential(std::vector<MwfnCenter>& centers, Grid&
 			subgrid->Spin = 1;
 			const int ngrids = subgrid->NumGrids;
 			subgrid->Eps1Rho.resize(ngrids, 1); subgrid->Eps1Rho.setZero();
-			for ( MwfnCenter& center : centers ){
+			for ( libmwfn::Center& center : centers ){
 				const double atomx = center.Coordinates[0];
 				const double atomy = center.Coordinates[1];
 				const double atomz = center.Coordinates[2];
@@ -74,7 +74,7 @@ EigenMatrix SuperpositionAtomicPotential(std::vector<MwfnCenter>& centers, Grid&
 	return Fsap;
 }
 
-void GuessSCF(Mwfn& mwfn, Int2C1E& int2c1e, Grid& grid, std::string guess, const bool output){
+void GuessSCF(libmwfn::Mwfn& mwfn, Int2C1E& int2c1e, Grid& grid, std::string guess, const bool output){
 	EigenMatrix V = EigenZero(mwfn.getNumBasis(), mwfn.getNumBasis());
 	bool potential = 0;
 	if ( guess == "SAP" ){
@@ -89,11 +89,11 @@ void GuessSCF(Mwfn& mwfn, Int2C1E& int2c1e, Grid& grid, std::string guess, const
 	if (potential){
 		Eigen::GeneralizedSelfAdjointEigenSolver<EigenMatrix> solver;
 		solver.compute(int2c1e.Kinetic + int2c1e.Nuclear + V, int2c1e.Overlap);
-		for ( int spin : ( mwfn.Wfntype == 0 || mwfn.Wfntype == 2 ? std::vector<int>{1} : std::vector<int>{1, 2} ) ){
-			const EigenMatrix C = solver.eigenvectors();
-			const EigenMatrix eps = solver.eigenvalues();
-			mwfn.setCoefficientMatrix(C, spin);
-			mwfn.setEnergy(eps, spin);
+		const EigenMatrix C = solver.eigenvectors();
+		const EigenMatrix eps = solver.eigenvalues();
+		for ( int iset = 0; iset < (int)mwfn.Orbitals.size(); iset++ ){
+			mwfn.setCoefficientMatrix(C, {.Set=iset});
+			mwfn.setEnergy(eps, {.Set=iset});
 		}
 	}
 }

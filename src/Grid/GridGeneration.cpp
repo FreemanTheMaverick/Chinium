@@ -24,10 +24,10 @@
 #define max_size 128
 #define ao_threshold -10
 
-int SphericalGridNumber(std::string path, std::vector<MwfnCenter>& centers){
+int SphericalGridNumber(std::string path, std::vector<libmwfn::Center>& centers){
 	int ngrids = 0;
 	__Z_2_Name__
-	for ( MwfnCenter& center : centers ){
+	for ( libmwfn::Center& center : centers ){
 		int ngroups;
 		std::ifstream gridfile( path + "/" + Z2Name[center.Index] + ".grid" );
 		if ( !gridfile.good() ) throw std::runtime_error("Missing element grid file in folder!");
@@ -71,10 +71,10 @@ double s_p_mu(
 }
 
 void SphericalGrid(
-		std::string path, std::vector<MwfnCenter>& centers,
+		std::string path, std::vector<libmwfn::Center>& centers,
 		double* data){
 	__Z_2_Name__
-	for ( MwfnCenter& centera : centers ){
+	for ( libmwfn::Center& centera : centers ){
 		std::ifstream gridfile(path + "/" + Z2Name[centera.Index] + ".grid");
 		if ( !gridfile.good() ) throw std::runtime_error("Missing element grid file in folder!");
 		std::string thisline;
@@ -133,12 +133,12 @@ void SphericalGrid(
 					const double lebedev_w = 4 * M_PI * lebedev_ws[ipoint];
 					double unnorm_becke_w_total = 0;
 					double unnorm_becke_w = 0;
-					for ( MwfnCenter& centerb : centers ){
+					for ( libmwfn::Center& centerb : centers ){
 						double unnorm_becke_wj = 1;
 						const double xj = centerb.Coordinates[0];
 						const double yj = centerb.Coordinates[1];
 						const double zj = centerb.Coordinates[2];
-						for ( MwfnCenter& centerc : centers ){
+						for ( libmwfn::Center& centerc : centers ){
 							if ( &centerb == &centerc ) continue;
 							const double xk = centerc.Coordinates[0];
 							const double yk = centerc.Coordinates[1];
@@ -229,7 +229,7 @@ SubGrid::SubGrid(EigenMatrix P){
 	std::memcpy(Z.data() + ngrids, Z.data(), ( new_ngrids - ngrids ) * 8);
 }
 
-Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
+Grid::Grid(libmwfn::Mwfn* mwfn, std::string grid, int nthreads, int output){
 	if ( grid.size() == 0 ) return;
 	std::string path = std::getenv("CHINIUM_PATH");
 	path += "/Grids/" + grid + "/";
@@ -258,7 +258,12 @@ Grid::Grid(Mwfn* mwfn, std::string grid, int nthreads, int output){
 	for ( int i = 0; i < (int)subgrids.size(); i++ ){
 		SubGrid& subgrid = subgrids[i] = SubGrid(batches[i]);
 		subgrid.MWFN = mwfn;
-		subgrid.Spin = mwfn->getNumSpins() > 1 ? 2 : 1;
+		if ( mwfn->Orbitals.size() == 2 ) subgrid.Spin = 2;
+		else{
+			subgrid.Spin = 1;
+			for ( libmwfn::Orbital& orbital : mwfn->Orbitals[0] )
+				if ( orbital.Type != 0 ) subgrid.Spin = 2;
+		}
 		subgrid.NumGrids = subgrid.W.dimension(0);
 		subgrid.BasisList.resize(mwfn->getNumBasis()); for ( int k = 0; k < mwfn->getNumBasis(); k++ ) subgrid.BasisList[k] = k;
 		subgrid.getAO(0);

@@ -56,7 +56,7 @@ void RGC_SCF::Calculate2(){
 
 	std::vector<int> frac_indeces;
 	for ( int i = 0; i < mwfn.getNumIndBasis(); i++ ){
-		if ( mwfn.Orbitals[i].Occ > 2 * __Occupation_Cutoff__ && mwfn.Orbitals[i].Occ < 2. - 2 * __Occupation_Cutoff__)
+		if ( mwfn.Orbitals[0][i].Occ > 2 * __Occupation_Cutoff__ && mwfn.Orbitals[0][i].Occ < 2. - 2 * __Occupation_Cutoff__)
 			frac_indeces.push_back(i);
 	}
 	std::map<int, EigenMatrix> Dns;
@@ -64,8 +64,8 @@ void RGC_SCF::Calculate2(){
 		std::printf("Occupation-fluctuation coupled-perturbed self-consistent-field ...\n");
 		auto start = __now__;
 		Dns = OccupationFluctuation(
-				mwfn.getCoefficientMatrix(1),
-				mwfn.getEnergy(1),
+				mwfn.getCoefficientMatrix({.Set=0}),
+				mwfn.getEnergy({.Set=0}),
 				mwfn.getOccupation() / 2.,
 				frac_indeces,
 				int4c2e, grid,
@@ -79,8 +79,8 @@ void RGC_SCF::Calculate2(){
 	const EigenArray ns = mwfn.getOccupation().array() / 2;
 	const EigenVector Nes = (ns * ( ns - 1. )) / Temperature;
 	const std::vector<EigenVector> dNs = OccupationGradient(
-			mwfn.getCoefficientMatrix(1),
-			mwfn.getEnergy(1),
+			mwfn.getCoefficientMatrix({.Set=0}),
+			mwfn.getEnergy({.Set=0}),
 			Dns, Nes,
 			int2c1e.OverlapGrads, dFs,
 			int4c2e, grid,

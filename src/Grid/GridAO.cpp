@@ -12,7 +12,7 @@
 #include "Grid.h"
 
 void GetAoValues(
-		std::vector<MwfnCenter>& centers,
+		std::vector<libmwfn::Center>& centers,
 		double* xs, double* ys, double* zs, int ngrids,
 		double* aos,
 		double* ao1xs, double* ao1ys, double* ao1zs,
@@ -69,7 +69,7 @@ void GetAoValues(
 	double Qzzz[16] = {0};
 	int shellsize, nprims; // These in-loop variables had better be declared outside the loop. Tests showed that the codes as such are faster than those otherwise.
 	int ibasis = 0;
-	for ( MwfnCenter& center : centers ) for ( MwfnShell& shell : center.Shells ){
+	for ( libmwfn::Center& center : centers ) for ( libmwfn::Shell& shell : center.Shells ){
 		shellsize = shell.getSize();
 		nprims = shell.getNumPrims();
 		for ( int iranger = 0; iranger < shellsize; iranger++, ibasis++ ){
@@ -214,7 +214,7 @@ void GetAoValues(
 	}
 }
 
-void SubGrid::getAO(int derivative){
+/*void SubGrid::getAO(int derivative){
 	const int order = derivative + this->Type;
 	const int ngrids = this->NumGrids;
 	const int nbasis = this->MWFN->getNumBasis();
@@ -286,5 +286,38 @@ void SubGrid::getAO(int derivative){
 		if ( order >= 3 ){
 			std::memcpy(this->AO3.data() + ibasis * ngrids * 10, ao3.data() + basis * ngrids * 10, ngrids * 10 * 8);
 		}
+	}
+}*/
+
+void SubGrid::getAO(int derivative){
+	const int order = derivative + this->Type;
+	const long int ngrids = this->NumGrids;
+	const int nbasis = this->MWFN->getNumBasis();
+	const int this_nbasis = this->getNumBasis();
+	std::vector<double> points( 3 * ngrids );
+	for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+		points[ 3 * kgrid + 0 ] = this->X[kgrid];
+		points[ 3 * kgrid + 1 ] = this->Y[kgrid];
+		points[ 3 * kgrid + 2 ] = this->Z[kgrid];
+	}
+	if ( order >= 0 ){
+		this->AO = this->MWFN->getGridAO(points, 0).chip(0, 2);
+	}
+	if ( order >= 1 ){
+		this->AO1 = this->MWFN->getGridAO(points, 1);
+	}
+	const Eigen::array<Eigen::IndexPair<int>, 1> prod_dim = { Eigen::IndexPair<int>(2, 0) };
+	if ( order >= 2 ){
+		this->AO2 = this->MWFN->getGridAO(points, 2);
+		Eigen::Tensor<double, 2> perm(6, 6); perm.setZero();
+		perm(0, 0) = perm(1, 1) = perm(2, 3) = perm(3, 2) = perm(4, 4) = perm(5, 5) = 1;
+		this->AO2 = this->AO2.contract(perm, prod_dim).eval();
+		this->AO2L = this->AO2.chip(0, 2).square() + this->AO2.chip(2, 2).square() + this->AO2.chip(5, 2).square();
+	}
+	if ( order >= 3 ){
+		this->AO3 = this->MWFN->getGridAO(points, 3);
+		Eigen::Tensor<double, 2> perm(10, 10); perm.setZero();
+		perm(0, 0) = perm(1, 1) = perm(2, 4) = perm(3, 2) = perm(4, 5) = perm(5, 7) = perm(6, 3) = perm(7, 6) = perm(8, 8) = perm(9, 9) = 1;
+		this->AO3 = this->AO3.contract(perm, prod_dim).eval();
 	}
 }

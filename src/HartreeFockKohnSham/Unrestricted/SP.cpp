@@ -6,7 +6,6 @@
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/LinearSolver/ConjugateGradient.h>
 #include <Maniverse/Optimizer/Newton.h>
-#include <libmwfn.h>
 
 #include "../../Macro.h"
 #include "../../DIIS.h"
@@ -258,20 +257,20 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 
 void U_SCF::Calculate0(){
 	if ( scftype == "DRY" ) return;
-	const int nocc1 = mwfn.getNumElec(1); 
-	const int nocc2 = mwfn.getNumElec(2); 
-	const EigenMatrix Z1 = mwfn.getCoefficientMatrix(1);
-	const EigenMatrix Z2 = mwfn.getCoefficientMatrix(2);
-	const EigenMatrix F1 = mwfn.getFock(1);
-	const EigenMatrix F2 = mwfn.getFock(2);
+	const int nocc1 = mwfn.getNumElec({.Set=0});
+	const int nocc2 = mwfn.getNumElec({.Set=1}); 
+	const EigenMatrix Z1 = mwfn.getCoefficientMatrix({.Set=0});
+	const EigenMatrix Z2 = mwfn.getCoefficientMatrix({.Set=1});
+	const EigenMatrix F1 = mwfn.getFock({.Set=0});
+	const EigenMatrix F2 = mwfn.getFock({.Set=1});
 	auto [E, eps1, eps2, C1, C2] =
 		scftype == "DIIS" ? UnrestrictedDIIS(nocc1, nocc2, int2c1e, int4c2e, xc, grid, F1, F2, Z1, Z1, 1, nthreads) :
 		scftype == "LBFGS" ? UnrestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1) :
 		scftype == "ARH" ? UnrestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1) :
 		/* scftype == "NEWTON" ? */ UnrestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1);
 	Energy += E;
-	mwfn.setEnergy(eps1, 1);
-	mwfn.setEnergy(eps2, 2);
-	mwfn.setCoefficientMatrix(C1, 1);
-	mwfn.setCoefficientMatrix(C2, 2);
+	mwfn.setEnergy(eps1, {.Set=0});
+	mwfn.setEnergy(eps2, {.Set=1});
+	mwfn.setCoefficientMatrix(C1, {.Set=0});
+	mwfn.setCoefficientMatrix(C2, {.Set=1});
 }

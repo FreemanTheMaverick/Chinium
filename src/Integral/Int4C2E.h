@@ -8,7 +8,7 @@
 #include "../Macro.h"
 
 class Int4C2E{ public:
-	Mwfn* MWFN;
+	libmwfn::Mwfn* MWFN;
 	double Threshold;
 	double EXX;
 
@@ -34,7 +34,7 @@ class Int4C2E{ public:
 	std::vector<std::tuple<EigenMatrix, std::vector<EigenMatrix>>> GradCache;
 
 	Int4C2E(){};
-	Int4C2E(Mwfn& mwfn, double exx, double threshold);
+	Int4C2E(libmwfn::Mwfn& mwfn, double exx, double threshold);
 	void getRepulsionDiag(int output); // Computing the diagonal elements of electron repulsion tensor for Cauchy-Schwarz screening.
 	void getRepulsionLength(int output); // Numbers of nonequivalent two-electron integrals and shell quartets after Cauchy-Schwarz screening.
 	void getRepulsionIndices(int output);

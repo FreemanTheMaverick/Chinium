@@ -5,7 +5,6 @@
 #include <typeinfo>
 #include <stdexcept>
 #include <libmwfn.h>
-#include <iostream>
 
 #include "Macro.h"
 #include "Gateway.h"
@@ -23,7 +22,7 @@ Representation::Representation(std::string inp){
 	const std::string guess = ReadGuess(inp);
 	if ( atoms.empty() || basis.empty() || guess == "READ" ){
 		std::printf("Reading existent Mwfn file %s ...\n", mwfnname.c_str());
-		mwfn = Mwfn(mwfnname);
+		mwfn = libmwfn::Mwfn(mwfnname);
 		const int wfntype = ReadWfnType(inp);
 		if ( wfntype != mwfn.Wfntype ) throw std::runtime_error("Inconsistent wavefunction type between the mwfn file and the input file!");
 	}
@@ -50,18 +49,18 @@ Representation::Representation(std::string inp){
 			mwfn.setBasis(basis_file_path_name, pseudo_file_path_name);
 		} // Else do nothing (just keep the existent atoms and basis in the mwfn)
 	}
-	Normalize(&mwfn);
+	mwfn.NormalizeBasis(1);
 	mwfn.PrintCenters();
 
 	// Numbers of electrons
 	int total_nuclear_charges = 0;
-	for ( MwfnCenter& center : mwfn.Centers ) total_nuclear_charges += center.Nuclear_charge;
+	for ( libmwfn::Center& center : mwfn.Centers ) total_nuclear_charges += center.Nuclear_charge;
 	if ( guess == "READ" ){
 		Na = Nb = Np = 0;
-		for ( auto& orb : mwfn.Orbitals ){
-			if ( orb.Occ == 2 && orb.Type == 0 ) Np++;
-			else if ( orb.Occ == 1 && orb.Type == 1 ) Na++;
-			else if ( orb.Occ == 1 && orb.Type == 2 ) Nb++;
+		for ( std::vector<libmwfn::Orbital>& orbital_set : mwfn.Orbitals ) for ( libmwfn::Orbital& orbital : orbital_set ){
+			if ( orbital.Occ == 2 && orbital.Type == 0 ) Np++;
+			else if ( orbital.Occ == 1 && orbital.Type == 1 ) Na++;
+			else if ( orbital.Occ == 1 && orbital.Type == 2 ) Nb++;
 		}
 	}else std::tie(Na, Nb, Np) = ReadNumElectrons(inp, total_nuclear_charges);
 
@@ -81,14 +80,15 @@ Representation::Representation(std::string inp){
 RepR::RepR(std::string inp): Representation(inp){
 	mwfn.Wfntype = 2;
 	if ( ReadGuess(inp) != "READ" ){
+		mwfn.Orbitals.resize(1);
+		mwfn.Orbitals[0].resize(mwfn.getNumBasis());
 		if ( isInt(Na) ){
 			if ( Np == 0 ) Np = Nb;
-			mwfn.Orbitals.resize(mwfn.getNumBasis());
 			const int np_int = std::lround(Np);
 			const int na_int = std::lround(Na);
 			const int nb_int = std::lround(Nb);
 			for ( int i = 0; i < na_int + nb_int - np_int; i++ ){
-				auto& orbital_i = mwfn.Orbitals[i];
+				auto& orbital_i = mwfn.Orbitals[0][i];
 				if ( i < np_int ){
 					orbital_i.Occ = 2;
 					orbital_i.Type = 0;
@@ -101,11 +101,10 @@ RepR::RepR(std::string inp): Representation(inp){
 			Na -= Np;
 			Nb -= Np;
 		}else{
-			mwfn.Orbitals.resize(mwfn.getNumBasis());
 			EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
 			for ( int i = 0; i < Round(Na); i++ ) occ(i) = 1;
 			occ( Round(Na) ) = Na - Round(Na);
-			mwfn.setOccupation(occ, 1);
+			mwfn.setOccupation(occ, {.Set=0});
 		}
 	}
 }
@@ -113,12 +112,14 @@ RepR::RepR(std::string inp): Representation(inp){
 RepU::RepU(std::string inp): Representation(inp){
 	mwfn.Wfntype = 1;
 	if ( ReadGuess(inp) != "READ" ){
-		mwfn.Orbitals.resize(mwfn.getNumBasis() * 2);
+		mwfn.Orbitals.resize(2);
+		mwfn.Orbitals[0].resize(mwfn.getNumBasis());
+		mwfn.Orbitals[1].resize(mwfn.getNumBasis());
 		EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
 		for ( int i = 0; i < Round(Na); i++ ) occ(i) = 1;
-		mwfn.setOccupation(occ, 1);
+		mwfn.setOccupation(occ, {.Set=0});
 		occ.setZero();
 		for ( int i = 0; i < Nb; i++ ) occ(i) = 1;
-		mwfn.setOccupation(occ, 2);
+		mwfn.setOccupation(occ, {.Set=1});
 	}
 }

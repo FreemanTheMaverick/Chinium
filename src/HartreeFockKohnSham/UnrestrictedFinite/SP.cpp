@@ -6,7 +6,6 @@
 #include <Maniverse/Manifold/Grassmann.h>
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/Optimizer/TruncatedNewton.h>
-#include <libmwfn.h>
 
 #include "../../Macro.h"
 #include "../../Integral.h"
@@ -132,18 +131,18 @@ std::tuple<double, EigenVector, EigenVector, EigenVector, EigenVector, EigenMatr
 
 void UGC_SCF::Calculate0(){
 	if ( scftype == "DRY" ) return;
-	EigenMatrix Z = mwfn.getCoefficientMatrix(1);
-	EigenMatrix Fa = mwfn.getFock(1);
-	EigenMatrix Fb = mwfn.getFock(2);
-	EigenVector Occa = mwfn.getOccupation(1);
-	EigenVector Occb = mwfn.getOccupation(2);
+	EigenMatrix Z = mwfn.getCoefficientMatrix({.Set=0});
+	EigenMatrix Fa = mwfn.getFock({.Set=0});
+	EigenMatrix Fb = mwfn.getFock({.Set=1});
+	EigenVector Occa = mwfn.getOccupation({.Set=0});
+	EigenVector Occb = mwfn.getOccupation({.Set=1});
 	auto [E, epsa, epsb, occa, occb, Ca, Cb] =
 		/* scftype == "DIIS" ? */ UnrestrictedFiniteDIIS(Temperature, ChemicalPotential, int2c1e, int4c2e, xc, grid, Fa, Fb, Occa, Occb, Z, Z, 1, nthreads);
 	Energy += E;
-	mwfn.setEnergy(epsa, 1);
-	mwfn.setEnergy(epsb, 2);
-	mwfn.setOccupation(occa, 1);
-	mwfn.setOccupation(occb, 2);
-	mwfn.setCoefficientMatrix(Ca, 1);
-	mwfn.setCoefficientMatrix(Cb, 2);
+	mwfn.setEnergy(epsa, {.Set=0});
+	mwfn.setEnergy(epsb, {.Set=1});
+	mwfn.setOccupation(occa, {.Set=0});
+	mwfn.setOccupation(occb, {.Set=1});
+	mwfn.setCoefficientMatrix(Ca, {.Set=0});
+	mwfn.setCoefficientMatrix(Cb, {.Set=1});
 }
