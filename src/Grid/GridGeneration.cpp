@@ -22,7 +22,7 @@
 #include "sphere_lebedev_rule.hpp"
 
 #define max_size 128
-#define ao_threshold -10
+#define ao_threshold 1e-8
 
 int SphericalGridNumber(std::string path, std::vector<libmwfn::Center>& centers){
 	int ngrids = 0;
@@ -255,6 +255,7 @@ Grid::Grid(libmwfn::Mwfn* mwfn, std::string grid, int nthreads, int output){
 	std::vector<SubGrid> subgrids; subgrids.resize(batches.size());
 	std::vector<int> complexity; complexity.resize(batches.size());
 	double total = 0;
+	#pragma omp parallel for schedule(static) reduction(+:total) num_threads(nthreads)
 	for ( int i = 0; i < (int)subgrids.size(); i++ ){
 		SubGrid& subgrid = subgrids[i] = SubGrid(batches[i]);
 		subgrid.MWFN = mwfn;
@@ -266,15 +267,17 @@ Grid::Grid(libmwfn::Mwfn* mwfn, std::string grid, int nthreads, int output){
 		}
 		subgrid.NumGrids = subgrid.W.dimension(0);
 		subgrid.BasisList.resize(mwfn->getNumBasis()); for ( int k = 0; k < mwfn->getNumBasis(); k++ ) subgrid.BasisList[k] = k;
-		subgrid.getAO(0);
+		subgrid.getAO(2);
 		subgrid.BasisList.resize(0);
 		for ( int mu = 0; mu < mwfn->getNumBasis(); mu++ ){
-			const EigenTensor<0> max = subgrid.AO.chip(mu, 1).abs().maximum();
-			if ( max() > ao_threshold ){
+			const EigenTensor<0> max0 = subgrid.AO.chip(mu, 1).abs().maximum();
+			const EigenTensor<0> max1 = subgrid.AO1.chip(mu, 1).abs().maximum();
+			if ( max0() > ao_threshold || max1() > ao_threshold ){
 				subgrid.BasisList.push_back(mu);
 			}
 		}
 		subgrid.AO.resize(0, 0);
+		subgrid.AO1.resize(0, 0, 0);
 		complexity[i] = subgrid.NumGrids * subgrid.BasisList.size() * subgrid.BasisList.size();
 		total += complexity[i];
 

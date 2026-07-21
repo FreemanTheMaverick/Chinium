@@ -78,7 +78,7 @@ Representation::Representation(std::string inp){
 
 #define Round(x) (int)( isInt(x) ? std::lround(x) : std::floor(x) )
 RepR::RepR(std::string inp): Representation(inp){
-	mwfn.Wfntype = 2;
+	mwfn.Wfntype = 0;
 	if ( ReadGuess(inp) != "READ" ){
 		mwfn.Orbitals.resize(1);
 		mwfn.Orbitals[0].resize(mwfn.getNumBasis());

@@ -59,8 +59,8 @@ void R_SCF::Calculate2(){
 		for ( int jbasis = 0; jbasis < mwfn.Centers[iatom].getNumBasis(); jbasis++, kbasis++ )
 			bf2atom[kbasis] = iatom;
 
-	const EigenMatrix D = mwfn.getDensity({.Set=0});
-	const EigenMatrix W = mwfn.getEnergyDensity({.Set=0});
+	const EigenMatrix D = mwfn.getDensity({.Set=0}) / 2;
+	const EigenMatrix W = mwfn.getEnergyDensity({.Set=0}) / 2;
 	std::vector<EigenMatrix> Fskeletons(3 * natoms, EigenMatrix(nbasis, nbasis));
 
 	auto [SWhesss, KDhesss, VDhesss] = int2c1e.ContractHesss(D, W, 1); // std::vector<std::vector<double>>

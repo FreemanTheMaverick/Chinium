@@ -214,7 +214,8 @@ void GetAoValues(
 	}
 }
 
-/*void SubGrid::getAO(int derivative){
+/*
+void SubGrid::getAO(int derivative){
 	const int order = derivative + this->Type;
 	const int ngrids = this->NumGrids;
 	const int nbasis = this->MWFN->getNumBasis();
@@ -274,20 +275,22 @@ void GetAoValues(
 	for ( int ibasis = 0; ibasis < this_nbasis; ibasis++ ){
 		const int basis = this->BasisList[ibasis];
 		if ( order >= 0 ){
-			std::memcpy(this->AO.data() + ibasis * ngrids, ao.data() + basis * ngrids, ngrids * 8);
+			this->AO.chip(ibasis, 1) = ao.chip(basis, 1);
 		}
-		if ( order >= 1 ){
-			std::memcpy(this->AO1.data() + ibasis * ngrids * 3, ao1.data() + basis * ngrids * 3, ngrids * 3 * 8);
+		if ( order >= 1 ) for ( int t = 0; t < 3; t++ ){
+			this->AO1.chip(t, 2).chip(ibasis, 1) = ao1.chip(t, 2).chip(basis, 1);
 		}
-		if ( order >= 2 ){
-			std::memcpy(this->AO2L.data() + ibasis * ngrids, ao2l.data() + basis * ngrids, ngrids * 8);
-			std::memcpy(this->AO2.data() + ibasis * ngrids * 6, ao2.data() + basis * ngrids * 6, ngrids * 6 * 8);
+		if ( order >= 2 ) for ( int t = 0; t < 6; t++ ){
+			this->AO2.chip(t, 2).chip(ibasis, 1) = ao2.chip(t, 2).chip(basis, 1);
 		}
-		if ( order >= 3 ){
-			std::memcpy(this->AO3.data() + ibasis * ngrids * 10, ao3.data() + basis * ngrids * 10, ngrids * 10 * 8);
+		if ( order >= 3 ) for ( int t = 0; t < 10; t++ ){
+			this->AO3.chip(t, 2).chip(ibasis, 1) = ao3.chip(t, 2).chip(basis, 1);
 		}
 	}
-}*/
+
+	if ( order >= 2 ) this->AO2L = this->AO2.chip(0, 2).square() + this->AO2.chip(2, 2).square() + this->AO2.chip(5, 2).square();
+}
+*/
 
 void SubGrid::getAO(int derivative){
 	const int order = derivative + this->Type;
@@ -300,24 +303,50 @@ void SubGrid::getAO(int derivative){
 		points[ 3 * kgrid + 1 ] = this->Y[kgrid];
 		points[ 3 * kgrid + 2 ] = this->Z[kgrid];
 	}
+
+	Eigen::Tensor<double, 2> ao(0, 0);
 	if ( order >= 0 ){
-		this->AO = this->MWFN->getGridAO(points, 0).chip(0, 2);
+		ao = this->MWFN->getGridAO(points, 0).chip(0, 2);
+		this->AO.resize(ngrids, this_nbasis);
 	}
+	Eigen::Tensor<double, 3> ao1(0, 0, 0);
 	if ( order >= 1 ){
-		this->AO1 = this->MWFN->getGridAO(points, 1);
+		ao1 = this->MWFN->getGridAO(points, 1);
+		this->AO1.resize(ngrids, this_nbasis, 3);
 	}
 	const Eigen::array<Eigen::IndexPair<int>, 1> prod_dim = { Eigen::IndexPair<int>(2, 0) };
+	Eigen::Tensor<double, 3> ao2(0, 0, 0);
 	if ( order >= 2 ){
-		this->AO2 = this->MWFN->getGridAO(points, 2);
+		ao2 = this->MWFN->getGridAO(points, 2);
 		Eigen::Tensor<double, 2> perm(6, 6); perm.setZero();
 		perm(0, 0) = perm(1, 1) = perm(2, 3) = perm(3, 2) = perm(4, 4) = perm(5, 5) = 1;
-		this->AO2 = this->AO2.contract(perm, prod_dim).eval();
-		this->AO2L = this->AO2.chip(0, 2).square() + this->AO2.chip(2, 2).square() + this->AO2.chip(5, 2).square();
+		ao2 = ao2.contract(perm, prod_dim).eval();
+		this->AO2.resize(ngrids, this_nbasis, 6);
 	}
+	Eigen::Tensor<double, 3> ao3(0, 0, 0);
 	if ( order >= 3 ){
-		this->AO3 = this->MWFN->getGridAO(points, 3);
+		ao3 = this->MWFN->getGridAO(points, 3);
 		Eigen::Tensor<double, 2> perm(10, 10); perm.setZero();
 		perm(0, 0) = perm(1, 1) = perm(2, 4) = perm(3, 2) = perm(4, 5) = perm(5, 7) = perm(6, 3) = perm(7, 6) = perm(8, 8) = perm(9, 9) = 1;
-		this->AO3 = this->AO3.contract(perm, prod_dim).eval();
+		ao3 = ao3.contract(perm, prod_dim).eval();
+		this->AO3.resize(ngrids, this_nbasis, 10);
 	}
+
+	for ( int ibasis = 0; ibasis < this_nbasis; ibasis++ ){
+		const int basis = this->BasisList[ibasis];
+		if ( order >= 0 ){
+			this->AO.chip(ibasis, 1) = ao.chip(basis, 1);
+		}
+		if ( order >= 1 ) for ( int t = 0; t < 3; t++ ){
+			this->AO1.chip(t, 2).chip(ibasis, 1) = ao1.chip(t, 2).chip(basis, 1);
+		}
+		if ( order >= 2 ) for ( int t = 0; t < 6; t++ ){
+			this->AO2.chip(t, 2).chip(ibasis, 1) = ao2.chip(t, 2).chip(basis, 1);
+		}
+		if ( order >= 3 ) for ( int t = 0; t < 10; t++ ){
+			this->AO3.chip(t, 2).chip(ibasis, 1) = ao3.chip(t, 2).chip(basis, 1);
+		}
+	}
+
+	if ( order >= 2 ) this->AO2L = this->AO2.chip(0, 2).square() + this->AO2.chip(2, 2).square() + this->AO2.chip(5, 2).square();
 }
