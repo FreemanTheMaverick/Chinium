@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <Maniverse/Manifold/Grassmann.h>
 #include <Maniverse/Optimizer/LBFGS.h>
-#include <Maniverse/Optimizer/TruncatedNewton.h>
+#include <Maniverse/Optimizer/Newton.h>
 
 #include "../../Macro.h"
 #include "../../Integral.h"

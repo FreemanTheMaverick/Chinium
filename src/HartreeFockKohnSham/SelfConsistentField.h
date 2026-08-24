@@ -19,6 +19,7 @@ class SCF{ public:
 	ExchangeCorrelation xc;
 	Grid grid;
 	std::string scftype = "DIIS";
+	int stable = 0; // The number of eigenpairs requested in stability check
 	SCF(std::string inp, libmwfn::Mwfn& mwfn, Int2C1E& int2c1e);
 };
 

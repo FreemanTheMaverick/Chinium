@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+#include <array>
 #include <string>
 
 #include "../Job.h"
@@ -9,6 +11,8 @@
 
 class R_SCF: public Job, public RepR, public SCF{ public:
 	double Coupling = 0;
+	std::vector<std::array<EigenMatrix, 2>> lowers;
+	std::vector<int> lowers_type; // 0 - Closed-shell; 1 - Normal open-shell; 2 - Two-determinant
 	std::vector<EigenVector> dEs;
 	std::vector<EigenMatrix> dFs; // For reusing the intermediate CPSCF results of R_SCF in RGC_SCF
 	R_SCF(std::string inp);

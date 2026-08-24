@@ -1,5 +1,7 @@
 #include <vector>
 #include <string>
+#include <sstream>
+#include <fstream>
 #include <cstdio>
 
 #include "../Restricted.h"
@@ -59,6 +61,42 @@ std::vector<std::vector<double>> getCouplingCoefficient(std::vector<int> shell_s
 	return b;
 }
 
+std::vector<std::array<EigenMatrix, 2>> ReadLower(std::string inp){
+	std::vector<std::array<EigenMatrix, 2>> lowers;
+	std::ifstream file(inp);
+	std::string thisline;
+	bool found = 0;
+	int nlowers = 0;
+	while ( std::getline(file, thisline) && ! found ){
+		std::transform(thisline.begin(), thisline.end(), thisline.begin(), ::toupper);
+		if ( thisline == "LOWER" ){
+			found = 1;
+			std::getline(file, thisline);
+			std::stringstream ss(thisline);
+			ss >> nlowers;
+			if ( nlowers < 0 ) throw std::runtime_error("Invalid number of lower states!");
+			lowers.resize(nlowers);
+			for ( int ilower = 0; ilower < nlowers; ilower++ ){
+				std::getline(file, thisline);
+				std::stringstream ss(thisline);
+				std::string mwfn_str;
+				ss >> mwfn_str;
+				libmwfn::Mwfn mwfn(mwfn_str);
+				if ( mwfn.Wfntype != 0 && mwfn.Wfntype != 2 ) throw std::runtime_error("Orthogonality-constrained SCF only supports spin-restricted lower states!");
+				const EigenMatrix Cd = mwfn.getCoefficientMatrix({.Set=0, .Type=0, .OccUpper=2, .OccLower=2});
+				const EigenMatrix Ca = mwfn.getCoefficientMatrix({.Set=0, .Type=1, .OccUpper=1, .OccLower=1});
+				const EigenMatrix Cb = mwfn.getCoefficientMatrix({.Set=0, .Type=2, .OccUpper=1, .OccLower=1});
+				EigenMatrix Ca_ = EigenZero(mwfn.getNumBasis(), Cd.cols() + Ca.cols());
+				EigenMatrix Cb_ = EigenZero(mwfn.getNumBasis(), Cd.cols() + Cb.cols());
+				Ca_ << Cd, Ca;
+				Cb_ << Cd, Cb;
+				lowers[ilower] = { Ca_, Cb_ };
+			}
+		}
+	}
+	return lowers;
+}
+
 R_SCF::R_SCF(std::string inp): Job(inp), RepR(inp), SCF(inp, mwfn, int2c1e){
 	if ( Na + Nb == 0 ) xc.Spin = 1;
 	else xc.Spin = 2;
@@ -67,4 +105,25 @@ R_SCF::R_SCF(std::string inp): Job(inp), RepR(inp), SCF(inp, mwfn, int2c1e){
 	std::printf("Restricted open-shell spin-coupling factor: %f\n", Coupling);
 
 	if ( scftype == "DIIS" && ( Na > 0 || Nb > 0 ) ) throw std::runtime_error("DIIS for RO-SCF is not implemented yet!");
+
+	lowers = ReadLower(inp);
+	lowers_type.resize(lowers.size());
+	if ( scftype == "DIIS" && lowers.size() > 0 ) throw std::runtime_error("DIIS cannot be used for orthogonality-constrained SCF!");
+	EigenMatrix Z = EigenZero(mwfn.getNumBasis(), mwfn.getNumIndBasis());
+	Z <<
+		mwfn.getCoefficientMatrix({.Set=0, .OccUpper=2, .OccLower=2}),
+		mwfn.getCoefficientMatrix({.Set=0, .Type=1, .OccUpper=1, .OccLower=1}),
+		mwfn.getCoefficientMatrix({.Set=0, .Type=2, .OccUpper=1, .OccLower=1}),
+		mwfn.getCoefficientMatrix({.Set=0, .OccUpper=0, .OccLower=0})
+	;
+	const EigenMatrix Zinv = Z.inverse();
+	for ( int ilower = 0; ilower < (int)lowers.size(); ilower++ ){
+		std::array<EigenMatrix, 2>& lower = lowers[ilower];
+		int& type = lowers_type[ilower] = 1;
+		lower[0] = Zinv * lower[0];
+		lower[1] = Zinv * lower[1];
+		if ( lower[0].cols() != lower[1].cols() ) type = 1;
+		else if ( std::abs( ( lower[0].transpose() * lower[1] ).determinant() ) > 1. - 1e-10 ) type = 0;
+		else type = 2;
+	}
 }

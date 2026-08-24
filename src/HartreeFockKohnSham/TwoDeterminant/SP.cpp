@@ -1,12 +1,15 @@
+#include<iostream>
 #include <Eigen/Dense>
 #include <vector>
 #include <functional>
 #include <tuple>
 #include <cstdio>
 #include <Maniverse/Manifold/Flag.h>
+#include <Maniverse/Optimizer/AugmentedLagrangian.h>
 #include <Maniverse/Optimizer/LBFGS.h>
 #include <Maniverse/LinearSolver/ConjugateGradient.h>
 #include <Maniverse/Optimizer/Newton.h>
+#include <Maniverse/Diagonalizer/Lanczos.h>
 
 #include "../../Macro.h"
 #include "../../Integral.h"
@@ -15,6 +18,7 @@
 
 #include "../AugmentedRoothaanHall.h"
 #include "../TwoDeterminant.h"
+#include "../Determinant.h"
 
 #define S ( int2c1e->Overlap )
 #define Hcore ( int2c1e->Kinetic + int2c1e->Nuclear )
@@ -47,19 +51,34 @@ class ObjBase: public Maniverse::Objective{ public:
 	EigenMatrix C;
 	EigenMatrix K;
 	EigenMatrix L;
+	std::vector<std::array<ObjDeterminant, 2>> lowers;
+	std::vector<std::array<ObjDeterminant, 2>> lowers2;
+	std::vector<int> lowers_type;
 
 	ObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
-		int Np, EigenMatrix Z,
-		int nthreads
-	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), grid2(&grid2), Np(Np), Z(Z), nthreads(nthreads){
+		int Np, EigenMatrix Z, int nthreads,
+		std::vector<std::array<EigenMatrix, 2>> lowers_,
+		std::vector<std::array<EigenMatrix, 2>> lowers2_,
+		std::vector<int> lowers_type
+	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), grid2(&grid2), Np(Np), Z(Z), nthreads(nthreads), lowers_type(lowers_type){
 		nbasis = Z.rows();
 		Cprime = EigenZero(nbasis, Np + 2);
 		Gradient = {Cprime};
 		__Make_Block_View__(Cprime, Cprimes);
 		__Make_Block_View__(Gradient[0], Gradients);
 		Dprimes = FprimeMs = FprimeTs = { EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis) };
+		Lambda.resize(lowers_.size());
+		lowers.clear();
+		for ( std::array<EigenMatrix, 2>& lower : lowers_ ) lowers.push_back({
+				ObjDeterminant(lower[0]),
+				ObjDeterminant(lower[1])
+		});
+		for ( std::array<EigenMatrix, 2>& lower2 : lowers2_ ) lowers2.push_back({
+				ObjDeterminant(lower2[0]),
+				ObjDeterminant(lower2[1])
+		});
 	};
 
 	virtual void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
@@ -162,6 +181,41 @@ class ObjBase: public Maniverse::Objective{ public:
 			K = A.block(0, 0, Np + 2, Np + 2);
 			L = A.block(Np + 2, 0, nbasis - Np - 2, Np + 2);
 		}
+
+		Constraint_Value.resize(lowers.size());
+		Constraint_Gradient.resize(lowers.size());
+		EigenMatrix Ca = Cprime.leftCols( Np + 1 );
+		EigenMatrix Cb = Ca; Cb.rightCols(1) = Cprime.rightCols(1);
+		for ( int icons = 0; icons < (int)lowers.size(); icons++ ){
+			std::array<ObjDeterminant, 2>& lower = lowers[icons];
+			std::array<ObjDeterminant, 2>& lower2 = lowers2[icons];
+			lower[0].Calculate({Ca}, derivatives);
+			lower[1].Calculate({Cb}, derivatives);
+			if ( lowers_type[icons] != 0 ){
+				lower2[0].Calculate({Cb}, derivatives);
+				lower2[1].Calculate({Ca}, derivatives);
+			}
+			if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
+				Constraint_Value[icons] = lower[0].Value * lower[1].Value;
+				if ( lowers_type[icons] != 0 ){
+					Constraint_Value[icons] += lower2[0].Value * lower2[1].Value;
+				}
+				Value += Lambda[icons] * Constraint_Value[icons] + Rho / 2 * std::pow(Constraint_Value[icons], 2);
+			}
+			if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+				EigenMatrix cons_grad = EigenZero(nbasis, Np + 2);
+				cons_grad.leftCols(Np + 1) = lower[0].Gradient[0] * lower[1].Value;
+				EigenMatrix tmp = lower[0].Value * lower[1].Gradient[0];
+				if ( lowers_type[icons] != 0 ){
+					cons_grad.leftCols(Np + 1) += lower2[0].Value * lower2[1].Gradient[0];
+					tmp += lower2[0].Gradient[0] * lower2[1].Value;
+				}
+				cons_grad.leftCols(Np) += tmp.leftCols(Np);
+				cons_grad.rightCols(1) += tmp.rightCols(1);
+				Constraint_Gradient[icons] = { cons_grad };
+				Gradient[0] += ( Lambda[icons] + Rho * Constraint_Value[icons] ) * cons_grad;
+			}
+		}
 	};
 };
 
@@ -229,6 +283,27 @@ class ObjNewtonBase: public ObjBase{ public:
 		for ( int type = 0; type < 3; type++ ){
 			HdCprimes[type] = 2 * occ[type] * ( HdDprimes[type] * Cprimes[type] + ( 2 * FprimeMs[type] - FprimeTs[type] ) * dCprimes[type] );
 		}
+
+		EigenMatrix dCa( nbasis, Np + 1 );
+		EigenMatrix dCb( nbasis, Np + 1 );
+		dCa.leftCols(Np) = dCb.leftCols(Np) = dCprimes[0];
+		dCa.rightCols(1) = dCprimes[1];
+		dCb.rightCols(1) = dCprimes[2];
+		for ( int icons = 0; icons < (int)lowers.size(); icons++ ){
+			EigenMatrix cons_hess = EigenZero(nbasis, Np + 2);
+			const std::array<ObjDeterminant, 2>& lower = lowers[icons];
+			const std::array<ObjDeterminant, 2>& lower2 = lowers2[icons];
+			cons_hess.leftCols(Np + 1) = lower[0].Hessian({dCa})[0] * lower[1].Value + lower[0].Gradient[0] * lower[1].Gradient[0].cwiseProduct(dCb).sum();
+			EigenMatrix tmp = lower[0].Value * lower[1].Hessian({dCb})[0] + lower[0].Gradient[0].cwiseProduct(dCa).sum() * lower[1].Gradient[0];
+			if ( lowers_type[icons] != 0 ){
+				cons_hess.leftCols(Np + 1) += lower2[0].Value * lower2[1].Hessian({dCa})[0] + lower2[0].Gradient[0].cwiseProduct(dCb).sum() * lower2[1].Gradient[0];
+				tmp += lower2[0].Hessian({dCb})[0] * lower2[1].Value + lower2[0].Gradient[0] * lower2[1].Gradient[0].cwiseProduct(dCa).sum();
+			}
+			cons_hess.leftCols(Np) += tmp.leftCols(Np);
+			cons_hess.rightCols(1) += tmp.rightCols(1);
+			HdCprime += ( Lambda[icons] + Rho * Constraint_Value[icons] ) * cons_hess + Rho * Constraint_Gradient[icons][0].cwiseProduct(Vprimes[0]).sum() * Constraint_Gradient[icons][0];
+		}
+
 		return std::vector<EigenMatrix>{ HdCprime };
 	};
 
@@ -342,6 +417,9 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
 		int Np, EigenMatrix Z,
+		std::vector<std::array<EigenMatrix, 2>> lowers_,
+		std::vector<std::array<EigenMatrix, 2>> lowers2_,
+		std::vector<int> lowers_type,
 		int nthreads, int output){
 	std::conditional_t< scf_t == lbfgs_t,
 				ObjLBFGS,
@@ -349,20 +427,28 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 							ObjNewton,
 							ObjARH
 				>
-	> obj(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads);
+	> obj(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, lowers_, lowers2_, lowers_type);
 	Maniverse::Flag flag(EigenOne(Z.rows(), Np + 2)); flag.setBlockParameters({Np, 1, 1});
 	Maniverse::Iterate M(obj, {flag.Share()});
 	std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
+	const std::vector<double> cons_tol(lowers_.size(), 1e-8);
 	if constexpr ( scf_t == lbfgs_t ){
-		if ( ! Maniverse::LBFGS(
+		if ( ! lowers_.size() && ! Maniverse::LBFGS(
+					M, tol,
+					20, 300, 0.1, 0.75, 10, output
+		) ) throw std::runtime_error("Convergence failed!");
+		if ( lowers_.size() && ! Maniverse::AugmentedLagrangian(1, 3.3, 0.8, cons_tol, 100, output)(Maniverse::LBFGS)(
 					M, tol,
 					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
 		Maniverse::TrustRegion tr;
 		static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
-		Maniverse::ConjugateGradient cg(M, 0, 1, {ls_tol, ls_tol}, M.getDimension(), 1);
-		if ( ! Maniverse::Newton(
+		Maniverse::ConjugateGradient cg(M, 0, 1, {ls_tol, ls_tol}, M.getDimension(), output);
+		if ( ! lowers_.size() && ! Maniverse::Newton(
+					M, tr, cg, tol, 300, output
+		) ) throw std::runtime_error("Convergence failed!");
+		if ( lowers_.size() && ! Maniverse::AugmentedLagrangian(1, 3.3, 0.8, cons_tol, 100, output)(Maniverse::Newton)(
 					M, tr, cg, tol, 300, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}
@@ -370,13 +456,35 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 	return std::make_tuple(obj.Value, obj.C);
 }
 
+bool TwoDetStability(
+		Int2C1E& int2c1e, Int4C2E& int4c2e,
+		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
+		int Np, EigenMatrix Z,
+		std::vector<std::array<EigenMatrix, 2>> lowers_,
+		std::vector<std::array<EigenMatrix, 2>> lowers2_,
+		std::vector<int> lowers_type,
+		int stable,
+		int nthreads, int output){
+	ObjNewton obj(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, lowers_, lowers2_, lowers_type);
+	Maniverse::Flag flag(EigenOne(Z.rows(), Np + 2)); flag.setBlockParameters({Np, 1, 1});
+	Maniverse::Iterate M(obj, {flag.Share()});
+	M.Func->Calculate(M.getPoint(), {0, 1, 2});
+	M.setGradient();
+	if ( lowers_.size() ) obj.Lambda = M.getEffectiveLambda();
+	const auto [Evals, Evecs] = Maniverse::Lanczos(M, stable, 0, lowers_.size() > 0, output);
+	return Evals[0] > 0;
+}
+
 void TwoDet::Calculate0(){
 	if ( scftype == "DRY" ) return;
 	const EigenMatrix Z = mwfn.getCoefficientMatrix({.Set=0});
 	auto [E, C] =
-		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, 1) :
-		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, 1);
+		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, lowers2, lowers_type, nthreads, 1) :
+		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, lowers2, lowers_type, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, lowers2, lowers_type, nthreads, 1);
 	Energy += E;
 	mwfn.setCoefficientMatrix(C, {.Set=0});
+	EigenVector eps = EigenZero(mwfn.getNumIndBasis(), 1);
+	mwfn.setEnergy(eps, {.Set=0});
+	if ( stable > 0 ) TwoDetStability(int2c1e, int4c2e, xc, grid, grid2, Np, C, lowers, lowers2, lowers_type, stable, nthreads, 1);
 }

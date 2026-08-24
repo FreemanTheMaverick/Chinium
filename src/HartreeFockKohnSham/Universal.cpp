@@ -28,6 +28,7 @@ UniversalObjBase::UniversalObjBase(
 
 void UniversalObjBase::Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives){
 	Cprimes = Cprimes_;
+
 	if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
 		std::vector<EigenMatrix> Ds(3, EigenZero(0, 0));
 		for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){

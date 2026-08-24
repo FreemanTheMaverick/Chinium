@@ -1,6 +1,8 @@
 #include <string>
 #include <tuple>
 #include <cstdio>
+#include <sstream>
+#include <fstream>
 #include <libmwfn.h>
 
 #include "../Macro.h"
@@ -11,6 +13,25 @@
 
 #include "SelfConsistentField.h"
 #include "GuessSCF.h"
+
+int ReadStable(std::string inp){
+	std::ifstream file(inp);
+	std::string thisline;
+	bool found = 0;
+	int stable = 0; // 0 for spin-restricted, 1 for spin-unrestricted, -1 for depending on nelec and spin.
+	while ( std::getline(file, thisline) && ! found ){
+		std::transform(thisline.begin(), thisline.end(), thisline.begin(), ::toupper);
+		if ( thisline == "STABLE" ){
+			found = 1;
+			std::getline(file, thisline);
+			if ( thisline.length() == 0 ) throw std::runtime_error("Missing Stable!");
+			std::stringstream ss(thisline);
+			ss >> stable;
+		}
+	}
+	if ( stable < 0 ) std::runtime_error("Invalid number of stability check vectors!");
+	return stable;
+}
 
 SCF::SCF(std::string inp, libmwfn::Mwfn& mwfn, Int2C1E& int2c1e){
 	nthreads = ReadNumThreads(inp);
@@ -52,4 +73,7 @@ SCF::SCF(std::string inp, libmwfn::Mwfn& mwfn, Int2C1E& int2c1e){
 		int4c2e.getThreadPointers(nthreads, 1);
 		int4c2e.CalculateIntegrals(0, 1);
 	}
+
+	// Check stability
+	stable = ReadStable(inp);
 }
