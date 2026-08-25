@@ -1,4 +1,3 @@
-#include<iostream>
 #include <Eigen/Dense>
 #include <vector>
 #include <tuple>
@@ -424,5 +423,6 @@ void R_SCF::Calculate0(){
 	occ.head(Np).setConstant(2);
 	occ.segment(Np, Na + Nb).setConstant(1);
 	mwfn.setOccupation(occ, {.Set=0});
+	for ( int iorb = 0; iorb < mwfn.getNumIndBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = ( Np + Na > iorb && iorb >= Np ) ? 1 : ( Np + Na + Nb > iorb && iorb >= Np + Na ) ? 2 : 0;
 	if ( stable > 0 ) RestrictedStability(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, C, lowers, lowers_type, stable, nthreads, 1);
 }
