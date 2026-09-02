@@ -120,10 +120,8 @@ R_SCF::R_SCF(std::string inp): Job(inp), RepR(inp), SCF(inp, mwfn, int2c1e){
 	for ( int ilower = 0; ilower < (int)lowers.size(); ilower++ ){
 		std::array<EigenMatrix, 2>& lower = lowers[ilower];
 		int& type = lowers_type[ilower] = 1;
-		lower[0] = Zinv * lower[0];
-		lower[1] = Zinv * lower[1];
 		if ( lower[0].cols() != lower[1].cols() ) type = 1;
-		else if ( std::abs( ( lower[0].transpose() * lower[1] ).determinant() ) > 1. - 1e-10 ) type = 0;
+		else if ( std::abs( ( lower[0].transpose() * int2c1e.Overlap * lower[1] ).determinant() ) > 1. - 1e-10 ) type = 0;
 		else type = 2;
 	}
 }

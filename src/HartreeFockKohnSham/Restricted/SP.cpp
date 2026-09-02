@@ -102,9 +102,10 @@ class ObjBase: public UniversalObjBase{ public:
 	): UniversalObjBase(int2c1e, int4c2e, xc, grid, Norbs, Coupling, Zs, nthreads), lowers_type(lowers_type){
 		Lambda.resize(lowers_.size());
 		lowers.clear();
+		const EigenMatrix Zinv = Zs[0].inverse();
 		for ( std::array<EigenMatrix, 2>& lower : lowers_ ) lowers.push_back({
-				ObjDeterminant(lower[0]),
-				ObjDeterminant(lower[1])
+				ObjDeterminant(Zinv * lower[0]),
+				ObjDeterminant(Zinv * lower[1])
 		});
 	};
 

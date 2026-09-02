@@ -1,4 +1,3 @@
-#include<iostream>
 #include <Eigen/Dense>
 #include <vector>
 #include <functional>
@@ -27,6 +26,8 @@ namespace{
 
 #define One ( grid2->SubGridBatches.size() > 0 )
 #define __Make_Block_View__(Mat, Mats) Mats = {Mat.middleCols(0, Np), Mat.middleCols(Np, 1), Mat.middleCols(Np + 1, 1)};
+// #define lambda ( One ? 0 : 1 )
+#define lambda 0
 
 class ObjBase: public Maniverse::Objective{ public:
 	Int2C1E* int2c1e;
@@ -71,13 +72,14 @@ class ObjBase: public Maniverse::Objective{ public:
 		Dprimes = FprimeMs = FprimeTs = { EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis) };
 		Lambda.resize(lowers_.size());
 		lowers.clear();
+		const EigenMatrix Zinv = Z.inverse();
 		for ( std::array<EigenMatrix, 2>& lower : lowers_ ) lowers.push_back({
-				ObjDeterminant(lower[0]),
-				ObjDeterminant(lower[1])
+				ObjDeterminant(Zinv * lower[0]),
+				ObjDeterminant(Zinv * lower[1])
 		});
 		for ( std::array<EigenMatrix, 2>& lower2 : lowers2_ ) lowers2.push_back({
-				ObjDeterminant(lower2[0]),
-				ObjDeterminant(lower2[1])
+				ObjDeterminant(Zinv * lower2[0]),
+				ObjDeterminant(Zinv * lower2[1])
 		});
 	};
 
@@ -92,8 +94,8 @@ class ObjBase: public Maniverse::Objective{ public:
 			const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
 			const std::vector<EigenMatrix> FhfMs = {
 				Hcore + J - Kd - 0.5 * ( Ka + Kb ),
-				Hcore + J - Kd - Ka + Kb*0,
-				Hcore + J - Kd + Ka*0 - Kb
+				Hcore + J - Kd - Ka + Kb * lambda,
+				Hcore + J - Kd + Ka * lambda - Kb
 			};
 			const std::vector<EigenMatrix> FhfTs = {
 				Hcore + J - Kd - 0.5 * ( Ka + Kb ),
@@ -331,8 +333,8 @@ class ObjNewton: public ObjNewtonBase{ public:
 		const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(dDs[0][0], dDs[1][0], dDs[2][0], nthreads, 0);
 		std::vector<EigenMatrix> dFMs = {
 			J - Kd - 0.5 * ( Ka + Kb ),
-			J - Kd - Ka + Kb*0,
-			J - Kd + Ka*0 - Kb
+			J - Kd - Ka + Kb * lambda,
+			J - Kd + Ka * lambda - Kb
 		};
 		std::vector<EigenMatrix> dFTs = {
 			J - Kd - 0.5 * ( Ka + Kb ),
