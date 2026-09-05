@@ -74,6 +74,14 @@ void SubGrid::getDensityU(EigenTensor<4>& D_){
 			SigmaU.chip(uv, 2) = TMP.chip(v, 3).chip(u, 2);
 		}
 	}
+	if ( this->Type >= 2 ){
+		TauU.resize(ngrids, nmats, nspins); TauU.setZero();
+		#include "DensityEinSum/D_mu,nu,mat,w...AO1_g,mu,r...AO1_g,nu,r---TauU_g,mat,w.hpp"
+		ScaleTensor(TauU, 0.5);
+		LaplU = 4. * TauU;
+		#include "DensityEinSum/D_mu,nu,mat,w...AO_g,mu...AO2L_g,nu---LaplU_g,mat,w.hpp"
+		#include "DensityEinSum/D_mu,nu,mat,w...AO2L_g,mu...AO_g,nu---LaplU_g,mat,w.hpp"
+	}
 }
 
 void SubGrid::getDensitySkeleton(EigenTensor<3>& D_){

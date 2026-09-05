@@ -159,6 +159,28 @@ void ExchangeCorrelation::Read(std::string df, bool output){
 		Eps1Sigma += eps1sigma;\
 		Eps1Lapl += eps1lapl;\
 		Eps1Tau += eps1tau;\
+	}else if ( order == "f" ){\
+		EigenMatrix eps2rho2(Eps2Rho2.rows(), ngrids);\
+		EigenMatrix eps2rhosigma(Eps2RhoSigma.rows(), ngrids);\
+		EigenMatrix eps2rholapl(Eps2RhoLapl.rows(), ngrids);\
+		EigenMatrix eps2rhotau(Eps2RhoTau.rows(), ngrids);\
+		EigenMatrix eps2sigma2(Eps2Sigma2.rows(), ngrids);\
+		EigenMatrix eps2sigmalapl(Eps2SigmaLapl.rows(), ngrids);\
+		EigenMatrix eps2sigmatau(Eps2SigmaTau.rows(), ngrids);\
+		EigenMatrix eps2lapl2(Eps2Lapl2.rows(), ngrids);\
+		EigenMatrix eps2lapltau(Eps2LaplTau.rows(), ngrids);\
+		EigenMatrix eps2tau2(Eps2Tau2.rows(), ngrids);\
+		xc_mgga_fxc(&func, ngrids, rho.data(), sigma.data(), lapl.data(), tau.data(), eps2rho2.data(), eps2rhosigma.data(), eps2rholapl.data(), eps2rhotau.data(), eps2sigma2.data(), eps2sigmalapl.data(), eps2sigmatau.data(), eps2lapl2.data(), eps2lapltau.data(), eps2tau2.data());\
+		Eps2Rho2 += eps2rho2;\
+		Eps2RhoSigma += eps2rhosigma;\
+		Eps2RhoLapl += eps2rholapl;\
+		Eps2RhoTau += eps2rhotau;\
+		Eps2Sigma2 += eps2sigma2;\
+		Eps2SigmaLapl += eps2sigmalapl;\
+		Eps2SigmaTau += eps2sigmatau;\
+		Eps2Lapl2 += eps2lapl2;\
+		Eps2LaplTau += eps2lapltau;\
+		Eps2Tau2 += eps2tau2;\
 	}
 
 void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
@@ -188,14 +210,31 @@ void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 				subgrid->Eps1Lapl.resize(ngrids, nspins);
 				subgrid->Eps1Tau.resize(ngrids, nspins);
 			}
-			EigenMatrix Eps2Rho2, Eps2RhoSigma, Eps2Sigma2;
+			EigenMatrix Eps2Rho2, Eps2RhoSigma, Eps2RhoLapl, Eps2RhoTau;
+			EigenMatrix Eps2Sigma2, Eps2SigmaLapl, Eps2SigmaTau;
+			EigenMatrix Eps2Lapl2, Eps2LaplTau;
+			EigenMatrix Eps2Tau2;
 			if ( order == "f" ){
 				Eps2Rho2 = EigenZero(nspins == 1 ? 1 : 3, ngrids);
 				Eps2RhoSigma = EigenZero(nspins == 1 ? 1 : 6, ngrids);
+				Eps2RhoLapl = EigenZero(nspins == 1 ? 1 : 4, ngrids);
+				Eps2RhoTau = EigenZero(nspins == 1 ? 1 : 4, ngrids);
 				Eps2Sigma2 = EigenZero(nspins == 1 ? 1 : 6, ngrids);
+				Eps2SigmaLapl = EigenZero(nspins == 1 ? 1 : 6, ngrids);
+				Eps2SigmaTau = EigenZero(nspins == 1 ? 1 : 6, ngrids);
+				Eps2Lapl2 = EigenZero(nspins == 1 ? 1 : 3, ngrids);
+				Eps2LaplTau = EigenZero(nspins == 1 ? 1 : 4, ngrids);
+				Eps2Tau2 = EigenZero(nspins == 1 ? 1 : 3, ngrids);
 				subgrid->Eps2Rho2.resize(ngrids, nspins, nspins);
 				subgrid->Eps2RhoSigma.resize(ngrids, nspins, nspins == 1 ? 1 : 3);
+				subgrid->Eps2RhoLapl.resize(ngrids, nspins, nspins);
+				subgrid->Eps2RhoTau.resize(ngrids, nspins, nspins);
 				subgrid->Eps2Sigma2.resize(ngrids, nspins == 1 ? 1 : 3, nspins == 1 ? 1 : 3);
+				subgrid->Eps2SigmaLapl.resize(ngrids, nspins == 1 ? 1 : 3, nspins);
+				subgrid->Eps2SigmaTau.resize(ngrids, nspins == 1 ? 1 : 3, nspins);
+				subgrid->Eps2Lapl2.resize(ngrids, nspins, nspins);
+				subgrid->Eps2LaplTau.resize(ngrids, nspins, nspins);
+				subgrid->Eps2Tau2.resize(ngrids, nspins, nspins);
 			}
 
 			for ( int code : this->Codes ){
@@ -230,17 +269,32 @@ void ExchangeCorrelation::Evaluate(std::string order, Grid& grid){
 			}
 			#define CopySymTensor3(tensor){\
 				tensor.transposeInPlace();\
-				for ( int i = 0, k = 0; i < subgrid->tensor.dimension(0); i++ ){\
+				for ( int i = 0, k = 0; i < subgrid->tensor.dimension(1); i++ ){\
 					for ( int j = i; j < subgrid->tensor.dimension(1); j++, k++ ){\
 						std::memcpy(&subgrid->tensor(0, i, j), &tensor(0, k), ngrids * 8);\
 						std::memcpy(&subgrid->tensor(0, j, i), &tensor(0, k), ngrids * 8);\
 					}\
 				}\
 			}
+			#define CopyTransposeTensor3(tensor){\
+				tensor.transposeInPlace();\
+				for ( int i = 0, k = 0; i < subgrid->tensor.dimension(1); i++ ){\
+					for ( int j = 0; j < subgrid->tensor.dimension(2); j++, k++ ){\
+						std::memcpy(&subgrid->tensor(0, i, j), &tensor(0, k), ngrids * 8);\
+					}\
+				}\
+			}
 			if ( order == "f" ){
 				CopySymTensor3(Eps2Rho2);
-				CopyTensor(Eps2RhoSigma);
+				CopyTransposeTensor3(Eps2RhoSigma);
+				CopyTransposeTensor3(Eps2RhoLapl);
+				CopyTransposeTensor3(Eps2RhoTau);
 				CopySymTensor3(Eps2Sigma2);
+				CopyTransposeTensor3(Eps2SigmaLapl);
+				CopyTransposeTensor3(Eps2SigmaTau);
+				CopySymTensor3(Eps2Lapl2);
+				CopyTransposeTensor3(Eps2LaplTau);
+				CopySymTensor3(Eps2Tau2);
 			}
 		}
 	}

@@ -275,20 +275,19 @@ void SubGrid::getAO(int derivative){
 	for ( int ibasis = 0; ibasis < this_nbasis; ibasis++ ){
 		const int basis = this->BasisList[ibasis];
 		if ( order >= 0 ){
-			this->AO.chip(ibasis, 1) = ao.chip(basis, 1);
+			std::memcpy(this->AO.data() + ibasis * ngrids, ao.data() + basis * ngrids, ngrids * 8);
 		}
-		if ( order >= 1 ) for ( int t = 0; t < 3; t++ ){
-			this->AO1.chip(t, 2).chip(ibasis, 1) = ao1.chip(t, 2).chip(basis, 1);
+		if ( order >= 1 ){
+			std::memcpy(this->AO1.data() + ibasis * ngrids * 3, ao1.data() + basis * ngrids * 3, ngrids * 3 * 8);
 		}
-		if ( order >= 2 ) for ( int t = 0; t < 6; t++ ){
-			this->AO2.chip(t, 2).chip(ibasis, 1) = ao2.chip(t, 2).chip(basis, 1);
+		if ( order >= 2 ){
+			std::memcpy(this->AO2L.data() + ibasis * ngrids, ao2l.data() + basis * ngrids, ngrids * 8);
+			std::memcpy(this->AO2.data() + ibasis * ngrids * 6, ao2.data() + basis * ngrids * 6, ngrids * 6 * 8);
 		}
-		if ( order >= 3 ) for ( int t = 0; t < 10; t++ ){
-			this->AO3.chip(t, 2).chip(ibasis, 1) = ao3.chip(t, 2).chip(basis, 1);
+		if ( order >= 3 ){
+			std::memcpy(this->AO3.data() + ibasis * ngrids * 10, ao3.data() + basis * ngrids * 10, ngrids * 10 * 8);
 		}
 	}
-
-	if ( order >= 2 ) this->AO2L = this->AO2.chip(0, 2).square() + this->AO2.chip(2, 2).square() + this->AO2.chip(5, 2).square();
 }
 */
 

@@ -48,11 +48,15 @@ class SubGrid{ public:
 	EigenTensor<3> RhoU;
 	EigenTensor<4> Rho1U;
 	EigenTensor<3> SigmaU;
+	EigenTensor<3> LaplU;
+	EigenTensor<3> TauU;
 	void getDensityU(EigenTensor<4>& D);
 
 	EigenTensor<4> RhoGrad;
 	EigenTensor<5> Rho1Grad;
 	EigenTensor<4> SigmaGrad;
+	EigenTensor<4> LaplGrad;
+	EigenTensor<4> TauGrad;
 	void getDensitySkeleton(EigenTensor<3>& D);
 
 	EigenTensor<6> RhoHess;
@@ -61,17 +65,28 @@ class SubGrid{ public:
 	void getDensitySkeleton2(EigenTensor<3>& D);
 
 	EigenTensor<1> Eps;
+
 	EigenTensor<2> Eps1Rho;
 	EigenTensor<2> Eps1Sigma;
 	EigenTensor<2> Eps1Lapl;
 	EigenTensor<2> Eps1Tau;
+
 	EigenTensor<3> Eps2Rho2;
 	EigenTensor<3> Eps2RhoSigma;
+	EigenTensor<3> Eps2RhoLapl;
+	EigenTensor<3> Eps2RhoTau;
 	EigenTensor<3> Eps2Sigma2;
+	EigenTensor<3> Eps2SigmaLapl;
+	EigenTensor<3> Eps2SigmaTau;
+	EigenTensor<3> Eps2Lapl2;
+	EigenTensor<3> Eps2LaplTau;
+	EigenTensor<3> Eps2Tau2;
+
 	EigenTensor<4> Eps3Rho3;
 	EigenTensor<4> Eps3Rho2Sigma;
 	EigenTensor<4> Eps3RhoSigma2;
 	EigenTensor<4> Eps3Sigma3;
+
 	EigenTensor<5> Eps4Rho4;
 	EigenTensor<5> Eps4Rho3Sigma;
 	EigenTensor<5> Eps4Rho2Sigma2;

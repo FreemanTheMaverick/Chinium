@@ -8,6 +8,13 @@
 #include "../Macro.h"
 #include "Grid.h"
 
+#define __Make_Scaled_Eps1Sigma__\
+	EigenTensor<2> ScaledEps1Sigma = Eps1Sigma;\
+	for ( int w = 0; w < nspins; w++ ) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){\
+		ScaledEps1Sigma(kgrid, ( w + 1 ) * ( w + 2 ) / 2 - 1) *= 2;\
+	}
+	//for ( int w = 0; w < nspins; w++ ) ScaledEps1Sigma.chip(( w + 1 ) * ( w + 2 ) / 2 - 1, 2) *= 2;
+
 void SubGrid::getFock(EigenTensor<3>& F_){
 	const int ngrids = this->NumGrids;
 	const int nspins = this->Spin;
@@ -19,12 +26,7 @@ void SubGrid::getFock(EigenTensor<3>& F_){
 		F += 0.5 * F0;
 	}
 	if ( this->Type >= 1 ){
-		EigenTensor<1> S(nspins * ( nspins + 1 ) / 2); // Scaling factors
-		S.setConstant(1);
-		for ( int w = 0; w < nspins; w++ ) S(( w + 1 ) * ( w + 2 ) / 2 - 1) = 2;
-		EigenTensor<2> ScaledEps1Sigma(ngrids, nspins * ( nspins + 1 ) / 2);
-		ScaledEps1Sigma.setZero();
-		#include "FockEinSum/S_w...Eps1Sigma_g,w---ScaledEps1Sigma_g,w.hpp"
+		__Make_Scaled_Eps1Sigma__
 		EigenTensor<3> F1(nbasis, nbasis, nspins); F1.setZero();
 		#include "FockEinSum/W_g...ScaledEps1Sigma_g,u+v...Rho1_g,r,v...AO1_g,mu,r...AO_g,nu---F1_mu,nu,u.hpp"
 		F += F1;
@@ -66,12 +68,7 @@ void SubGrid::getFockSkeleton(EigenTensor<5>& F_){
 	}
 	if ( this->Type >= 1 ){
 		for ( int iatom = 0; iatom < natoms; iatom++ ){
-			EigenTensor<1> S(nspins * ( nspins + 1 ) / 2); // Scaling factors
-			S.setConstant(1);
-			for ( int w = 0; w < nspins; w++ ) S(( w + 1 ) * ( w + 2 ) / 2 - 1) = 2;
-			EigenTensor<2> ScaledEps1Sigma(ngrids, nspins * ( nspins + 1 ) / 2);
-			ScaledEps1Sigma.setZero();
-			#include "FockEinSum/S_w...Eps1Sigma_g,w---ScaledEps1Sigma_g,w.hpp"
+			__Make_Scaled_Eps1Sigma__
 			const int ihead = this->AtomHeads[iatom];
 			const int ilength = this->AtomLengths[iatom];
 			EigenTensor<4> Fa1(ilength, nbasis, 3, nspins); Fa1.setZero();
@@ -113,12 +110,24 @@ void SubGrid::getFockU(EigenTensor<4>& F_){
 			if constexpr ( d_t == s_t ) return SigmaGrad.data();
 			else return SigmaU.data();
 	}(), this->Type >= 1 ? ngrids : 0, nmats, nspins * ( nspins + 1 ) / 2 );
+	const Eigen::TensorMap<EigenTensor<3>> LaplG( [&LaplGrad = this->LaplGrad, &LaplU = this->LaplU]() -> double* {
+			if constexpr ( d_t == s_t ) return LaplGrad.data();
+			else return LaplU.data();
+	}(), this->Type >= 2 ? ngrids : 0, nmats, nspins );
+	const Eigen::TensorMap<EigenTensor<3>> TauG( [&TauGrad = this->TauGrad, &TauU = this->TauU]() -> double* {
+			if constexpr ( d_t == s_t ) return TauGrad.data();
+			else return TauU.data();
+	}(), this->Type >= 2 ? ngrids : 0, nmats, nspins );
 	EigenTensor<4> F(nbasis, nbasis, nmats, nspins); F.setZero();
 	if ( this->Type >= 0 ){
 		EigenTensor<3> TMP0(ngrids, nmats, nspins); TMP0.setZero();
 		#include "FockEinSum/Eps2Rho2_g,u,v...RhoG_g,mat,v---TMP0_g,mat,u.hpp"
 		if ( this->Type >= 1 ){
 			#include "FockEinSum/Eps2RhoSigma_g,w,uv...SigmaG_g,mat,uv---TMP0_g,mat,w.hpp"
+		}
+		if ( this->Type >= 2 ){
+			#include "FockEinSum/Eps2RhoLapl_g,u,v...LaplG_g,mat,v---TMP0_g,mat,u.hpp"
+			#include "FockEinSum/Eps2RhoTau_g,u,v...TauG_g,mat,v---TMP0_g,mat,u.hpp"
 		}
 		EigenTensor<3> TMP1(ngrids, nmats, nspins); TMP1.setZero();
 		#include "FockEinSum/W_g...TMP0_g,mat,w---TMP1_g,mat,w.hpp"
@@ -127,30 +136,45 @@ void SubGrid::getFockU(EigenTensor<4>& F_){
 		F += 0.5 * F0;
 	}
 	if ( this->Type >= 1 ){
-		EigenTensor<1> S(nspins * ( nspins + 1 ) / 2); // Scaling factors
-		S.setConstant(1);
-		for ( int w = 0; w < nspins; w++ ) S(( w + 1 ) * ( w + 2 ) / 2 - 1) = 2;
-		EigenTensor<3> ScaledEps2RhoSigma(ngrids, nspins, nspins * ( nspins + 1 ) / 2);
-		ScaledEps2RhoSigma.setZero();
-		#include "FockEinSum/S_x...Eps2RhoSigma_g,w,x---ScaledEps2RhoSigma_g,w,x.hpp"
-		EigenTensor<3> ScaledEps2Sigma2(ngrids, nspins * ( nspins + 1 ) / 2, nspins * ( nspins + 1 ) / 2);
-		ScaledEps2Sigma2.setZero();
-		#include "FockEinSum/S_x...Eps2Sigma2_g,w,x---ScaledEps2Sigma2_g,w,x.hpp"
-		EigenTensor<2> ScaledEps1Sigma(ngrids, nspins * ( nspins + 1 ) / 2);
-		ScaledEps1Sigma.setZero();
-		#include "FockEinSum/S_w...Eps1Sigma_g,w---ScaledEps1Sigma_g,w.hpp"
-
 		EigenTensor<3> TMP1(ngrids, nmats, nspins * ( nspins + 1 ) / 2); TMP1.setZero();
-		#include "FockEinSum/ScaledEps2RhoSigma_g,w,uv...RhoG_g,mat,w---TMP1_g,mat,uv.hpp"
-		#include "FockEinSum/ScaledEps2Sigma2_g,u,v...SigmaG_g,mat,v---TMP1_g,mat,u.hpp"
+		#include "FockEinSum/Eps2RhoSigma_g,w,uv...RhoG_g,mat,w---TMP1_g,mat,uv.hpp"
+		#include "FockEinSum/Eps2Sigma2_g,u,v...SigmaG_g,mat,v---TMP1_g,mat,u.hpp"
+		if ( this->Type >= 2 ){
+			#include "FockEinSum/Eps2SigmaLapl_g,uv,w...LaplG_g,mat,w---TMP1_g,mat,uv.hpp"
+			#include "FockEinSum/Eps2SigmaTau_g,uv,w...TauG_g,mat,w---TMP1_g,mat,uv.hpp"
+		}
+		//for ( int w = 0; w < nspins; w++ ) TMP1.chip(( w + 1 ) * ( w + 2 ) / 2 - 1, 2) *= 2; // Scale gamma_aa and gamma_bb by 2.
+		for ( int w = 0; w < nspins; w++ ) for ( int mat = 0; mat < nmats; mat++ ) for ( long int kgrid = 0; kgrid < ngrids; kgrid++ ){
+			TMP1(kgrid, mat, ( w + 1 ) * ( w + 2 ) / 2 - 1) *= 2; // Scale gamma_aa and gamma_bb by 2.
+		}
 		EigenTensor<4> TMP2(ngrids, 3, nmats, nspins); TMP2.setZero();
 		#include "FockEinSum/TMP1_g,mat,u+v...Rho1_g,r,v---TMP2_g,r,mat,u.hpp"
+		__Make_Scaled_Eps1Sigma__
 		EigenTensor<4> TMP3(ngrids, 3, nmats, nspins); TMP3.setZero();
 		#include "FockEinSum/ScaledEps1Sigma_g,u+v...Rho1G_g,r,mat,v---TMP3_g,r,mat,u.hpp"
 		EigenTensor<4> TMP4 = TMP2 + TMP3;
 		EigenTensor<4> F1(nbasis, nbasis, nmats, nspins); F1.setZero();
 		#include "FockEinSum/W_g...TMP4_g,r,mat,u...AO1_g,mu,r...AO_g,nu---F1_mu,nu,mat,u.hpp"
 		F += F1;
+	}
+	if ( this->Type >= 2 ){
+		EigenTensor<3> TMP5(ngrids, nmats, nspins); TMP5.setZero();
+		#include "FockEinSum/Eps2RhoLapl_g,u,v...RhoG_g,mat,u---TMP5_g,mat,v.hpp"
+		#include "FockEinSum/Eps2SigmaLapl_g,uv,w...SigmaG_g,mat,uv---TMP5_g,mat,w.hpp"
+		#include "FockEinSum/Eps2Lapl2_g,u,v...LaplG_g,mat,u---TMP5_g,mat,v.hpp"
+		#include "FockEinSum/Eps2LaplTau_g,u,v...TauG_g,mat,u---TMP5_g,mat,v.hpp"
+		EigenTensor<3> TMP6(ngrids, nmats, nspins); TMP6.setZero();
+		#include "FockEinSum/Eps2RhoTau_g,u,v...RhoG_g,mat,u---TMP6_g,mat,v.hpp"
+		#include "FockEinSum/Eps2SigmaTau_g,uv,w...SigmaG_g,mat,uv---TMP6_g,mat,w.hpp"
+		#include "FockEinSum/Eps2LaplTau_g,u,v...LaplG_g,mat,u---TMP6_g,mat,v.hpp"
+		#include "FockEinSum/Eps2Tau2_g,u,v...TauG_g,mat,u---TMP6_g,mat,v.hpp"
+		EigenTensor<3> V = 0.5 * TMP6 + 2 * TMP5;
+		EigenTensor<4> F2(nbasis, nbasis, nmats, nspins); F2.setZero();
+		#include "FockEinSum/W_g...V_g,mat,w...AO1_g,mu,r...AO1_g,nu,r---F2_mu,nu,mat,w.hpp"
+		F += 0.5 * F2;
+		F2.setZero();
+		#include "FockEinSum/W_g...TMP5_g,mat,w...AO_g,mu...AO2L_g,nu---F2_mu,nu,mat,w.hpp"
+		F += F2;
 	}
 	F += F.shuffle(Eigen::array<int, 4>{1, 0, 2, 3}).eval();
 	for ( int spin = 0; spin < nspins; spin++ ) for ( int mat = 0; mat < nmats; mat++ ){
