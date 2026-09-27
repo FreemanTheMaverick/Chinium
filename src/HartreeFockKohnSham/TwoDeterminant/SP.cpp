@@ -52,8 +52,7 @@ class ObjBase: public Maniverse::Objective{ public:
 	EigenMatrix C;
 	EigenMatrix K;
 	EigenMatrix L;
-	std::vector<std::array<ObjDeterminant, 2>> lowers;
-	std::vector<std::array<ObjDeterminant, 2>> lowers2;
+	std::vector<std::array<std::array<ObjDeterminant, 2>, 2>> lowers;
 	std::vector<int> lowers_type;
 
 	ObjBase(
@@ -61,7 +60,6 @@ class ObjBase: public Maniverse::Objective{ public:
 		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
 		int Np, EigenMatrix Z, int nthreads,
 		std::vector<std::array<EigenMatrix, 2>> lowers_,
-		std::vector<std::array<EigenMatrix, 2>> lowers2_,
 		std::vector<int> lowers_type
 	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), grid2(&grid2), Np(Np), Z(Z), nthreads(nthreads), lowers_type(lowers_type){
 		nbasis = Z.rows();
@@ -74,12 +72,8 @@ class ObjBase: public Maniverse::Objective{ public:
 		lowers.clear();
 		const EigenMatrix Zinv = Z.inverse();
 		for ( std::array<EigenMatrix, 2>& lower : lowers_ ) lowers.push_back({
-				ObjDeterminant(Zinv * lower[0]),
-				ObjDeterminant(Zinv * lower[1])
-		});
-		for ( std::array<EigenMatrix, 2>& lower2 : lowers2_ ) lowers2.push_back({
-				ObjDeterminant(Zinv * lower2[0]),
-				ObjDeterminant(Zinv * lower2[1])
+				std::array<ObjDeterminant, 2>{ ObjDeterminant(Zinv * lower[0]), ObjDeterminant(Zinv * lower[0]) },
+				std::array<ObjDeterminant, 2>{ ObjDeterminant(Zinv * lower[1]), ObjDeterminant(Zinv * lower[1]) }
 		});
 	};
 
@@ -189,28 +183,27 @@ class ObjBase: public Maniverse::Objective{ public:
 		EigenMatrix Ca = Cprime.leftCols( Np + 1 );
 		EigenMatrix Cb = Ca; Cb.rightCols(1) = Cprime.rightCols(1);
 		for ( int icons = 0; icons < (int)lowers.size(); icons++ ){
-			std::array<ObjDeterminant, 2>& lower = lowers[icons];
-			std::array<ObjDeterminant, 2>& lower2 = lowers2[icons];
-			lower[0].Calculate({Ca}, derivatives);
-			lower[1].Calculate({Cb}, derivatives);
+			std::array<std::array<ObjDeterminant, 2>, 2>& lower = lowers[icons];
+			lower[0][0].Calculate({Ca}, derivatives);
+			lower[1][1].Calculate({Cb}, derivatives);
 			if ( lowers_type[icons] != 0 ){
-				lower2[0].Calculate({Cb}, derivatives);
-				lower2[1].Calculate({Ca}, derivatives);
+				lower[1][0].Calculate({Ca}, derivatives);
+				lower[0][1].Calculate({Cb}, derivatives);
 			}
 			if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
-				Constraint_Value[icons] = lower[0].Value * lower[1].Value;
+				Constraint_Value[icons] = lower[0][0].Value * lower[1][1].Value;
 				if ( lowers_type[icons] != 0 ){
-					Constraint_Value[icons] += lower2[0].Value * lower2[1].Value;
+					Constraint_Value[icons] += lower[1][0].Value * lower[0][1].Value;
 				}
 				Value += Lambda[icons] * Constraint_Value[icons] + Rho / 2 * std::pow(Constraint_Value[icons], 2);
 			}
 			if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
 				EigenMatrix cons_grad = EigenZero(nbasis, Np + 2);
-				cons_grad.leftCols(Np + 1) = lower[0].Gradient[0] * lower[1].Value;
-				EigenMatrix tmp = lower[0].Value * lower[1].Gradient[0];
+				cons_grad.leftCols(Np + 1) = lower[0][0].Gradient[0] * lower[1][1].Value;
+				EigenMatrix tmp = lower[0][0].Value * lower[1][1].Gradient[0];
 				if ( lowers_type[icons] != 0 ){
-					cons_grad.leftCols(Np + 1) += lower2[0].Value * lower2[1].Gradient[0];
-					tmp += lower2[0].Gradient[0] * lower2[1].Value;
+					cons_grad.leftCols(Np + 1) += lower[0][1].Value * lower[1][0].Gradient[0];
+					tmp += lower[0][1].Gradient[0] * lower[1][0].Value;
 				}
 				cons_grad.leftCols(Np) += tmp.leftCols(Np);
 				cons_grad.rightCols(1) += tmp.rightCols(1);
@@ -292,14 +285,13 @@ class ObjNewtonBase: public ObjBase{ public:
 		dCa.rightCols(1) = dCprimes[1];
 		dCb.rightCols(1) = dCprimes[2];
 		for ( int icons = 0; icons < (int)lowers.size(); icons++ ){
+			const std::array<std::array<ObjDeterminant, 2>, 2>& lower = lowers[icons];
 			EigenMatrix cons_hess = EigenZero(nbasis, Np + 2);
-			const std::array<ObjDeterminant, 2>& lower = lowers[icons];
-			const std::array<ObjDeterminant, 2>& lower2 = lowers2[icons];
-			cons_hess.leftCols(Np + 1) = lower[0].Hessian({dCa})[0] * lower[1].Value + lower[0].Gradient[0] * lower[1].Gradient[0].cwiseProduct(dCb).sum();
-			EigenMatrix tmp = lower[0].Value * lower[1].Hessian({dCb})[0] + lower[0].Gradient[0].cwiseProduct(dCa).sum() * lower[1].Gradient[0];
+			cons_hess.leftCols(Np + 1) = lower[0][0].Hessian({dCa})[0] * lower[1][1].Value + lower[0][0].Gradient[0] * lower[1][1].Gradient[0].cwiseProduct(dCb).sum();
+			EigenMatrix tmp = lower[0][0].Gradient[0].cwiseProduct(dCa).sum() * lower[1][1].Gradient[0] + lower[0][0].Value * lower[1][1].Hessian({dCb})[0];
 			if ( lowers_type[icons] != 0 ){
-				cons_hess.leftCols(Np + 1) += lower2[0].Value * lower2[1].Hessian({dCa})[0] + lower2[0].Gradient[0].cwiseProduct(dCb).sum() * lower2[1].Gradient[0];
-				tmp += lower2[0].Hessian({dCb})[0] * lower2[1].Value + lower2[0].Gradient[0] * lower2[1].Gradient[0].cwiseProduct(dCa).sum();
+				cons_hess.leftCols(Np + 1) += lower[0][1].Gradient[0].cwiseProduct(dCb).sum() * lower[1][0].Gradient[0] + lower[0][1].Value * lower[1][0].Hessian({dCa})[0];
+				tmp += lower[0][1].Hessian({dCb})[0] * lower[1][0].Value + lower[0][1].Gradient[0] * lower[1][0].Gradient[0].cwiseProduct(dCa).sum();
 			}
 			cons_hess.leftCols(Np) += tmp.leftCols(Np);
 			cons_hess.rightCols(1) += tmp.rightCols(1);
@@ -420,7 +412,6 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
 		int Np, EigenMatrix Z,
 		std::vector<std::array<EigenMatrix, 2>> lowers_,
-		std::vector<std::array<EigenMatrix, 2>> lowers2_,
 		std::vector<int> lowers_type,
 		int nthreads, int output){
 	std::conditional_t< scf_t == lbfgs_t,
@@ -429,11 +420,11 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 							ObjNewton,
 							ObjARH
 				>
-	> obj(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, lowers_, lowers2_, lowers_type);
+	> obj(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, lowers_, lowers_type);
 	Maniverse::Flag flag(EigenOne(Z.rows(), Np + 2)); flag.setBlockParameters({Np, 1, 1});
 	Maniverse::Iterate M(obj, {flag.Share()});
 	std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
-	const std::vector<double> cons_tol(lowers_.size(), 1e-8);
+	const std::vector<double> cons_tol(lowers_.size(), 1e-10);
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! lowers_.size() && ! Maniverse::LBFGS(
 					M, tol,
@@ -463,17 +454,27 @@ bool TwoDetStability(
 		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
 		int Np, EigenMatrix Z,
 		std::vector<std::array<EigenMatrix, 2>> lowers_,
-		std::vector<std::array<EigenMatrix, 2>> lowers2_,
 		std::vector<int> lowers_type,
 		int stable,
 		int nthreads, int output){
-	ObjNewton obj(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, lowers_, lowers2_, lowers_type);
+	ObjNewton obj(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads, lowers_, lowers_type);
 	Maniverse::Flag flag(EigenOne(Z.rows(), Np + 2)); flag.setBlockParameters({Np, 1, 1});
 	Maniverse::Iterate M(obj, {flag.Share()});
 	M.Func->Calculate(M.getPoint(), {0, 1, 2});
 	M.setGradient();
 	if ( lowers_.size() ) obj.Lambda = M.getEffectiveLambda();
 	const auto [Evals, Evecs] = Maniverse::Lanczos(M, stable, 0, lowers_.size() > 0, output);
+	if ( output > 0 && Evals[0] < 0 ){
+		std::printf("Non-positive curvature:\n");
+		EigenMatrix Omega = Eigen::Map<const Eigen::MatrixXd>(Evecs[0].data(), Z.rows(), Np + 2);
+		for ( int i = 0; i < 3; i++ ){
+			int maxRow, maxCol;
+			const double maxcoeff = Omega.cwiseAbs().maxCoeff(&maxRow, &maxCol);
+			std::printf("%d <-> %d  %f\n", maxCol, maxRow, maxcoeff);
+			Omega(maxRow, maxCol) = 0;
+			if ( maxRow < Np + 2 ) Omega(maxCol, maxRow) = 0;
+		}
+	}
 	return Evals[0] > 0;
 }
 
@@ -487,9 +488,9 @@ void TwoDet::Calculate0(){
 		mwfn.getCoefficientMatrix({.Set=0, .OccUpper=0, .OccLower=0})
 	;
 	auto [E, C] =
-		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, lowers2, lowers_type, nthreads, 1) :
-		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, lowers2, lowers_type, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, lowers2, lowers_type, nthreads, 1);
+		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, lowers_type, nthreads, 1) :
+		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, lowers_type, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, lowers_type, nthreads, 1);
 	Energy += E;
 	mwfn.setCoefficientMatrix(C, {.Set=0});
 	mwfn.setEnergy(EigenZero(mwfn.getNumIndBasis(), 1), {.Set=0});
@@ -498,5 +499,5 @@ void TwoDet::Calculate0(){
 	occ.segment(Np, 2).setConstant(1);
 	mwfn.setOccupation(occ, {.Set=0});
 	for ( int iorb = 0; iorb < mwfn.getNumIndBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = iorb == Np ? 1 : iorb == Np + 1 ? 2 : 0;
-	if ( stable > 0 ) TwoDetStability(int2c1e, int4c2e, xc, grid, grid2, Np, C, lowers, lowers2, lowers_type, stable, nthreads, 1);
+	if ( stable > 0 ) TwoDetStability(int2c1e, int4c2e, xc, grid, grid2, Np, C, lowers, lowers_type, stable, nthreads, 1);
 }

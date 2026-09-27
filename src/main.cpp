@@ -13,6 +13,7 @@
 
 int main(int /*argc*/, char* argv[]){
 	std::printf("*** Chinium started ***\n");
+	if ( !std::getenv("CHINIUM_PATH") ) throw std::runtime_error("Environment variable CHINIUM_PATH is not set!");
 	const std::string path = std::getenv("CHINIUM_PATH");
 	std::printf("Environment variable CHINIUM_PATH is %s. Check whether it is correct.\n", path.c_str());
 

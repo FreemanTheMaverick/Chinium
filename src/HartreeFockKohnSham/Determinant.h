@@ -17,6 +17,8 @@ class ObjDeterminant: public mv::Objective{ public:
 	double beta = 0;
 
 	// Rank-deficient 1
+	Eigen::VectorXd u0 = Eigen::VectorXd::Zero(0);
+	Eigen::VectorXd v0 = Eigen::VectorXd::Zero(0);
 	Eigen::MatrixXd u0v0t = Eigen::MatrixXd::Zero(0, 0);
 
 	// Rank-deficient 2
@@ -40,24 +42,26 @@ class ObjDeterminant: public mv::Objective{ public:
 			if ( derivatives.size() == 1 ) return;
 		}
 		Eigen::BDCSVD<Eigen::MatrixXd, Eigen::ComputeFullU | Eigen::ComputeFullV> svd(C0tC);
-		rank = svd.rank();
-		const Eigen::VectorXd S = svd.singularValues().head(rank);
+		rank = 0;
+		Eigen::VectorXd S = svd.singularValues();
+		for ( double s : S ) if ( s > 1e-10 ) rank++;
+		S = S.head(rank).eval();
 		C0tCinv = svd.matrixV().leftCols(rank) * S.cwiseInverse().asDiagonal() * svd.matrixU().leftCols(rank).transpose();
+		Gradient = { Eigen::MatrixXd::Zero(C0.rows(), C0.cols()) };
 		if ( rank == C0.cols() ) Gradient = { Value * C0 * C0tCinv.transpose() };
 		else{
 			const double sing_prod = S.prod();
-			const double detUV = ( svd.matrixU() * svd.matrixV() ).determinant();
+			const double detUV = Eigen::HouseholderQR<Eigen::MatrixXd>( svd.matrixU() * svd.matrixV() ).determinant();
 			beta = sing_prod * detUV;
 			if ( rank == C0.cols() - 1 ){
-				const Eigen::VectorXd u0 = svd.matrixU().col(rank);
-				const Eigen::VectorXd v0 = svd.matrixV().col(rank);
+				u0 = svd.matrixU().col(rank);
+				v0 = svd.matrixV().col(rank);
 				u0v0t = u0 * v0.transpose();
-				Gradient = { sing_prod * C0 * u0v0t };
+				Gradient = { beta * C0 * u0v0t };
 			}else if ( rank == C0.cols() - 2 ){
 				U0 = svd.matrixU().rightCols(2);
 				V0 = svd.matrixV().rightCols(2);
-				Gradient = { Eigen::MatrixXd::Zero(C0.rows(), C0.cols()) };
-			}else Gradient = { Eigen::MatrixXd::Zero(C0.rows(), C0.cols()) };
+			}
 		}
 	};
 
@@ -69,9 +73,10 @@ class ObjDeterminant: public mv::Objective{ public:
 		) };
 		if ( rank == C0.cols() - 1 ){
 			return std::vector<Eigen::MatrixXd>{ beta * C0 * (
-					0.5 * C0tCinv.transpose() * u0v0t.cwiseProduct(C0tX.transpose() )
-					+ 0.5 * u0v0t * C0tCinv.cwiseProduct(C0tX)
-					- C0tCinv.transpose() * C0tX.transpose() * u0v0t
+					( u0.transpose() * C0tX * v0 ).value() * C0tCinv.transpose()
+					+ C0tX.transpose().cwiseProduct(C0tCinv).sum() * u0v0t
+					- u0v0t * ( C0tCinv * C0tX ).transpose()
+					- ( C0tX * C0tCinv ).transpose() * u0v0t
 			) };
 		}
 		if ( rank == C0.cols() - 2 ){
@@ -79,7 +84,7 @@ class ObjDeterminant: public mv::Objective{ public:
 			M(0, 1) *= -1;
 			M(1, 0) *= -1;
 			std::swap(M(0, 0), M(1, 1));
-			return std::vector<Eigen::MatrixXd>{ 2 * beta * C0 * U0 * M.transpose() * V0.transpose() };
+			return std::vector<Eigen::MatrixXd>{ beta * C0 * U0 * M.transpose() * V0.transpose() };
 		}
 		return { Eigen::MatrixXd::Zero(C0.rows(), C0.cols()) };
 	};

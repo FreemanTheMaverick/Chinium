@@ -304,7 +304,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	flag.setBlockParameters(space);
 	Maniverse::Iterate M(obj, {flag.Share()});
 	const std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
-	const std::vector<double> cons_tol(lowers_.size(), 1e-8);
+	const std::vector<double> cons_tol(lowers_.size(), 1e-10);
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! lowers_.size() && ! Maniverse::LBFGS(
 					M, tol,
@@ -390,7 +390,8 @@ bool RestrictedStability(
 		int stable,
 		int nthreads, int output){
 	ObjNewton obj(int2c1e, int4c2e, xc, grid, Norbs, Coupling, {Z, Z, Z}, nthreads, lowers_, lowers_type);
-	Maniverse::Flag flag(EigenOne(Z.rows(), Norbs[0] + Norbs[1] + Norbs[2]));
+	const int norbs_tot = Norbs[0] + Norbs[1] + Norbs[2];
+	Maniverse::Flag flag(EigenOne(Z.rows(), norbs_tot));
 	std::vector<int> space = {};
 	for ( int Norb : Norbs ) if ( Norb > 0 ) space.push_back(Norb);
 	flag.setBlockParameters(space);
@@ -399,6 +400,17 @@ bool RestrictedStability(
 	M.setGradient();
 	if ( lowers_.size() ) obj.Lambda = M.getEffectiveLambda();
 	const auto [Evals, Evecs] = Maniverse::Lanczos(M, stable, 0, lowers_.size() > 0, output);
+	if ( output > 0 && Evals[0] < 0 ){
+		std::printf("Non-positive curvature:\n");
+		EigenMatrix Omega = Eigen::Map<const Eigen::MatrixXd>(Evecs[0].data(), Z.rows(), norbs_tot);
+		for ( int i = 0; i < 3; i++ ){
+			int maxRow, maxCol;
+			const double maxcoeff = Omega.cwiseAbs().maxCoeff(&maxRow, &maxCol);
+			std::printf("%d <-> %d  %f\n", maxCol, maxRow, maxcoeff);
+			Omega(maxRow, maxCol) = 0;
+			if ( maxRow < norbs_tot ) Omega(maxCol, maxRow) = 0;
+		}
+	}
 	return Evals[0] > 0;
 }
 

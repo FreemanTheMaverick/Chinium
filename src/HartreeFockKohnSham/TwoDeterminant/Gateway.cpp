@@ -44,5 +44,4 @@ TwoDet::TwoDet(std::string inp): R_SCF(inp){
 		xc.Spin = 1;
 		grid.setSpin(1);
 	}
-	lowers2 = lowers;
 }
