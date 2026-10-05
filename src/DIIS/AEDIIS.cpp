@@ -8,7 +8,7 @@
 
 #include "AEDIIS.h"
 
-class QuadraticObj: public Maniverse::Objective{ public:
+class QuadraticObj: public Maniverse::Function{ public:
 	EigenMatrix A, B;
 
 	QuadraticObj(std::tuple<EigenMatrix, EigenMatrix> AB){

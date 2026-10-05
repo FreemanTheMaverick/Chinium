@@ -6,7 +6,7 @@
 
 namespace mv = Maniverse;
 
-class ObjDeterminant: public mv::Objective{ public:
+class ObjDeterminant: public mv::Function{ public:
 	Eigen::MatrixXd C0 = Eigen::MatrixXd::Zero(0, 0);
 	Eigen::MatrixXd C = Eigen::MatrixXd::Zero(0, 0);
 	Eigen::MatrixXd C0tC = Eigen::MatrixXd::Zero(0, 0);
@@ -25,6 +25,7 @@ class ObjDeterminant: public mv::Objective{ public:
 	Eigen::MatrixXd U0 = Eigen::MatrixXd::Zero(0, 0);
 	Eigen::MatrixXd V0 = Eigen::MatrixXd::Zero(0, 0);
 
+	ObjDeterminant() = default;
 	ObjDeterminant(Eigen::MatrixXd C0) : C0(C0){
 		C.resize(C0.rows(), C0.cols());
 		C0tC.resize(C0.cols(), C0.cols());

@@ -11,7 +11,7 @@
 
 #include "AugmentedRoothaanHall.h"
 
-class UniversalObjBase: public Maniverse::Objective{ public:
+class UniversalObjBase: public Maniverse::Function{ public:
 	Int2C1E* int2c1e;
 	Int4C2E* int4c2e;
 	ExchangeCorrelation* xc;

@@ -1,6 +1,6 @@
 #include <Eigen/Dense>
 #include <vector>
-#include <tuple>
+#include <array>
 #include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Optimizer/AugmentedLagrangian.h>
 #include <Maniverse/Optimizer/LBFGS.h>
@@ -89,25 +89,13 @@ class ObjBase: public UniversalObjBase{ public:
 	EigenMatrix C;
 	EigenMatrix K;
 	EigenMatrix L;
-	std::vector<std::array<ObjDeterminant, 2>> lowers;
-	std::vector<int> lowers_type;
 
 	ObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		std::vector<int> Norbs, double Coupling,
-		std::vector<EigenMatrix> Zs, int nthreads,
-		std::vector<std::array<EigenMatrix, 2>> lowers_,
-		std::vector<int> lowers_type
-	): UniversalObjBase(int2c1e, int4c2e, xc, grid, Norbs, Coupling, Zs, nthreads), lowers_type(lowers_type){
-		Lambda.resize(lowers_.size());
-		lowers.clear();
-		const EigenMatrix Zinv = Zs[0].inverse();
-		for ( std::array<EigenMatrix, 2>& lower : lowers_ ) lowers.push_back({
-				ObjDeterminant(Zinv * lower[0]),
-				ObjDeterminant(Zinv * lower[1])
-		});
-	};
+		std::vector<EigenMatrix> Zs, int nthreads
+	): UniversalObjBase(int2c1e, int4c2e, xc, grid, Norbs, Coupling, Zs, nthreads){};
 
 	virtual void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
 		Cprime = Cprimes_[0];
@@ -155,43 +143,6 @@ class ObjBase: public UniversalObjBase{ public:
 			}
 			K = A.topLeftCorner(Np + Na + Nb, Np + Na + Nb);
 			L = A.bottomLeftCorner(nbasis - Np - Na - Nb, Np + Na + Nb);
-		}
-
-		// Orthogonality constraints
-		EigenMatrix Ca( nbasis, Norbs[0] + Norbs[1] );
-		if ( Norbs[0] ) Ca.leftCols(Norbs[0]) = Cprimes[0];
-		if ( Norbs[1] ) Ca.rightCols(Norbs[1]) = Cprimes[1];
-		EigenMatrix Cb( nbasis, Norbs[0] + Norbs[2] );
-		if ( Norbs[0] ) Cb.leftCols(Norbs[0]) = Cprimes[0];
-		if ( Norbs[2] ) Cb.rightCols(Norbs[2]) = Cprimes[2];
-		Constraint_Value.resize(lowers.size());
-		Constraint_Gradient.resize(lowers.size());
-
-		for ( int icons = 0; icons < (int)lowers.size(); icons++ ){
-			std::array<ObjDeterminant, 2>& lower = lowers[icons];
-			lower[0].Calculate({Ca}, derivatives);
-			lower[1].Calculate({Cb}, derivatives);
-			if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
-				if ( Norbs[0] && !Norbs[1] && !Norbs[2] && lowers_type[icons] == 0 ){ // The current and the lower states are both closed-shell configurations.
-					Constraint_Value[icons] = lower[0].Value;
-				// }else if (lowers_type[icons] == 2){ // No need to specify this for two-determinant lower states.
-				}else Constraint_Value[icons] = lower[0].Value * lower[1].Value;
-				Value += Lambda[icons] * Constraint_Value[icons] + Rho / 2 * std::pow(Constraint_Value[icons], 2);
-			}
-			if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-				EigenMatrix cons_grad = EigenZero(nbasis, Cprime.cols());
-				if ( Norbs[0] && !Norbs[1] && !Norbs[2] && lowers_type[icons] == 0 ){ // The current and the lower states are both closed-shell configurations.
-					cons_grad = lower[0].Gradient[0];
-				}else{
-					const EigenMatrix Ca_grad = lower[0].Gradient[0] * lower[1].Value;
-					const EigenMatrix Cb_grad = lower[0].Value * lower[1].Gradient[0];
-					cons_grad.leftCols( Norbs[0] + Norbs[1] ) += Ca_grad;
-					cons_grad.leftCols( Norbs[0] ) += Cb_grad.leftCols( Norbs[0] );
-					cons_grad.rightCols( Norbs[2] ) += Cb_grad.rightCols( Norbs[2] );
-				}
-				Constraint_Gradient[icons] = { cons_grad };
-				Gradient[0] += ( Lambda[icons] + Rho * Constraint_Value[icons] ) * cons_grad;
-			}
 		}
 	};
 };
@@ -246,27 +197,6 @@ class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
 			HdCprime.middleCols(col, Norbs[type]) = HdCprimes[type];
 			col += Norbs[type];
 		}
-
-		EigenMatrix dCa( nbasis, Norbs[0] + Norbs[1] );
-		if ( Norbs[0] ) dCa.leftCols(Norbs[0]) = dCprimes[0];
-		if ( Norbs[1] ) dCa.rightCols(Norbs[1]) = dCprimes[1];
-		EigenMatrix dCb( nbasis, Norbs[0] + Norbs[2] );
-		if ( Norbs[0] ) dCb.leftCols(Norbs[0]) = dCprimes[0];
-		if ( Norbs[2] ) dCb.rightCols(Norbs[2]) = dCprimes[2];
-		for ( int icons = 0; icons < (int)lowers.size(); icons++ ){
-			EigenMatrix cons_hess = EigenZero(nbasis, Cprime.cols());
-			const std::array<ObjDeterminant, 2>& lower = lowers[icons];
-			if ( Norbs[0] && !Norbs[1] && !Norbs[2] && lowers_type[icons] ){
-				cons_hess = lower[0].Hessian({dCprime})[0];
-			}else{
-				const EigenMatrix Ca_hess = lower[0].Hessian({dCa})[0] * lower[1].Value + lower[0].Gradient[0] * lower[1].Gradient[0].cwiseProduct(dCb).sum();
-				const EigenMatrix Cb_hess = lower[0].Gradient[0].cwiseProduct(dCa).sum() * lower[1].Gradient[0] + lower[0].Value * lower[1].Hessian({dCb})[0];
-				cons_hess.leftCols( Norbs[0] + Norbs[1] ) += Ca_hess;
-				cons_hess.leftCols( Norbs[0] ) += Cb_hess.leftCols( Norbs[0] );
-				cons_hess.rightCols( Norbs[2] ) += Cb_hess.rightCols( Norbs[2] );
-			}
-			HdCprime += ( Lambda[icons] + Rho * Constraint_Value[icons] ) * cons_hess + Rho * Constraint_Gradient[icons][0].cwiseProduct(dCprime).sum() * Constraint_Gradient[icons][0];
-		}
 		return std::vector<EigenMatrix>{ HdCprime };
 	};
 
@@ -279,6 +209,74 @@ using ObjNewton = UniversalObjNewton<ObjNewtonBase>;
 
 using ObjARH = UniversalObjARH<ObjNewtonBase>;
 
+class Cons: public Maniverse::Function{ public:
+	std::vector<int> Norbs;
+	int nbasis = 0;
+	std::vector<ObjDeterminant> lower;
+
+	Cons(
+		std::vector<int> Norbs,
+		EigenMatrix Z,
+		std::vector<EigenMatrix> lower_
+	): Norbs(Norbs), nbasis(Z.rows()){
+		lower.clear();
+		const EigenMatrix Zinv = Z.inverse();
+		for ( EigenMatrix& Clower : lower_ ) lower.push_back({
+				ObjDeterminant(Zinv * Clower)
+		});
+		Gradient = { EigenZero(nbasis, Norbs[0] + Norbs[1] + Norbs[2]) };
+	};
+
+	virtual void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
+		std::array<EigenMatrix, 2> Cprimes = {
+			Cprimes_[0].leftCols(Norbs[0] + Norbs[1]),
+			Cprimes_[0].leftCols(Norbs[0] + Norbs[2])
+		};
+		Cprimes[1].rightCols(Norbs[2]);
+		for ( int i = 0; i < (int)lower.size(); i++ ){
+			lower[i].Calculate({Cprimes[i]}, derivatives);
+		}
+		if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
+			if ( lower.size() == 1 ) Value = lower[0].Value;
+			else Value = lower[0].Value * lower[1].Value;
+		}
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			if ( lower.size() == 1 ) Gradient = lower[0].Gradient;
+			else{
+				const EigenMatrix Ga = lower[0].Gradient[0] * lower[1].Value;
+				const EigenMatrix Gb = lower[0].Value * lower[1].Gradient[0];
+				Gradient[0].leftCols(Norbs[0] + Norbs[1]) = Ga;
+				Gradient[0].leftCols(Norbs[0]) += Gb.leftCols(Norbs[0]);
+				Gradient[0].rightCols(Norbs[2]) = Gb.rightCols(Norbs[2]);
+			}
+		}
+	};
+
+	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCprimes_) const override{
+		std::array<EigenMatrix, 2> dCprimes = {
+			dCprimes_[0].leftCols(Norbs[0] + Norbs[1]),
+			dCprimes_[0].leftCols(Norbs[0] + Norbs[2])
+		};
+		dCprimes[1].rightCols(Norbs[2]) = dCprimes_[0].rightCols(Norbs[2]);
+		EigenMatrix cons_hess = EigenZero(nbasis, dCprimes_[0].cols());
+		if ( lower.size() == 1 ) cons_hess = lower[0].Hessian({dCprimes[0]})[0];
+		else{
+			const EigenMatrix Ca_hess = (
+				lower[0].Hessian({dCprimes[0]})[0] * lower[1].Value
+				+ lower[0].Gradient[0] * lower[1].Gradient[0].cwiseProduct(dCprimes[1]).sum()
+			);
+			const EigenMatrix Cb_hess = (
+				lower[0].Gradient[0].cwiseProduct(dCprimes[0]).sum() * lower[1].Gradient[0]
+				+ lower[0].Value * lower[1].Hessian({dCprimes[1]})[0]
+			);
+			cons_hess.leftCols( Norbs[0] + Norbs[1] ) += Ca_hess;
+			cons_hess.leftCols( Norbs[0] ) += Cb_hess.leftCols( Norbs[0] );
+			cons_hess.rightCols( Norbs[2] ) += Cb_hess.rightCols( Norbs[2] );
+		}
+		return std::vector<EigenMatrix>{ cons_hess };
+	};
+};
+
 } // namespace
 
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
@@ -288,8 +286,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		ExchangeCorrelation& xc, Grid& grid,
 		std::vector<int> Norbs, double Coupling,
 		EigenMatrix Z,
-		std::vector<std::array<EigenMatrix, 2>> lowers_,
-		std::vector<int> lowers_type,
+		std::vector<std::vector<EigenMatrix>> lowers_,
 		int nthreads, int output){
 	std::conditional_t< scf_t == lbfgs_t,
 				ObjLBFGS,
@@ -297,13 +294,17 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 							ObjNewton,
 							ObjARH
 				>
-	> obj(int2c1e, int4c2e, xc, grid, Norbs, Coupling, {Z, Z, Z}, nthreads, lowers_, lowers_type);
+	> obj(int2c1e, int4c2e, xc, grid, Norbs, Coupling, {Z, Z, Z}, nthreads);
 	Maniverse::Flag flag(EigenOne(Z.rows(), Norbs[0] + Norbs[1] + Norbs[2]));
 	std::vector<int> space = {};
 	for ( int Norb : Norbs ) if ( Norb > 0 ) space.push_back(Norb);
 	flag.setBlockParameters(space);
-	Maniverse::Iterate M(obj, {flag.Share()});
-	const std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
+	std::vector<Cons> lowers;
+	for ( std::vector<EigenMatrix>& lower_ : lowers_ ) lowers.emplace_back(Norbs, Z, lower_);
+	std::vector<Maniverse::Function*> lowers_ptr;
+	for ( Cons& lower : lowers ) lowers_ptr.push_back(&lower);
+	Maniverse::Iterate M(obj, {flag.Share()}, lowers_ptr);
+	const std::array<double, 3> tol = {1.e-8, 1.e-5, 1.e-5};
 	const std::vector<double> cons_tol(lowers_.size(), 1e-10);
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! lowers_.size() && ! Maniverse::LBFGS(
@@ -385,20 +386,23 @@ bool RestrictedStability(
 		ExchangeCorrelation& xc, Grid& grid,
 		std::vector<int> Norbs, double Coupling,
 		EigenMatrix Z,
-		std::vector<std::array<EigenMatrix, 2>> lowers_,
-		std::vector<int> lowers_type,
+		std::vector<std::vector<EigenMatrix>> lowers_,
 		int stable,
 		int nthreads, int output){
-	ObjNewton obj(int2c1e, int4c2e, xc, grid, Norbs, Coupling, {Z, Z, Z}, nthreads, lowers_, lowers_type);
+	ObjNewton obj(int2c1e, int4c2e, xc, grid, Norbs, Coupling, {Z, Z, Z}, nthreads);
 	const int norbs_tot = Norbs[0] + Norbs[1] + Norbs[2];
 	Maniverse::Flag flag(EigenOne(Z.rows(), norbs_tot));
 	std::vector<int> space = {};
 	for ( int Norb : Norbs ) if ( Norb > 0 ) space.push_back(Norb);
 	flag.setBlockParameters(space);
-	Maniverse::Iterate M(obj, {flag.Share()});
-	M.Func->Calculate(M.getPoint(), {0, 1, 2});
+	std::vector<Cons> lowers;
+	for ( std::vector<EigenMatrix>& lower_ : lowers_ ) lowers.emplace_back(Norbs, Z, lower_);
+	std::vector<Maniverse::Function*> lowers_ptr;
+	for ( Cons& lower : lowers ) lowers_ptr.push_back(&lower);
+	Maniverse::Iterate M(obj, {flag.Share()}, lowers_ptr);
+	M.Calculate(M.getPoint(), {0, 1, 2});
 	M.setGradient();
-	if ( lowers_.size() ) obj.Lambda = M.getEffectiveLambda();
+	if ( lowers_.size() > 0 ) M.setLambda(M.calcLambda());
 	const auto [Evals, Evecs] = Maniverse::Lanczos(M, stable, 0, lowers_.size() > 0, output);
 	if ( output > 0 && Evals[0] < 0 ){
 		std::printf("Non-positive curvature:\n");
@@ -426,9 +430,9 @@ void R_SCF::Calculate0(){
 	const EigenMatrix F = mwfn.getFock({.Set=0});
 	auto [E, eps, C] =
 		scftype == "DIIS" ? RestrictedDIIS(Np, int2c1e, int4c2e, xc, grid, F, Z, 1, nthreads) :
-		scftype == "LBFGS" ? RestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, lowers_type, nthreads, 1) :
-		scftype == "ARH" ? RestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, lowers_type, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ RestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, lowers_type, nthreads, 1);
+		scftype == "LBFGS" ? RestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, nthreads, 1) :
+		scftype == "ARH" ? RestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ RestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, nthreads, 1);
 	Energy += E;
 	mwfn.setEnergy(eps, {.Set=0});
 	mwfn.setCoefficientMatrix(C, {.Set=0});
@@ -437,5 +441,5 @@ void R_SCF::Calculate0(){
 	occ.segment(Np, Na + Nb).setConstant(1);
 	mwfn.setOccupation(occ, {.Set=0});
 	for ( int iorb = 0; iorb < mwfn.getNumIndBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = ( Np + Na > iorb && iorb >= Np ) ? 1 : ( Np + Na + Nb > iorb && iorb >= Np + Na ) ? 2 : 0;
-	if ( stable > 0 ) RestrictedStability(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, C, lowers, lowers_type, stable, nthreads, 1);
+	if ( stable > 0 ) RestrictedStability(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, C, lowers, stable, nthreads, 1);
 }

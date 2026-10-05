@@ -1,7 +1,7 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <functional>
-#include <tuple>
+#include <array>
 #include <cstdio>
 #include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Manifold/Euclidean.h>
@@ -226,7 +226,7 @@ class OneMoreVirtual: public std::exception{ public:
 	}
 };
 
-class ObjBase: public Maniverse::Objective{ public:
+class ObjBase: public Maniverse::Function{ public:
 	Int2C1E* int2c1e;
 	Int4C2E* int4c2e;
 	ExchangeCorrelation* xc;
@@ -504,7 +504,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		EigenVector all_occ, EigenMatrix Z,
 		int nthreads, int output){
 	int No, Na, Nv;
-	std::tuple<double, double, double> tol = {1.e-3, 1.e-2, 1.e-2};
+	std::array<double, 3> tol = {1.e-3, 1.e-2, 1.e-2};
 	EigenMatrix Cprime = EigenOne(Z.rows(), Z.cols());
 	AugmentedRoothaanHall arh(20, 1);
 
@@ -589,7 +589,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		if (output) std::printf("Switching manifold due to inconsistent orbital energy and occupation!\n");
 		goto RESTART;
 	}
-	if ( tol != std::make_tuple(1e-8, 1e-5, 1e-5) ){
+	if ( tol != std::array<double, 3>{1e-8, 1e-5, 1e-5} ){
 		if (output) std::printf("Switching to higher convergence precision!\n");
 		tol = {1e-8, 1e-5, 1e-5};
 		if constexpr ( scf_t == arh_t ){

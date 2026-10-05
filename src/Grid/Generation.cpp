@@ -161,7 +161,7 @@ void SphericalGrid(
 	}
 }
 
-class CutFunc: public Maniverse::Objective{ public:
+class CutFunc: public Maniverse::Function{ public:
 	EigenMatrix P2;
 	CutFunc(EigenMatrix P2): P2(P2){};
 	void Calculate(std::vector<EigenMatrix> Ws, std::vector<int> /*derivatives*/) override{

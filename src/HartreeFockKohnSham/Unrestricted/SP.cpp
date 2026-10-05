@@ -1,6 +1,6 @@
 #include <Eigen/Dense>
 #include <vector>
-#include <tuple>
+#include <array>
 #include <cstdio>
 #include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Optimizer/LBFGS.h>
@@ -231,7 +231,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	 Maniverse::Flag flag1(EigenOne(Z1.rows(), nocc1)); flag1.setBlockParameters({nocc1});
 	 Maniverse::Flag flag2(EigenOne(Z2.rows(), nocc2)); flag2.setBlockParameters({nocc2});
 	Maniverse::Iterate M(obj, {flag1.Share(), flag2.Share()});
-	std::tuple<double, double, double> tol = {1.e-8, 1.e-5, 1.e-5};
+	std::array<double, 3> tol = {1.e-8, 1.e-5, 1.e-5};
 	if constexpr ( scf_t == lbfgs_t ){
 		if ( ! Maniverse::LBFGS(
 					M, tol,

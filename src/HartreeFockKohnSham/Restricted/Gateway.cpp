@@ -61,8 +61,8 @@ std::vector<std::vector<double>> getCouplingCoefficient(std::vector<int> shell_s
 	return b;
 }
 
-std::vector<std::array<EigenMatrix, 2>> ReadLower(std::string inp){
-	std::vector<std::array<EigenMatrix, 2>> lowers;
+std::vector<std::vector<EigenMatrix>> ReadLower(std::string inp){
+	std::vector<std::vector<EigenMatrix>> lowers;
 	std::ifstream file(inp);
 	std::string thisline;
 	bool found = 0;
@@ -82,15 +82,19 @@ std::vector<std::array<EigenMatrix, 2>> ReadLower(std::string inp){
 				std::string mwfn_str;
 				ss >> mwfn_str;
 				libmwfn::Mwfn mwfn(mwfn_str);
+				mwfn.Orthogonalize("Gram-Schmidt");
 				if ( mwfn.Wfntype != 0 && mwfn.Wfntype != 2 ) throw std::runtime_error("Orthogonality-constrained SCF only supports spin-restricted lower states!");
 				const EigenMatrix Cd = mwfn.getCoefficientMatrix({.Set=0, .Type=0, .OccUpper=2, .OccLower=2});
 				const EigenMatrix Ca = mwfn.getCoefficientMatrix({.Set=0, .Type=1, .OccUpper=1, .OccLower=1});
 				const EigenMatrix Cb = mwfn.getCoefficientMatrix({.Set=0, .Type=2, .OccUpper=1, .OccLower=1});
-				EigenMatrix Ca_ = EigenZero(mwfn.getNumBasis(), Cd.cols() + Ca.cols());
-				EigenMatrix Cb_ = EigenZero(mwfn.getNumBasis(), Cd.cols() + Cb.cols());
-				Ca_ << Cd, Ca;
-				Cb_ << Cd, Cb;
-				lowers[ilower] = { Ca_, Cb_ };
+				if ( Ca.cols() == 0 && Cb.cols() == 0 ) lowers[ilower] = { Cd };
+				else{
+					EigenMatrix Ca_ = EigenZero(mwfn.getNumBasis(), Cd.cols() + Ca.cols());
+					EigenMatrix Cb_ = EigenZero(mwfn.getNumBasis(), Cd.cols() + Cb.cols());
+					Ca_ << Cd, Ca;
+					Cb_ << Cd, Cb;
+					lowers[ilower] = { Ca_, Cb_ };
+				}
 			}
 		}
 	}
@@ -107,21 +111,16 @@ R_SCF::R_SCF(std::string inp): Job(inp), RepR(inp), SCF(inp, mwfn, int2c1e){
 	if ( scftype == "DIIS" && ( Na > 0 || Nb > 0 ) ) throw std::runtime_error("DIIS for RO-SCF is not implemented yet!");
 
 	lowers = ReadLower(inp);
-	lowers_type.resize(lowers.size());
 	if ( scftype == "DIIS" && lowers.size() > 0 ) throw std::runtime_error("DIIS cannot be used for orthogonality-constrained SCF!");
-	EigenMatrix Z = EigenZero(mwfn.getNumBasis(), mwfn.getNumIndBasis());
-	Z <<
-		mwfn.getCoefficientMatrix({.Set=0, .OccUpper=2, .OccLower=2}),
-		mwfn.getCoefficientMatrix({.Set=0, .Type=1, .OccUpper=1, .OccLower=1}),
-		mwfn.getCoefficientMatrix({.Set=0, .Type=2, .OccUpper=1, .OccLower=1}),
-		mwfn.getCoefficientMatrix({.Set=0, .OccUpper=0, .OccLower=0})
-	;
-	const EigenMatrix Zinv = Z.inverse();
-	for ( int ilower = 0; ilower < (int)lowers.size(); ilower++ ){
-		std::array<EigenMatrix, 2>& lower = lowers[ilower];
-		int& type = lowers_type[ilower] = 1;
-		if ( lower[0].cols() != lower[1].cols() ) type = 1;
-		else if ( std::abs( ( lower[0].transpose() * int2c1e.Overlap * lower[1] ).determinant() ) > 1. - 1e-10 ) type = 0;
-		else type = 2;
+	bool oops = 0;
+	const int norbs_a = mwfn.getNumOrbitals({.Set=0, .Type=0, .OccUpper=2, .OccLower=2}) + mwfn.getNumOrbitals({.Set=0, .Type=1, .OccUpper=1, .OccLower=1});
+	const int norbs_b = mwfn.getNumOrbitals({.Set=0, .Type=0, .OccUpper=2, .OccLower=2}) + mwfn.getNumOrbitals({.Set=0, .Type=2, .OccUpper=1, .OccLower=1});
+	for ( std::vector<EigenMatrix>& lower : lowers ){
+		if ( lower.size() == 1 ){
+			if ( lower[0].cols() != norbs_a || lower[0].cols() != norbs_b ) oops = 1;
+		}else{
+			if ( lower[0].cols() != norbs_a || lower[1].cols() != norbs_b ) oops = 1;
+		}
+		if ( oops ) throw std::runtime_error("The number of electrons in the lower state does not match the number of electrons in the current state!");
 	}
 }
