@@ -14,7 +14,6 @@
 #include "../Universal.h"
 #include "../Restricted.h"
 #include "../Determinant.h"
-#include<iostream>
 
 namespace{
 
