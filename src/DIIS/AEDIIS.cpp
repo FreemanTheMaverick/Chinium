@@ -37,7 +37,8 @@ EigenVector AEDIIS::Extrapolate(int index){
 
 	if ( this->Verbose > 1 ) std::printf("| Calling Maniverse for optimization on the Simplex manifold\n");
 	Maniverse::TrustRegion tr;
-	Maniverse::ConjugateGradient cg(M, 0, 1, {0.001, 0.001}, M.getDimension(), 0);
+	Maniverse::ConjugateGradient cg(1, {0.001, 0.001}, M.getDimension(), 0);
+	Maniverse::initLinearSolverForNewton(cg, M);
 	const bool converged = Maniverse::Newton(
 				M, tr, cg, {1.e-4, 1.e-6, 1e-2}, 1000, 0
 	);

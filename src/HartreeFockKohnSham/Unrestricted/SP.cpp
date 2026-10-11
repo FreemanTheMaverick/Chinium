@@ -160,20 +160,6 @@ class ObjLBFGS: public ObjBase{ public:
 			}
 		}
 	};
-
-	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<EigenMatrix>{
-			UniversalPreconditioner(Cprimes[1], Cprime_perps[1], Ksqrtinvs[1], Lsqrtinvs[1], Vs[0]),
-			UniversalPreconditioner(Cprimes[2], Cprime_perps[2], Ksqrtinvs[2], Lsqrtinvs[2], Vs[1])
-		};
-	};
-
-	std::vector<EigenMatrix> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<EigenMatrix>{
-			UniversalPreconditioner(Cprimes[1], Cprime_perps[1], Ksqrts[1], Lsqrts[1], Vs[0]),
-			UniversalPreconditioner(Cprimes[2], Cprime_perps[2], Ksqrts[2], Lsqrts[2], Vs[1])
-		};
-	};
 };
 
 class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
@@ -198,13 +184,6 @@ class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
 		HdCprimes.erase(HdCprimes.begin());
 		return HdCprimes;
 	};
-
-	std::vector<EigenMatrix> Preconditioner(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<EigenMatrix>{
-			UniversalPreconditioner(Cprimes[1], Cprime_perps[1], Kinvs[1], Linvs[1], Vs[0]),
-			UniversalPreconditioner(Cprimes[2], Cprime_perps[2], Kinvs[2], Linvs[2], Vs[1])
-		};
-	};
 };
 
 using ObjNewton = UniversalObjNewton<ObjNewtonBase>;
@@ -212,6 +191,19 @@ using ObjNewton = UniversalObjNewton<ObjNewtonBase>;
 using ObjARH = UniversalObjARH<ObjNewtonBase>;
 
 } // namespace
+
+#define __Precon__(_P_, _K_, _L_){\
+	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
+		EigenVector PV(V.size());\
+		for ( int i = 0; i < 2; i++ ){\
+			MV_SetBlock(PV, i, bp) = UniversalPreconditioner(\
+				obj.Cprimes[i + 1], obj.Cprime_perps[i + 1], obj._K_[i + 1], obj._L_[i + 1],\
+				MV_GetBlock(V, i, bp)\
+			);\
+		}\
+		return PV;\
+	};\
+}
 
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
@@ -228,19 +220,23 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 							ObjARH
 				>
 	> obj(int2c1e, int4c2e, xc, grid, {0, nocc1, nocc2}, 0, {EigenZero(0, 0), Z1, Z2}, nthreads);
-	 Maniverse::Flag flag1(EigenOne(Z1.rows(), nocc1)); flag1.setBlockParameters({nocc1});
-	 Maniverse::Flag flag2(EigenOne(Z2.rows(), nocc2)); flag2.setBlockParameters({nocc2});
+	Maniverse::Flag flag1(EigenOne(Z1.rows(), nocc1)); flag1.setBlockParameters({nocc1});
+	Maniverse::Flag flag2(EigenOne(Z2.rows(), nocc2)); flag2.setBlockParameters({nocc2});
 	Maniverse::Iterate M(obj, {flag1.Share(), flag2.Share()});
 	std::array<double, 3> tol = {1.e-8, 1.e-5, 1.e-5};
 	if constexpr ( scf_t == lbfgs_t ){
+		__Precon__(PreconditionerSqrt, Ksqrtinvs, Lsqrtinvs);
+		__Precon__(PreconditionerInvSqrt, Ksqrts, Lsqrts);
 		if ( ! Maniverse::LBFGS(
 					M, tol,
 					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
+		__Precon__(Preconditioner, Kinvs, Linvs);
 		Maniverse::TrustRegion tr;
 		static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
-		Maniverse::ConjugateGradient cg(M, 0, 1, {ls_tol, ls_tol}, M.getDimension(), 1);
+		Maniverse::ConjugateGradient cg(1, {ls_tol, ls_tol}, M.getDimension(), 1);
+		Maniverse::initLinearSolverForNewton(cg, M);
 		if ( ! Maniverse::Newton(
 					M, tr, cg, tol, 300, output
 		) ) throw std::runtime_error("Convergence failed!");

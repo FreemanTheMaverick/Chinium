@@ -15,6 +15,7 @@
 #include "../../ExchangeCorrelation.h"
 #include "../../DIIS.h"
 
+#include "../Universal.h"
 #include "../AugmentedRoothaanHall.h"
 #include "../RestrictedFinite.h"
 
@@ -336,14 +337,6 @@ class ObjBase: public Maniverse::Function{ public:
 	};
 };
 
-EigenMatrix Preconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix B, EigenMatrix C, EigenMatrix V){
-	EigenMatrix Omega = U.transpose() * V;
-	Omega = Omega.cwiseProduct(B);
-	EigenMatrix Kappa = Uperp.transpose() * V;
-	Kappa = Kappa.cwiseProduct(C);
-	return ( U * Omega + Uperp * Kappa ).eval();
-}
-
 class ObjLBFGS: public ObjBase{ public:
 	EigenMatrix Ksqrt, Ksqrtinv, Lsqrt, Lsqrtinv;
 
@@ -357,18 +350,6 @@ class ObjLBFGS: public ObjBase{ public:
 			Lsqrt = L.cwiseSqrt();
 			Lsqrtinv = Lsqrt.cwiseInverse();
 		}
-	};
-
-	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
-		const EigenMatrix PCC = ::Preconditioner(Cprime_oa, Cprime_v, Ksqrtinv, Lsqrtinv, Vs[0]);
-		if ( Na ) return std::vector<EigenMatrix>{ PCC, Vs[1] };
-		else return std::vector<EigenMatrix>{ PCC };
-	};
-
-	std::vector<EigenMatrix> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
-		const EigenMatrix PCC = ::Preconditioner(Cprime_oa, Cprime_v, Ksqrt, Lsqrt, Vs[0]);
-		if ( Na ) return std::vector<EigenMatrix>{ PCC, Vs[1] };
-		else return std::vector<EigenMatrix>{ PCC };
 	};
 };
 
@@ -427,12 +408,6 @@ class ObjNewtonBase: public ObjBase{ public:
 			};
 		}
 	};
-
-	std::vector<EigenMatrix> Preconditioner(std::vector<EigenMatrix> Vs) const override{
-		const EigenMatrix PCC = ::Preconditioner(Cprime_oa, Cprime_v, Kinv, Linv, Vs[0]);
-		if ( Na ) return std::vector<EigenMatrix>{ PCC, Vs[1] };
-		else return std::vector<EigenMatrix>{ PCC };
-	};
 };
 
 class ObjNewton: public ObjNewtonBase{ public:
@@ -479,6 +454,17 @@ class ObjARH: public ObjNewtonBase{ public:
 #undef Nv
 
 } // namespace
+
+#define __Precon__(_P_, _K_, _L_){\
+	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
+		EigenVector PV(V.size());\
+		MV_SetBlock(PV, 0, bp) = UniversalPreconditioner(\
+			obj.Cprime_oa, obj.Cprime_v, obj._K_, obj._L_,\
+			MV_GetBlock(V, 0, bp)\
+		);\
+		return PV;\
+	};\
+}
 
 std::tuple<int, int, int> Regularize(EigenVector& occ, double threshold){
 	int ni = 0; int na = 0; int nv = 0;
@@ -532,14 +518,18 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 
 	try{
 		if constexpr ( scf_t == lbfgs_t ){
+			__Precon__(PreconditionerSqrt, Ksqrtinv, Lsqrtinv);
+			__Precon__(PreconditionerInvSqrt, Ksqrt, Lsqrt);
 			if ( ! Maniverse::LBFGS(
 					M, tol,
 					20, 300, 0.1, 0.75, 10, output
 			) ) throw std::runtime_error("Convergence failed!");
 		}else{
+			__Precon__(Preconditioner, Kinv, Linv);
 			Maniverse::TrustRegion tr;
 			static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
-			Maniverse::ConjugateGradient cg(M, 0, 1, {ls_tol, ls_tol}, M.getDimension(), 1);
+			Maniverse::ConjugateGradient cg(1, {ls_tol, ls_tol}, M.getDimension(), 1);
+			Maniverse::initLinearSolverForNewton(cg, M);
 			if ( ! Maniverse::Newton(
 					M, tr, cg, tol, 300, output
 			) ) throw std::runtime_error("Convergence failed!");

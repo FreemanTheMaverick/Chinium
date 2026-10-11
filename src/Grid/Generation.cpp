@@ -185,7 +185,8 @@ std::tuple<EigenMatrix, EigenMatrix> Cut(EigenMatrix P){
 	Maniverse::Stiefel stiefel(EigenMatrix::Ones(3, 1) / std::sqrt(3));
 	Maniverse::Iterate M(obj, {stiefel.Share()});
 	Maniverse::TrustRegion tr;
-	Maniverse::ConjugateGradient cg(M, 0, 1, {0.001, 0.001}, M.getDimension(), 0);
+	Maniverse::ConjugateGradient cg(1, {0.001, 0.001}, M.getDimension(), 0);
+	Maniverse::initLinearSolverForNewton(cg, M);
 	Maniverse::Newton(
 			M, tr, cg, {1e-6, 1, 1}, 100, 0
 	);

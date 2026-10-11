@@ -15,6 +15,7 @@
 #include "../../Grid.h"
 #include "../../ExchangeCorrelation.h"
 
+#include "../Universal.h"
 #include "../AugmentedRoothaanHall.h"
 #include "../TwoDeterminant.h"
 #include "../Determinant.h"
@@ -169,14 +170,6 @@ class ObjBase: public Maniverse::Function{ public:
 	};
 };
 
-EigenMatrix Preconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix K, EigenMatrix L, EigenMatrix V){
-	EigenMatrix Omega = U.transpose() * V;
-	Omega = Omega.cwiseProduct(K);
-	EigenMatrix Kappa = Uperp.transpose() * V;
-	Kappa = Kappa.cwiseProduct(L);
-	return ( U * Omega + Uperp * Kappa ).eval();
-}
-
 class ObjLBFGS: public ObjBase{ public:
 	EigenMatrix Ksqrt, Ksqrtinv, Lsqrt, Lsqrtinv;
 
@@ -190,14 +183,6 @@ class ObjLBFGS: public ObjBase{ public:
 			Lsqrt = L.cwiseSqrt();
 			Lsqrtinv = Lsqrt.cwiseInverse();
 		}
-	};
-
-	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<EigenMatrix>{ ::Preconditioner(Cprime, Cprime_perp, Ksqrtinv, Lsqrtinv, Vs[0]) };
-	};
-
-	std::vector<EigenMatrix> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<EigenMatrix>{ ::Preconditioner(Cprime, Cprime_perp, Ksqrt, Lsqrt, Vs[0]) };
 	};
 };
 
@@ -235,10 +220,6 @@ class ObjNewtonBase: public ObjBase{ public:
 		}
 
 		return std::vector<EigenMatrix>{ HdCprime };
-	};
-
-	std::vector<EigenMatrix> Preconditioner(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<EigenMatrix>{ ::Preconditioner(Cprime, Cprime_perp, Kinv, Linv, Vs[0]) };
 	};
 };
 
@@ -417,6 +398,17 @@ class Cons: public Maniverse::Function{ public:
 
 } // namespace
 
+#define __Precon__(_P_, _K_, _L_){\
+	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
+		EigenVector PV(V.size());\
+		MV_SetBlock(PV, 0, bp) = UniversalPreconditioner(\
+			obj.Cprime, obj.Cprime_perp, obj._K_, obj._L_,\
+			MV_GetBlock(V, 0, bp)\
+		);\
+		return PV;\
+	};\
+}
+
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
 std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
@@ -441,6 +433,8 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 	std::array<double, 3> tol = {1.e-8, 1.e-5, 1.e-5};
 	const std::vector<double> cons_tol(lowers_.size(), 1e-10);
 	if constexpr ( scf_t == lbfgs_t ){
+		__Precon__(PreconditionerSqrt, Ksqrtinv, Lsqrtinv);
+		__Precon__(PreconditionerInvSqrt, Ksqrt, Lsqrt);
 		if ( ! lowers_.size() && ! Maniverse::LBFGS(
 					M, tol,
 					20, 300, 0.1, 0.75, 10, output
@@ -450,9 +444,11 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
+		__Precon__(Preconditioner, Kinv, Linv);
 		Maniverse::TrustRegion tr;
 		static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
-		Maniverse::ConjugateGradient cg(M, 0, 1, {ls_tol, ls_tol}, M.getDimension(), output);
+		Maniverse::ConjugateGradient cg(1, {ls_tol, ls_tol}, M.getDimension(), output);
+		Maniverse::initLinearSolverForNewton(cg, M);
 		if ( ! lowers_.size() && ! Maniverse::Newton(
 					M, tr, cg, tol, 300, output
 		) ) throw std::runtime_error("Convergence failed!");

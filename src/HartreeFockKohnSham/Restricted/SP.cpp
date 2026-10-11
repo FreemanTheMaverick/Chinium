@@ -14,6 +14,7 @@
 #include "../Universal.h"
 #include "../Restricted.h"
 #include "../Determinant.h"
+#include<iostream>
 
 namespace{
 
@@ -161,14 +162,6 @@ class ObjLBFGS: public ObjBase{ public:
 			Lsqrtinv = Lsqrt.cwiseInverse();
 		}
 	};
-
-	std::vector<EigenMatrix> PreconditionerSqrt(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<EigenMatrix>{ UniversalPreconditioner(Cprime, Cprime_perp, Ksqrtinv, Lsqrtinv, Vs[0]) };
-	};
-
-	std::vector<EigenMatrix> PreconditionerInvSqrt(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<EigenMatrix>{ UniversalPreconditioner(Cprime, Cprime_perp, Ksqrt, Lsqrt, Vs[0]) };
-	};
 };
 
 class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
@@ -198,10 +191,6 @@ class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
 			col += Norbs[type];
 		}
 		return std::vector<EigenMatrix>{ HdCprime };
-	};
-
-	std::vector<EigenMatrix> Preconditioner(std::vector<EigenMatrix> Vs) const override{
-		return std::vector<EigenMatrix>{ UniversalPreconditioner(Cprime, Cprime_perp, Kinv, Linv, Vs[0]) };
 	};
 };
 
@@ -279,6 +268,17 @@ class Cons: public Maniverse::Function{ public:
 
 } // namespace
 
+#define __Precon__(_P_, _K_, _L_){\
+	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
+		EigenVector PV(V.size());\
+		MV_SetBlock(PV, 0, bp) = UniversalPreconditioner(\
+			obj.Cprime, obj.Cprime_perp, obj._K_, obj._L_,\
+			MV_GetBlock(V, 0, bp)\
+		);\
+		return PV;\
+	};\
+}
+
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
 std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
@@ -307,6 +307,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	const std::array<double, 3> tol = {1.e-8, 1.e-5, 1.e-5};
 	const std::vector<double> cons_tol(lowers_.size(), 1e-10);
 	if constexpr ( scf_t == lbfgs_t ){
+		__Precon__(PreconditionerSqrt, Ksqrtinv, Lsqrtinv);
+		__Precon__(PreconditionerInvSqrt, Ksqrt, Lsqrt);
 		if ( ! lowers_.size() && ! Maniverse::LBFGS(
 					M, tol,
 					20, 300, 0.1, 0.75, 10, output
@@ -316,9 +318,11 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
+		__Precon__(Preconditioner, Kinv, Linv);
 		Maniverse::TrustRegion tr;
 		static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
-		Maniverse::ConjugateGradient cg(M, 0, 1, {ls_tol, ls_tol}, M.getDimension(), output);
+		Maniverse::ConjugateGradient cg(1, {ls_tol, ls_tol}, M.getDimension(), output);
+		Maniverse::initLinearSolverForNewton(cg, M);
 		if ( ! lowers_.size() && ! mv::Newton(
 					M, tr, cg, tol, 300, output
 		) ) throw std::runtime_error("Convergence failed!");
