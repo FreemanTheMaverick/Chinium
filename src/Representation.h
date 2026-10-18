@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <memory>
 #include <libmwfn.h>
 
 #include "Integral.h"
@@ -8,7 +9,7 @@
 class Representation{ public:
 	libmwfn::Mwfn mwfn;
 	int Np, Na, Nb;
-	Int2C1E int2c1e;
+	std::shared_ptr<Int2C1E> int2c1e;
 	Representation(std::string inp);
 };
 

@@ -1,5 +1,5 @@
 #include <string>
-#include <tuple>
+#include <memory>
 #include <cstdio>
 #include <sstream>
 #include <fstream>
@@ -65,13 +65,13 @@ SCF::SCF(std::string inp, libmwfn::Mwfn& mwfn, Int2C1E& int2c1e){
 
 	// Two-electron integrals
 	if ( scftype != "DRY" ){
-		int4c2e = Int4C2E(mwfn, 1, -1);
-		if (xc) int4c2e.EXX = xc.EXX;
-		int4c2e.getRepulsionDiag(1);
-		int4c2e.getRepulsionLength(1);
-		int4c2e.getRepulsionIndices(1);
-		int4c2e.getThreadPointers(nthreads, 1);
-		int4c2e.CalculateIntegrals(0, 1);
+		int4c2e = std::make_shared<Int4C2E>(mwfn, 1, -1);
+		if (xc) int4c2e->EXX = xc.EXX;
+		int4c2e->getRepulsionDiag(1);
+		int4c2e->getRepulsionLength(1);
+		int4c2e->getRepulsionIndices(1);
+		int4c2e->getThreadPointers(nthreads, 1);
+		int4c2e->CalculateIntegrals(0, 1);
 	}
 
 	// Check stability

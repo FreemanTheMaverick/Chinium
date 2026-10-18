@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include <string>
+#include <memory>
 #include <libmwfn.h>
 
 #include "../Macro.h"
@@ -15,7 +16,7 @@ class SCF{ public:
 	EigenMatrix Hessian = EigenZero(0, 0);
 
 	int nthreads = 1;
-	Int4C2E int4c2e;
+	std::shared_ptr<Int4C2E> int4c2e;
 	ExchangeCorrelation xc;
 	Grid grid;
 	std::string scftype = "DIIS";

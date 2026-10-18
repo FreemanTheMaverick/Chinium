@@ -599,10 +599,10 @@ void RGC_SCF::Calculate0(){
 	const EigenMatrix Z = mwfn.getCoefficientMatrix({.Set=0});
 	const EigenMatrix F = mwfn.getFock({.Set=0});
 	auto [E, epsilons, occ, C] =
-		scftype == "DIIS" ? RestrictedFiniteDIIS(Temperature, ChemicalPotential, int2c1e, int4c2e, xc, grid, F, occ_guess, Z, 1, nthreads) :
-		scftype == "LBFGS" ? RestrictedFiniteRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, Z, nthreads, 1) :
-		scftype == "ARH" ? RestrictedFiniteRiemann<arh_t>(int2c1e, int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, Z, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ RestrictedFiniteRiemann<newton_t>(int2c1e, int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, Z, nthreads, 1);
+		scftype == "DIIS" ? RestrictedFiniteDIIS(Temperature, ChemicalPotential, *int2c1e, *int4c2e, xc, grid, F, occ_guess, Z, 1, nthreads) :
+		scftype == "LBFGS" ? RestrictedFiniteRiemann<lbfgs_t>(*int2c1e, *int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, Z, nthreads, 1) :
+		scftype == "ARH" ? RestrictedFiniteRiemann<arh_t>(*int2c1e, *int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, Z, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ RestrictedFiniteRiemann<newton_t>(*int2c1e, *int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, Z, nthreads, 1);
 	Energy += E;
 	mwfn.setEnergy(epsilons, {.Set=0});
 	mwfn.setOccupation(occ, {.Set=0});

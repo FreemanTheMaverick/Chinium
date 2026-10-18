@@ -65,11 +65,11 @@ Representation::Representation(std::string inp){
 	}else std::tie(Na, Nb, Np) = ReadNumElectrons(inp, total_nuclear_charges);
 
 	// One-electron integrals
-	int2c1e = Int2C1E(mwfn);
-	int2c1e.CalculateIntegrals(0, 1);
+	int2c1e = std::make_shared<Int2C1E>(mwfn);
+	int2c1e->CalculateIntegrals(0, 1);
 
 	// Orthogonalize read orbitals
-	mwfn.Overlap = int2c1e.Overlap;
+	mwfn.Overlap = int2c1e->Overlap;
 	if ( guess == "READ" ) mwfn.Orthogonalize("Lowdin");
 }
 

@@ -502,9 +502,9 @@ void TwoDet::Calculate0(){
 		mwfn.getCoefficientMatrix({.Set=0, .OccUpper=0, .OccLower=0})
 	;
 	auto [E, C] =
-		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, nthreads, 1) :
-		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(int2c1e, int4c2e, xc, grid, grid2, Np, Z, lowers, nthreads, 1);
+		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(*int2c1e, *int4c2e, xc, grid, grid2, Np, Z, lowers, nthreads, 1) :
+		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(*int2c1e, *int4c2e, xc, grid, grid2, Np, Z, lowers, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(*int2c1e, *int4c2e, xc, grid, grid2, Np, Z, lowers, nthreads, 1);
 	Energy += E;
 	mwfn.setCoefficientMatrix(C, {.Set=0});
 	mwfn.setEnergy(EigenZero(mwfn.getNumIndBasis(), 1), {.Set=0});
@@ -513,5 +513,5 @@ void TwoDet::Calculate0(){
 	occ.segment(Np, 2).setConstant(1);
 	mwfn.setOccupation(occ, {.Set=0});
 	for ( int iorb = 0; iorb < mwfn.getNumIndBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = iorb == Np ? 1 : iorb == Np + 1 ? 2 : 0;
-	if ( stable > 0 ) TwoDetStability(int2c1e, int4c2e, xc, grid, grid2, Np, C, lowers, stable, nthreads, 1);
+	if ( stable > 0 ) TwoDetStability(*int2c1e, *int4c2e, xc, grid, grid2, Np, C, lowers, stable, nthreads, 1);
 }

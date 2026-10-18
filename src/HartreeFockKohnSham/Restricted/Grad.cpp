@@ -53,7 +53,7 @@ void R_SCF::Calculate1(){
 	const int nbasis = mwfn.getNumBasis();
 	std::vector<double> Gradient(3 * natoms, 0);
 	std::vector<int> bf2atom(nbasis);
-	int2c1e.CalculateIntegrals(1, 1);
+	int2c1e->CalculateIntegrals(1, 1);
 
 	for ( int iatom = 0, kbasis = 0; iatom < natoms; iatom++ )
 		for ( int jbasis = 0; jbasis < mwfn.Centers[iatom].getNumBasis(); jbasis++, kbasis++ )
@@ -62,8 +62,8 @@ void R_SCF::Calculate1(){
 	const EigenMatrix D = mwfn.getDensity({.Set=0}) / 2;
 	const EigenMatrix W = mwfn.getEnergyDensity({.Set=0}) / 2;
 
-	auto [SWgrads, KDgrads, VDgrads] = int2c1e.ContractGrads(D, W, 1); // std::vector<double>
-	const std::vector<double> DGDgrads = int4c2e.ContractGrads(D, D, 1);
+	auto [SWgrads, KDgrads, VDgrads] = int2c1e->ContractGrads(D, W, 1); // std::vector<double>
+	const std::vector<double> DGDgrads = int4c2e->ContractGrads(D, D, 1);
 	__VectorIncrement__(Gradient, KDgrads, 2)
 	__VectorIncrement__(Gradient, VDgrads, 2)
 	__VectorIncrement__(Gradient, SWgrads, -2)

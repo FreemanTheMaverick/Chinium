@@ -63,15 +63,15 @@ void R_SCF::Calculate2(){
 	const EigenMatrix W = mwfn.getEnergyDensity({.Set=0}) / 2;
 	std::vector<EigenMatrix> Fskeletons(3 * natoms, EigenMatrix(nbasis, nbasis));
 
-	auto [SWhesss, KDhesss, VDhesss] = int2c1e.ContractHesss(D, W, 1); // std::vector<std::vector<double>>
-	const std::vector<std::vector<double>> DGDhesss = int4c2e.ContractHesss(D, D, 1);
+	auto [SWhesss, KDhesss, VDhesss] = int2c1e->ContractHesss(D, W, 1); // std::vector<std::vector<double>>
+	const std::vector<std::vector<double>> DGDhesss = int4c2e->ContractHesss(D, D, 1);
 	__VectorVectorIncrement__(Hessian, SWhesss, -2)
 	__VectorVectorIncrement__(Hessian, KDhesss, 2)
 	__VectorVectorIncrement__(Hessian, VDhesss, 2)
 	__VectorVectorIncrement__(Hessian, DGDhesss, 1)
-	const std::vector<EigenMatrix> DGgrads = int4c2e.ContractGrads(D, 1);
-	__VectorIncrement__(Fskeletons, int2c1e.KineticGrads, 1)
-	__VectorIncrement__(Fskeletons, int2c1e.NuclearGrads, 1)
+	const std::vector<EigenMatrix> DGgrads = int4c2e->ContractGrads(D, 1);
+	__VectorIncrement__(Fskeletons, int2c1e->KineticGrads, 1)
+	__VectorIncrement__(Fskeletons, int2c1e->NuclearGrads, 1)
 	__VectorIncrement__(Fskeletons, DGgrads, 1)
 
 	if (xc){
@@ -104,8 +104,8 @@ void R_SCF::Calculate2(){
 			mwfn.getCoefficientMatrix({.Set=0}),
 			mwfn.getEnergy({.Set=0}),
 			mwfn.getOccupation({.Set=0}) / 2.,
-			int2c1e.OverlapGrads, Fskeletons,
-			int4c2e, grid,
+			int2c1e->OverlapGrads, Fskeletons,
+			*int4c2e, grid,
 			1, nthreads
 	);
 	this->dEs = dEs;
@@ -115,8 +115,8 @@ void R_SCF::Calculate2(){
 	for ( int i = 0; i < 3 * natoms; i++ ) for ( int j = 0; j <= i; j++ ){
 		Hessian[i][j] += 2 * dDs[i].cwiseProduct(Fskeletons[j]).sum();
 		if ( i != j ) Hessian[j][i] += 2 * dDs[i].cwiseProduct(Fskeletons[j]).sum();
-		Hessian[i][j] -= 2 * dWs[i].cwiseProduct(int2c1e.OverlapGrads[j]).sum();
-		if ( i != j ) Hessian[j][i] -= 2 * dWs[i].cwiseProduct(int2c1e.OverlapGrads[j]).sum();
+		Hessian[i][j] -= 2 * dWs[i].cwiseProduct(int2c1e->OverlapGrads[j]).sum();
+		if ( i != j ) Hessian[j][i] -= 2 * dWs[i].cwiseProduct(int2c1e->OverlapGrads[j]).sum();
 	}
 
 	for ( int i = 0; i < 3 * natoms; i++ ) for ( int j = 0; j < 3 * natoms; j++ ){

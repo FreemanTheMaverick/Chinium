@@ -101,7 +101,7 @@ std::vector<std::vector<EigenMatrix>> ReadLower(std::string inp){
 	return lowers;
 }
 
-R_SCF::R_SCF(std::string inp): Job(inp), RepR(inp), SCF(inp, mwfn, int2c1e){
+R_SCF::R_SCF(std::string inp): Job(inp), RepR(inp), SCF(inp, mwfn, *int2c1e){
 	if ( Na + Nb == 0 ) xc.Spin = 1;
 	else xc.Spin = 2;
 
@@ -112,10 +112,10 @@ R_SCF::R_SCF(std::string inp): Job(inp), RepR(inp), SCF(inp, mwfn, int2c1e){
 
 	lowers = ReadLower(inp);
 	if ( scftype == "DIIS" && lowers.size() > 0 ) throw std::runtime_error("DIIS cannot be used for orthogonality-constrained SCF!");
-	bool oops = 0;
 	const int norbs_a = mwfn.getNumOrbitals({.Set=0, .Type=0, .OccUpper=2, .OccLower=2}) + mwfn.getNumOrbitals({.Set=0, .Type=1, .OccUpper=1, .OccLower=1});
 	const int norbs_b = mwfn.getNumOrbitals({.Set=0, .Type=0, .OccUpper=2, .OccLower=2}) + mwfn.getNumOrbitals({.Set=0, .Type=2, .OccUpper=1, .OccLower=1});
 	for ( std::vector<EigenMatrix>& lower : lowers ){
+		bool oops = 0;
 		if ( lower.size() == 1 ){
 			if ( lower[0].cols() != norbs_a || lower[0].cols() != norbs_b ) oops = 1;
 		}else{

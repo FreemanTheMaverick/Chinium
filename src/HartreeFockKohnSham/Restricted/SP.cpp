@@ -432,10 +432,10 @@ void R_SCF::Calculate0(){
 	;
 	const EigenMatrix F = mwfn.getFock({.Set=0});
 	auto [E, eps, C] =
-		scftype == "DIIS" ? RestrictedDIIS(Np, int2c1e, int4c2e, xc, grid, F, Z, 1, nthreads) :
-		scftype == "LBFGS" ? RestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, nthreads, 1) :
-		scftype == "ARH" ? RestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ RestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, nthreads, 1);
+		scftype == "DIIS" ? RestrictedDIIS(Np, *int2c1e, *int4c2e, xc, grid, F, Z, 1, nthreads) :
+		scftype == "LBFGS" ? RestrictedRiemann<lbfgs_t>(*int2c1e, *int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, nthreads, 1) :
+		scftype == "ARH" ? RestrictedRiemann<arh_t>(*int2c1e, *int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ RestrictedRiemann<newton_t>(*int2c1e, *int4c2e, xc, grid, {Np, Na, Nb}, Coupling, Z, lowers, nthreads, 1);
 	Energy += E;
 	mwfn.setEnergy(eps, {.Set=0});
 	mwfn.setCoefficientMatrix(C, {.Set=0});
@@ -444,5 +444,5 @@ void R_SCF::Calculate0(){
 	occ.segment(Np, Na + Nb).setConstant(1);
 	mwfn.setOccupation(occ, {.Set=0});
 	for ( int iorb = 0; iorb < mwfn.getNumIndBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = ( Np + Na > iorb && iorb >= Np ) ? 1 : ( Np + Na + Nb > iorb && iorb >= Np + Na ) ? 2 : 0;
-	if ( stable > 0 ) RestrictedStability(int2c1e, int4c2e, xc, grid, {Np, Na, Nb}, Coupling, C, lowers, stable, nthreads, 1);
+	if ( stable > 0 ) RestrictedStability(*int2c1e, *int4c2e, xc, grid, {Np, Na, Nb}, Coupling, C, lowers, stable, nthreads, 1);
 }

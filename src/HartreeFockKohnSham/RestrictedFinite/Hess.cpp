@@ -68,7 +68,7 @@ void RGC_SCF::Calculate2(){
 				mwfn.getEnergy({.Set=0}),
 				mwfn.getOccupation() / 2.,
 				frac_indeces,
-				int4c2e, grid,
+				*int4c2e, grid,
 				1, nthreads
 		);
 		std::printf("Occupation-fluctuation coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));
@@ -82,8 +82,8 @@ void RGC_SCF::Calculate2(){
 			mwfn.getCoefficientMatrix({.Set=0}),
 			mwfn.getEnergy({.Set=0}),
 			Dns, Nes,
-			int2c1e.OverlapGrads, dFs,
-			int4c2e, grid,
+			int2c1e->OverlapGrads, dFs,
+			*int4c2e, grid,
 			1, nthreads
 	);
 	std::printf("Occupation-gradient coupled-perturbed self-consistent-field done in %f s\n", __duration__(start, __now__));

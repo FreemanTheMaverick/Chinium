@@ -260,10 +260,10 @@ void U_SCF::Calculate0(){
 	const EigenMatrix F1 = mwfn.getFock({.Set=0});
 	const EigenMatrix F2 = mwfn.getFock({.Set=1});
 	auto [E, eps1, eps2, C1, C2] =
-		scftype == "DIIS" ? UnrestrictedDIIS(nocc1, nocc2, int2c1e, int4c2e, xc, grid, F1, F2, Z1, Z1, 1, nthreads) :
-		scftype == "LBFGS" ? UnrestrictedRiemann<lbfgs_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1) :
-		scftype == "ARH" ? UnrestrictedRiemann<arh_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ UnrestrictedRiemann<newton_t>(int2c1e, int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1);
+		scftype == "DIIS" ? UnrestrictedDIIS(nocc1, nocc2, *int2c1e, *int4c2e, xc, grid, F1, F2, Z1, Z1, 1, nthreads) :
+		scftype == "LBFGS" ? UnrestrictedRiemann<lbfgs_t>(*int2c1e, *int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1) :
+		scftype == "ARH" ? UnrestrictedRiemann<arh_t>(*int2c1e, *int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ UnrestrictedRiemann<newton_t>(*int2c1e, *int4c2e, xc, grid, nocc1, nocc2, Z1, Z2, nthreads, 1);
 	Energy += E;
 	mwfn.setEnergy(eps1, {.Set=0});
 	mwfn.setEnergy(eps2, {.Set=1});

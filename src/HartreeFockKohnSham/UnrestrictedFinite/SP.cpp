@@ -137,7 +137,7 @@ void UGC_SCF::Calculate0(){
 	EigenVector Occa = mwfn.getOccupation({.Set=0});
 	EigenVector Occb = mwfn.getOccupation({.Set=1});
 	auto [E, epsa, epsb, occa, occb, Ca, Cb] =
-		/* scftype == "DIIS" ? */ UnrestrictedFiniteDIIS(Temperature, ChemicalPotential, int2c1e, int4c2e, xc, grid, Fa, Fb, Occa, Occb, Z, Z, 1, nthreads);
+		/* scftype == "DIIS" ? */ UnrestrictedFiniteDIIS(Temperature, ChemicalPotential, *int2c1e, *int4c2e, xc, grid, Fa, Fb, Occa, Occb, Z, Z, 1, nthreads);
 	Energy += E;
 	mwfn.setEnergy(epsa, {.Set=0});
 	mwfn.setEnergy(epsb, {.Set=1});

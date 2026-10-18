@@ -8,7 +8,7 @@
 #include "SelfConsistentField.h"
 
 class U_SCF: public Job, public RepU, public SCF{ public:
-	U_SCF(std::string inp): Job(inp), RepU(inp), SCF(inp, mwfn, int2c1e){
+	U_SCF(std::string inp): Job(inp), RepU(inp), SCF(inp, mwfn, *int2c1e){
 		xc.Spin = 2;
 	};
 	virtual void Calculate0() override;
