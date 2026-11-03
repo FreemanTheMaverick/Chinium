@@ -15,26 +15,27 @@ UniversalObjBase::UniversalObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		std::vector<int> Norbs, double Coupling,
-		std::vector<EigenMatrix> Zs, int nthreads
-): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), Norbs(Norbs), Coupling(Coupling), Zs(Zs), nthreads(nthreads){
-	nbasis = Zs.back().rows();
+		int nthreads
+): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), Norbs(Norbs), Coupling(Coupling), nthreads(nthreads){
+	Eigen::SelfAdjointEigenSolver<EigenMatrix> es(int2c1e.Overlap);
+	Ssqrt = es.operatorSqrt();
+	Ssqrtinv = es.operatorInverseSqrt();
+	nbasis = Ssqrt.rows();
 	for ( int type = 0; type < 3; type++ ){
-		Cprimes.push_back(EigenZero(nbasis, Norbs[type]));
+		Cs.push_back(EigenZero(nbasis, Norbs[type]));
 		Gradients.push_back(EigenZero(nbasis, Norbs[type]));
-		Dprimes.push_back(EigenZero(nbasis, nbasis));
-		Fprimes.push_back(EigenZero(nbasis, nbasis));
+		Ds.push_back(EigenZero(nbasis, nbasis));
+		Fs.push_back(EigenZero(nbasis, nbasis));
 	}
 }
 
-void UniversalObjBase::Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives){
-	Cprimes = Cprimes_;
+void UniversalObjBase::Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives){
+	Cs = Cs_;
 
 	if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
 		std::vector<EigenMatrix> Ds(3, EigenZero(0, 0));
 		for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-			Dprimes[type] = Cprimes[type] * Cprimes[type].transpose();
-			Ds[type].resize(nbasis, nbasis);
-			Ds[type] = Zs[type] * Dprimes[type] * Zs[type].transpose();
+			Ds[type] = Cs[type] * Cs[type].transpose();
 		}
 		const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
 		Value = 0;
@@ -44,7 +45,7 @@ void UniversalObjBase::Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<
 				type == 1 ? ( Hcore + J - Kd - Ka + Coupling * Kb ).eval() :
 				/* type == 2 ? */ ( Hcore + J - Kd - Kb + Coupling * Ka ).eval();
 			Value += 0.5 * occ[type] * Ds[type].cwiseProduct( Hcore + Fhf ).sum();
-			Fprimes[type] = Zs[type].transpose() * Fhf * Zs[type];
+			Fs[type] = Fhf;
 		}
 
 		if (*xc){
@@ -64,25 +65,25 @@ void UniversalObjBase::Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<
 		if (*xc){
 			const std::vector<EigenMatrix> Fxcab = grid->getFock();
 			if ( Norbs[0] && !Norbs[1] && !Norbs[2] ){
-				Fprimes[0] += Zs[0].transpose() * Fxcab[0] * Zs[0];
+				Fs[0] += Fxcab[0];
 			}else for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-				Fprimes[type] += Zs[type].transpose() * (
+				Fs[type] += (
 					type == 0 ? ( ( Fxcab[0] + Fxcab[1] ) / 2 ).eval() :
 					type == 1 ? Fxcab[0] :
 					/* type == 2 ? */ Fxcab[1]
-				) * Zs[type];
+				);
 			}
 		}
 		for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-			Gradients[type] = 2 * occ[type] * Fprimes[type] * Cprimes[type];
+			Gradients[type] = 2 * occ[type] * Fs[type] * Cs[type];
 		}
 	}
 }
 
-EigenMatrix UniversalPreconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix K, EigenMatrix L, EigenMatrix V){
-	EigenMatrix Omega = U.transpose() * V;
+EigenMatrix UniversalPreconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix K, EigenMatrix L, EigenMatrix SV){
+	EigenMatrix Omega = U.transpose() * SV;
 	Omega = Omega.cwiseProduct(K);
-	EigenMatrix Kappa = Uperp.transpose() * V;
+	EigenMatrix Kappa = Uperp.transpose() * SV;
 	Kappa = Kappa.cwiseProduct(L);
 	return ( U * Omega + Uperp * Kappa ).eval();
 }

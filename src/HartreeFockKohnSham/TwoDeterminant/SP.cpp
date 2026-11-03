@@ -401,9 +401,9 @@ class Cons: public Maniverse::Function{ public:
 #define __Precon__(_P_, _K_, _L_){\
 	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
 		EigenVector PV(V.size());\
-		MV_SetBlock(PV, 0, bp) = UniversalPreconditioner(\
+		MV_Block(PV, 0, bp) = UniversalPreconditioner(\
 			obj.Cprime, obj.Cprime_perp, obj._K_, obj._L_,\
-			MV_GetBlock(V, 0, bp)\
+			MV_constBlock(V, 0, bp)\
 		);\
 		return PV;\
 	};\
