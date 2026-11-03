@@ -196,9 +196,9 @@ using ObjARH = UniversalObjARH<ObjNewtonBase>;
 	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
 		EigenVector PV(V.size());\
 		for ( int i = 0; i < 2; i++ ){\
-			MV_SetBlock(PV, i, bp) = UniversalPreconditioner(\
+			MV_Block(PV, i, bp) = UniversalPreconditioner(\
 				obj.Cprimes[i + 1], obj.Cprime_perps[i + 1], obj._K_[i + 1], obj._L_[i + 1],\
-				MV_GetBlock(V, i, bp)\
+				MV_constBlock(V, i, bp)\
 			);\
 		}\
 		return PV;\
