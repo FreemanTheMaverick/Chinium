@@ -84,8 +84,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 }
 
 class ObjBase: public UniversalObjBase{ public:
-	EigenMatrix C;
-	EigenMatrix C_perp;
+	EigenVector eps;
+	EigenMatrix Ccano;
 	EigenMatrix K;
 	EigenMatrix L;
 
@@ -97,7 +97,7 @@ class ObjBase: public UniversalObjBase{ public:
 	): UniversalObjBase(int2c1e, int4c2e, xc, grid, Norbs, Coupling, nthreads){};
 
 	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
-		C = Cs_[0];
+		const EigenMatrix C = Cs_[0];
 		Cs_.clear();
 		for ( int type = 0, col = 0; type < 3; type++ ){
 			Cs_.push_back( Norbs[type] ? C.middleCols(col, Norbs[type]).eval() : EigenZero(0, 0) );
@@ -112,12 +112,41 @@ class ObjBase: public UniversalObjBase{ public:
 			}
 
 			const int Np = Norbs[0]; const int Na = Norbs[1]; const int Nb = Norbs[2];
-			Eigen::HouseholderQR<EigenMatrix> qr(Ssqrt * C);
-			const EigenMatrix Call = Ssqrtinv * qr.householderQ();
-			C_perp = Call.rightCols(nbasis - Np - Na - Nb);
+			Eigen::SelfAdjointEigenSolver<EigenMatrix> es;
+			Ccano.resize(nbasis, nbasis);
+			eps.resize(nbasis);
+			if (Np){
+				const EigenMatrix Cp = C.leftCols(Np);
+				const EigenMatrix Fp = Cp.transpose() * Fs[0] * Cp;
+				es.compute(Fp);
+				Ccano.leftCols(Np) = Cp * es.eigenvectors();
+				eps.head(Np) = es.eigenvalues();
+			}
+			if (Na){
+				const EigenMatrix Ca = C.middleCols(Np, Na);
+				const EigenMatrix Fa = Ca.transpose() * Fs[0] * Ca;
+				es.compute(Fa);
+				Ccano.middleCols(Np, Na) = Ca * es.eigenvectors();
+				eps.segment(Np, Na) = es.eigenvalues();
+			}
+			if (Nb){
+				const EigenMatrix Cb = C.middleCols(Np + Na, Nb);
+				const EigenMatrix Fb = Cb.transpose() * Fs[0] * Cb;
+				es.compute(Fb);
+				Ccano.middleCols(Np + Na, Nb) = Cb * es.eigenvectors();
+				eps.segment(Np + Na, Nb) = es.eigenvalues();
+			}
+			{
+				Eigen::HouseholderQR<EigenMatrix> qr(Ssqrt * C);
+				const EigenMatrix C_perp = (Ssqrtinv * qr.householderQ()).rightCols(nbasis - Np - Na - Nb);
+				const EigenMatrix Fvir = C_perp.transpose() * Fs[0] * C_perp;
+				es.compute(Fvir);
+				Ccano.rightCols(nbasis - Np - Na - Nb) = C_perp * es.eigenvectors();
+				eps.tail(nbasis - Np - Na - Nb) = es.eigenvalues();
+			}
 			std::vector<EigenMatrix> Fmos(4, EigenZero(nbasis, nbasis));
 			for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-				Fmos[type] = Call.transpose() * Fs[type] * Call;
+				Fmos[type] = Ccano.transpose() * Fs[type] * Ccano;
 			}
 			EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
 			for ( int i = 0; i < nbasis; i++ ){
@@ -183,7 +212,7 @@ class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
 			col += Norbs[type];
 		}
 		const std::vector<EigenMatrix> HdCs = UniversalObjNewtonBase<ObjBase>::Hessian(dCs);
-		EigenMatrix HdC = C;
+		EigenMatrix HdC = dC;
 		for ( int type = 0, col = 0; type < 3; type++ ) if ( Norbs[type] ){
 			HdC.middleCols(col, Norbs[type]) = HdCs[type];
 			col += Norbs[type];
@@ -269,7 +298,9 @@ class Cons: public Maniverse::Function{ public:
 	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
 		EigenVector PV(V.size());\
 		MV_Block(PV, 0, bp) = UniversalPreconditioner(\
-			obj.C, obj.C_perp, obj._K_, obj._L_,\
+			obj.Ccano.leftCols(obj.Norbs[0] + obj.Norbs[1] + obj.Norbs[2]),\
+			obj.Ccano.rightCols(obj.nbasis - obj.Norbs[0] - obj.Norbs[1] - obj.Norbs[2]),\
+			obj._K_, obj._L_,\
 			obj.int2c1e->Overlap * MV_constBlock(V, 0, bp)\
 		);\
 		return PV;\
@@ -292,7 +323,6 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 							ObjARH
 				>
 	> obj(int2c1e, int4c2e, xc, grid, Norbs, Coupling, nthreads);
-	const int nbasis = S.rows();
 	Maniverse::Flag flag(C, S);
 	std::vector<int> space = {};
 	for ( int Norb : Norbs ) if ( Norb > 0 ) space.push_back(Norb);
@@ -329,58 +359,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		) ) throw std::runtime_error("Convergence failed!");
 	}
 
-	EigenVector eps = EigenZero(nbasis, 1);
-	C = EigenZero(nbasis, nbasis);
-	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-	if ( Norbs[0] && !Norbs[1] && !Norbs[2] ){
-		const EigenMatrix Focc = obj.C.transpose() * obj.Fs[0] * obj.C;
-		eigensolver.compute(Focc);
-		eps.head(Norbs[0]) = eigensolver.eigenvalues();
-		C.leftCols(Norbs[0]) = obj.C * eigensolver.eigenvectors();
-		const EigenMatrix Fvir = obj.C_perp.transpose() * obj.Fs[0] * obj.C_perp;
-		eigensolver.compute(Fvir);
-		eps.tail(nbasis - Norbs[0]) = eigensolver.eigenvalues();
-		C.rightCols(nbasis - Norbs[0]) = obj.C_perp * eigensolver.eigenvectors();
-	}else if ( ( Norbs[1] && !Norbs[2] ) || ( !Norbs[1] && Norbs[2] ) ){ // Guest and Saunders averaged Fock matrix
-		const int nd = Norbs[0];
-		const int ns = Norbs[1] ? Norbs[1] : Norbs[2];
-		const int nv = obj.nbasis - nd - ns;
-		EigenMatrix C_all = EigenZero(obj.nbasis, obj.nbasis);
-		C_all << obj.C, obj.C_perp;
-		EigenMatrix Fd = C_all.transpose() * obj.Fs[0] * C_all;
-		EigenMatrix Fs = 0.5 * C_all.transpose() * obj.Fs[1] * C_all;
-		EigenMatrix bigF = EigenZero(obj.nbasis, obj.nbasis);
-
-		// Diagonal
-		bigF.block(0, 0, nd, nd) = Fd.block(0, 0, nd, nd);
-		bigF.block(nd, nd, ns, ns) = Fd.block(nd, nd, ns, ns);
-		bigF.block(nd + ns, nd + ns, nv, nv) = Fd.block(nd + ns, nd + ns, nv, nv);
-
-		// Off-diagonal
-		bigF.block(0, nd, nd, ns) = Fd.block(0, nd, nd, ns) - Fs.block(0, nd, nd, ns);
-		bigF.block(nd, 0, ns, nd) = bigF.block(0, nd, nd, ns).transpose();
-		bigF.block(0, nd + ns, nd, nv) = Fd.block(0, nd + ns, nd, nv);
-		bigF.block(nd + ns, 0, nv, nd) = bigF.block(0, nd + ns, nd, nv).transpose();
-		bigF.block(nd, nd + ns, ns, nv) = Fs.block(nd, nd + ns, ns, nv);
-		bigF.block(nd + ns, nd, nv, ns) = bigF.block(nd, nd + ns, ns, nv).transpose();
-		bigF = ( S * C_all * bigF * C_all.transpose() * S ).eval();
-		Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
-
-		// Separate diagonalization
-		const EigenMatrix Fdocc = obj.C.leftCols(nd).transpose() * bigF * obj.C.leftCols(nd);
-		eigensolver.compute(Fdocc);
-		eps.head(nd) = eigensolver.eigenvalues();
-		C.leftCols(nd) = obj.C.leftCols(nd) * eigensolver.eigenvectors();
-		const EigenMatrix Fsocc = obj.C.rightCols(ns).transpose() * bigF * obj.C.rightCols(ns);
-		eigensolver.compute(Fsocc);
-		eps.segment(nd, ns) = eigensolver.eigenvalues();
-		C.middleCols(nd, ns) = obj.C.rightCols(ns) * eigensolver.eigenvectors();
-		const EigenMatrix Fvir = obj.C_perp.transpose() * bigF * obj.C_perp;
-		eigensolver.compute(Fvir);
-		eps.tail(nv) = eigensolver.eigenvalues();
-		C.rightCols(nv) = obj.C_perp * eigensolver.eigenvectors();
-	}else C << obj.C, obj.C_perp;
-	return std::make_tuple(obj.Value, eps, C);
+	return std::make_tuple(obj.Value, obj.eps, obj.Ccano);
 }
 
 bool RestrictedStability(
@@ -444,5 +423,5 @@ void R_SCF::Calculate0(){
 	occ.segment(Np, Na + Nb).setConstant(1);
 	mwfn.setOccupation(occ, {.Set=0});
 	for ( int iorb = 0; iorb < mwfn.getNumIndBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = ( Np + Na > iorb && iorb >= Np ) ? 1 : ( Np + Na + Nb > iorb && iorb >= Np + Na ) ? 2 : 0;
-	if ( stable > 0 ) RestrictedStability(*int2c1e, *int4c2e, xc, grid, {Np, Na, Nb}, Coupling, C, lowers, stable, nthreads, 1);
+	if ( stable > 0 ) RestrictedStability(*int2c1e, *int4c2e, xc, grid, {Np, Na, Nb}, Coupling, C.leftCols(Np + Na + Nb), lowers, stable, nthreads, 1);
 }
