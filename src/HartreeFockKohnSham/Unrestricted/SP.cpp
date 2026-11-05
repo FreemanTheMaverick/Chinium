@@ -106,7 +106,11 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 namespace{
 
 class ObjBase: public UniversalObjBase{ public:
-	std::array<EigenMatrix, 3> C_perps = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
+	std::array<EigenVector, 3> epss = {
+		EigenVector::Zero(0), EigenVector::Zero(0), EigenVector::Zero(0)
+	};
+	std::array<EigenMatrix, 3> Ccano_occs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
+	std::array<EigenMatrix, 3> Ccano_virs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 	std::array<EigenMatrix, 3> Ks = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 	std::array<EigenMatrix, 3> Ls = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 
@@ -118,15 +122,28 @@ class ObjBase: public UniversalObjBase{ public:
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
 			Gradient = Gradients;
 			Gradient.erase(Gradient.begin());
+			Eigen::SelfAdjointEigenSolver<EigenMatrix> es;
 			for ( int type = 1; type < 3; type++ ){
+				epss[type].resize(nbasis);
+
+				const EigenMatrix Focc = Cs[type].transpose() * Fs[type] * Cs[type];
+				es.compute(Focc);
+				Ccano_occs[type] = Cs[type] * es.eigenvectors();
+				epss[type].head(Norbs[type]) = es.eigenvalues();
+
 				Eigen::HouseholderQR<EigenMatrix> qr(Ssqrt * Cs[type]);
 				const EigenMatrix Call = Ssqrtinv * qr.householderQ();
-				C_perps[type] = Call.rightCols(nbasis - Norbs[type]);
+				const EigenMatrix C_perp = Call.rightCols(nbasis - Norbs[type]);
+
+				const EigenMatrix Fvir = C_perp.transpose() * Fs[type] * C_perp;
+				es.compute(Fvir);
+				Ccano_virs[type] = C_perp * es.eigenvectors();
+				epss[type].tail(nbasis - Norbs[type]) = es.eigenvalues();
+
 				EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
-				const EigenMatrix Fmo = Call.transpose() * Fs[type] * Call;
 				for ( int o = 0; o < Norbs[type]; o++ ){
 					for ( int v = Norbs[type]; v < nbasis; v++ ){
-						A(o, v) = A(v, o) = 2 * std::abs( Fmo(v, v) - Fmo(o, o) );
+						A(o, v) = A(v, o) = 2 * std::abs( epss[type](v) - epss[type](o) );
 					}
 				}
 				Ks[type] = A.topLeftCorner(Norbs[type], Norbs[type]);
@@ -192,7 +209,7 @@ using ObjARH = UniversalObjARH<ObjNewtonBase>;
 		EigenVector PV(V.size());\
 		for ( int i = 0; i < 2; i++ ){\
 			MV_Block(PV, i, bp) = UniversalPreconditioner(\
-				obj.Cs[i + 1], obj.C_perps[i + 1], obj._K_[i + 1], obj._L_[i + 1],\
+				obj.Ccano_occs[i + 1], obj.Ccano_virs[i + 1], obj._K_[i + 1], obj._L_[i + 1],\
 				obj.int2c1e->Overlap * MV_constBlock(V, i, bp)\
 			);\
 		}\
@@ -236,27 +253,11 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 					M, tr, cg, tol, 300, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}
-	Eigen::SelfAdjointEigenSolver<EigenMatrix> es;
-	std::array<EigenVector, 3> epss;
-	std::array<EigenMatrix, 3> Cnews;
-	for ( int type = 1; type < 3; type++ ){
-		const EigenMatrix& F = obj.Fs[type];
-		EigenVector& eps = epss[type] = EigenZero(F.rows(), 1);
-		EigenMatrix& Cnew = Cnews[type] = EigenZero(F.rows(), F.cols());
-
-		const EigenMatrix& C = obj.Cs[type];
-		const EigenMatrix Focc = C.transpose() * F * C;
-		es.compute(Focc);
-		eps.head(C.cols()) = es.eigenvalues();
-		Cnew.leftCols(C.cols()) = C * es.eigenvectors();
-
-		const EigenMatrix& C_perp = obj.C_perps[type];
-		const EigenMatrix Fvir = C_perp.transpose() * F * C_perp;
-		es.compute(Fvir);
-		eps.tail(C_perp.cols()) = es.eigenvalues();
-		Cnew.rightCols(C_perp.cols()) = C_perp * es.eigenvectors();
-	}
-	return std::make_tuple(obj.Value, epss[1], epss[2], Cnews[1], Cnews[2]);
+	EigenMatrix Ca = EigenZero(obj.nbasis, obj.nbasis);
+	Ca << obj.Ccano_occs[1], obj.Ccano_virs[1];
+	EigenMatrix Cb = EigenZero(obj.nbasis, obj.nbasis);
+	Cb << obj.Ccano_occs[2], obj.Ccano_virs[2];
+	return std::make_tuple(obj.Value, obj.epss[1], obj.epss[2], Ca, Cb);
 }
 
 void U_SCF::Calculate0(){
@@ -266,12 +267,12 @@ void U_SCF::Calculate0(){
 	EigenMatrix Z1 = EigenZero(mwfn.getNumBasis(), mwfn.getNumBasis());
 	EigenMatrix Z2 = EigenZero(mwfn.getNumBasis(), mwfn.getNumBasis());
 	Z1 <<
-		mwfn.getCoefficientMatrix({.Set=1, .Type=1, .OccUpper=1, .OccLower=1}),
-		mwfn.getCoefficientMatrix({.Set=1, .Type=1, .OccUpper=0, .OccLower=0})
+		mwfn.getCoefficientMatrix({.Set=0, .Type=1, .OccUpper=1, .OccLower=1}),
+		mwfn.getCoefficientMatrix({.Set=0, .Type=1, .OccUpper=0, .OccLower=0})
 	;
 	Z2 <<
-		mwfn.getCoefficientMatrix({.Set=2, .Type=2, .OccUpper=1, .OccLower=1}),
-		mwfn.getCoefficientMatrix({.Set=2, .Type=2, .OccUpper=0, .OccLower=0})
+		mwfn.getCoefficientMatrix({.Set=1, .Type=2, .OccUpper=1, .OccLower=1}),
+		mwfn.getCoefficientMatrix({.Set=1, .Type=2, .OccUpper=0, .OccLower=0})
 	;
 	const EigenMatrix F1 = mwfn.getFock({.Set=0});
 	const EigenMatrix F2 = mwfn.getFock({.Set=1});
