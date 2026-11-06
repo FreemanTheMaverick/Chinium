@@ -111,7 +111,6 @@ class ObjBase: public UniversalObjBase{ public:
 	};
 	std::array<EigenMatrix, 3> Ccano_occs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 	std::array<EigenMatrix, 3> Ccano_virs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
-	std::array<EigenMatrix, 3> Ks = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 	std::array<EigenMatrix, 3> Ls = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 
 	using UniversalObjBase::UniversalObjBase;
@@ -146,7 +145,6 @@ class ObjBase: public UniversalObjBase{ public:
 						A(o, v) = A(v, o) = 2 * std::abs( epss[type](v) - epss[type](o) );
 					}
 				}
-				Ks[type] = A.topLeftCorner(Norbs[type], Norbs[type]);
 				Ls[type] = A.bottomLeftCorner(nbasis - Norbs[type], Norbs[type]);
 			}
 		}
@@ -154,8 +152,6 @@ class ObjBase: public UniversalObjBase{ public:
 };
 
 class ObjLBFGS: public ObjBase{ public:
-	std::array<EigenMatrix, 3> Ksqrts = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
-	std::array<EigenMatrix, 3> Ksqrtinvs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 	std::array<EigenMatrix, 3> Lsqrts = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 	std::array<EigenMatrix, 3> Lsqrtinvs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 
@@ -165,8 +161,6 @@ class ObjLBFGS: public ObjBase{ public:
 		ObjBase::Calculate(Ds, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
 			for ( int type = 1; type < 3; type++ ){
-				Ksqrts[type] = Ks[type].cwiseSqrt();
-				Ksqrtinvs[type] = Ksqrts[type].cwiseInverse();
 				Lsqrts[type] = Ls[type].cwiseSqrt();
 				Lsqrtinvs[type] = Lsqrts[type].cwiseInverse();
 			}
@@ -175,7 +169,6 @@ class ObjLBFGS: public ObjBase{ public:
 };
 
 class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
-	std::array<EigenMatrix, 3> Kinvs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 	std::array<EigenMatrix, 3> Linvs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 
 	using UniversalObjNewtonBase<ObjBase>::UniversalObjNewtonBase;
@@ -184,7 +177,6 @@ class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
 		ObjBase::Calculate(Cs_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
 			for ( int type = 1; type < 3; type++ ){
-				Kinvs[type] = Ks[type].cwiseInverse();
 				Linvs[type] = Ls[type].cwiseInverse();
 			}
 		}
@@ -204,12 +196,13 @@ using ObjARH = UniversalObjARH<ObjNewtonBase>;
 
 } // namespace
 
-#define __Precon__(_P_, _K_, _L_){\
+#define __Precon__(_P_, _L_){\
 	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
 		EigenVector PV(V.size());\
 		for ( int i = 0; i < 2; i++ ){\
 			MV_Block(PV, i, bp) = UniversalPreconditioner(\
-				obj.Ccano_occs[i + 1], obj.Ccano_virs[i + 1], obj._K_[i + 1], obj._L_[i + 1],\
+				EigenZero(bp[i][1], bp[i][2]), obj.Ccano_virs[i + 1],\
+				EigenZero(bp[i][2], bp[i][2]), obj._L_[i + 1],\
 				obj.int2c1e->Overlap * MV_constBlock(V, i, bp)\
 			);\
 		}\
@@ -237,14 +230,14 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 	Maniverse::Iterate M(obj, {flag1.Share(), flag2.Share()});
 	std::array<double, 3> tol = {1.e-8, 1.e-5, 1.e-5};
 	if constexpr ( scf_t == lbfgs_t ){
-		__Precon__(PreconditionerSqrt, Ksqrtinvs, Lsqrtinvs);
-		__Precon__(PreconditionerInvSqrt, Ksqrts, Lsqrts);
+		__Precon__(PreconditionerSqrt, Lsqrtinvs);
+		__Precon__(PreconditionerInvSqrt, Lsqrts);
 		if ( ! Maniverse::LBFGS(
 					M, tol,
 					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
-		__Precon__(Preconditioner, Kinvs, Linvs);
+		__Precon__(Preconditioner, Linvs);
 		Maniverse::TrustRegion tr;
 		static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
 		Maniverse::ConjugateGradient cg(1, {ls_tol, ls_tol}, M.getDimension(), 1);
