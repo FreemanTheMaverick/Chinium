@@ -135,7 +135,8 @@ class ObjBase: public UniversalObjBase{ public:
 			for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
 				Fmos[type] = Ccano.transpose() * Fs[type] * Ccano;
 			}
-			EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
+			Fmos[3] = Fmos[0];
+			EigenMatrix A = EigenZero(nbasis, nbasis);
 			for ( int i = 0; i < nbasis; i++ ){
 				int I = 0; int Iscale = 4;
 				if ( i < Np ){ I = 0; Iscale = 4; }
@@ -148,18 +149,22 @@ class ObjBase: public UniversalObjBase{ public:
 					else if ( j < Np + Na ){ J = 1; Jscale = 2; }
 					else if ( j < Np + Na + Nb ){ J = 2; Jscale = 2; }
 					else{ J = 3; Jscale = 0; }
+					if ( I == J ) continue;
 					const double FIi = Fmos[I](i, i) * Iscale;
 					const double FIj = Fmos[I](j, j) * Iscale;
 					const double FJi = Fmos[J](i, i) * Jscale;
 					const double FJj = Fmos[J](j, j) * Jscale;
 					A(i, j) = std::abs(FIj + FJi - FIi - FJj);
-					if ( A(i, j) < 0.1 ) A(i, j) = 0.1;
 				}
 			}
 			K = A.topLeftCorner(Np + Na + Nb, Np + Na + Nb);
 			L = A.bottomLeftCorner(nbasis - Np - Na - Nb, Np + Na + Nb);
 		}
 	};
+};
+
+static std::function<double (double)> SafeInverse = [](double x){
+	return x == 0 ? 0 : 1. / x;
 };
 
 class ObjLBFGS: public ObjBase{ public:
@@ -171,9 +176,9 @@ class ObjLBFGS: public ObjBase{ public:
 		ObjBase::Calculate(Cprimes_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
 			Ksqrt = K.cwiseSqrt();
-			Ksqrtinv = Ksqrt.cwiseInverse();
+			Ksqrtinv = Ksqrt.unaryExpr(SafeInverse);
 			Lsqrt = L.cwiseSqrt();
-			Lsqrtinv = Lsqrt.cwiseInverse();
+			Lsqrtinv = Lsqrt.unaryExpr(SafeInverse);
 		}
 	};
 };
@@ -186,8 +191,8 @@ class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
 	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
 		UniversalObjNewtonBase<ObjBase>::Calculate(Cs_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
-			Kinv = K.cwiseInverse();
-			Linv = L.cwiseInverse();
+			Kinv = K.unaryExpr(SafeInverse);
+			Linv = L.unaryExpr(SafeInverse);
 		}
 	};
 
