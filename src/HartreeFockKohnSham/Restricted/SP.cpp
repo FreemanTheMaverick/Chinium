@@ -115,26 +115,13 @@ class ObjBase: public UniversalObjBase{ public:
 			Eigen::SelfAdjointEigenSolver<EigenMatrix> es;
 			Ccano.resize(nbasis, nbasis);
 			eps.resize(nbasis);
-			if (Np){
-				const EigenMatrix Cp = C.leftCols(Np);
-				const EigenMatrix Fp = Cp.transpose() * Fs[0] * Cp;
-				es.compute(Fp);
-				Ccano.leftCols(Np) = Cp * es.eigenvectors();
-				eps.head(Np) = es.eigenvalues();
-			}
-			if (Na){
-				const EigenMatrix Ca = C.middleCols(Np, Na);
-				const EigenMatrix Fa = Ca.transpose() * Fs[0] * Ca;
-				es.compute(Fa);
-				Ccano.middleCols(Np, Na) = Ca * es.eigenvectors();
-				eps.segment(Np, Na) = es.eigenvalues();
-			}
-			if (Nb){
-				const EigenMatrix Cb = C.middleCols(Np + Na, Nb);
-				const EigenMatrix Fb = Cb.transpose() * Fs[0] * Cb;
-				es.compute(Fb);
-				Ccano.middleCols(Np + Na, Nb) = Cb * es.eigenvectors();
-				eps.segment(Np + Na, Nb) = es.eigenvalues();
+			for ( int type = 0, col = 0; type < 3; type++ ) if ( Norbs[type] ){
+				const EigenMatrix Ct = C.middleCols(col, Norbs[type]);
+				const EigenMatrix Ft = Ct.transpose() * Fs[type] * Ct;
+				es.compute(Ft);
+				Ccano.middleCols(col, Norbs[type]) = Ct * es.eigenvectors();
+				eps.segment(col, Norbs[type]) = es.eigenvalues();
+				col += Norbs[type];
 			}
 			{
 				Eigen::HouseholderQR<EigenMatrix> qr(Ssqrt * C);
