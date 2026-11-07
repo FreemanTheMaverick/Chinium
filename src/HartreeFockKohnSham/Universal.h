@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <functional>
 #include <vector>
 #include <Maniverse/Manifold/Manifold.h>
 
@@ -41,29 +42,14 @@ class UniversalObjBase: public Maniverse::Function{ public:
 	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override;
 };
 
-EigenMatrix UniversalPreconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix K, EigenMatrix L, EigenMatrix V);
-
-#define __Base_Members__(basename)\
-	using basename::basename;\
-	using basename::int2c1e;\
-	using basename::int4c2e;\
-	using basename::Ssqrt;\
-	using basename::Ssqrtinv;\
-	using basename::xc;\
-	using basename::grid;\
-	using basename::Norbs;\
-	using basename::Coupling;\
-	using basename::nthreads;\
-	using basename::nbasis;\
-	using basename::occ;\
-	using basename::Cs;\
-	using basename::Gradients;\
-	using basename::Ds;\
-	using basename::Fs;
-
 template<typename ObjBase>
 class UniversalObjNewtonBase: public ObjBase{ public:
-	__Base_Members__(ObjBase)
+	using ObjBase::ObjBase;
+	using ObjBase::Norbs;
+	using ObjBase::nbasis;
+	using ObjBase::Cs;
+	using ObjBase::occ;
+	using ObjBase::Fs;
 
 	virtual std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDs) const = 0;
 
@@ -86,7 +72,14 @@ class UniversalObjNewtonBase: public ObjBase{ public:
 
 template<typename ObjNewtonBase>
 class UniversalObjNewton: public ObjNewtonBase{ public:
-	__Base_Members__(ObjNewtonBase)
+	using ObjNewtonBase::ObjNewtonBase;
+	using ObjNewtonBase::int4c2e;
+	using ObjNewtonBase::xc;
+	using ObjNewtonBase::grid;
+	using ObjNewtonBase::Norbs;
+	using ObjNewtonBase::Coupling;
+	using ObjNewtonBase::nthreads;
+	using ObjNewtonBase::nbasis;
 
 	void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
 		ObjNewtonBase::Calculate(Cs_, derivatives);
@@ -129,7 +122,13 @@ class UniversalObjNewton: public ObjNewtonBase{ public:
 
 template<typename ObjNewtonBase>
 class UniversalObjARH: public ObjNewtonBase{ public:
-	__Base_Members__(ObjNewtonBase)
+    using ObjNewtonBase::ObjNewtonBase;
+    using ObjNewtonBase::Norbs;
+    using ObjNewtonBase::nbasis;
+    using ObjNewtonBase::Ssqrt;
+    using ObjNewtonBase::Ssqrtinv;
+    using ObjNewtonBase::Ds;
+    using ObjNewtonBase::Fs;
 
 	AugmentedRoothaanHall arh = AugmentedRoothaanHall(20, 1);
 
@@ -161,3 +160,7 @@ class UniversalObjARH: public ObjNewtonBase{ public:
 		return HdDs;
 	};
 };
+
+extern std::function<double (double)> SafeInverse;
+
+EigenMatrix UniversalPreconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix K, EigenMatrix L, EigenMatrix V);

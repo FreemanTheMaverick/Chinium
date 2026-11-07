@@ -94,7 +94,10 @@ class ObjBase: public UniversalObjBase{ public:
 		ExchangeCorrelation& xc, Grid& grid,
 		std::vector<int> Norbs, double Coupling,
 		int nthreads
-	): UniversalObjBase(int2c1e, int4c2e, xc, grid, Norbs, Coupling, nthreads){};
+	): UniversalObjBase(int2c1e, int4c2e, xc, grid, Norbs, Coupling, nthreads){
+		Ccano.resize(nbasis, nbasis);
+		eps.resize(nbasis);
+	};
 
 	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
 		const EigenMatrix C = Cs_[0];
@@ -113,8 +116,6 @@ class ObjBase: public UniversalObjBase{ public:
 
 			const int Np = Norbs[0]; const int Na = Norbs[1]; const int Nb = Norbs[2];
 			Eigen::SelfAdjointEigenSolver<EigenMatrix> es;
-			Ccano.resize(nbasis, nbasis);
-			eps.resize(nbasis);
 			for ( int type = 0, col = 0; type < 3; type++ ) if ( Norbs[type] ){
 				const EigenMatrix Ct = C.middleCols(col, Norbs[type]);
 				const EigenMatrix Ft = Ct.transpose() * Fs[type] * Ct;
@@ -131,11 +132,11 @@ class ObjBase: public UniversalObjBase{ public:
 				Ccano.rightCols(nbasis - Np - Na - Nb) = C_perp * es.eigenvectors();
 				eps.tail(nbasis - Np - Na - Nb) = es.eigenvalues();
 			}
-			std::vector<EigenMatrix> Fmos(4, EigenZero(nbasis, nbasis));
+			std::vector<EigenVector> Fmodiags(4, EigenZero(nbasis, 1));
 			for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-				Fmos[type] = Ccano.transpose() * Fs[type] * Ccano;
+				Fmodiags[type] = ( Ccano.transpose() * Fs[type] * Ccano ).diagonal();
 			}
-			Fmos[3] = Fmos[0];
+			Fmodiags[3] = Fmodiags[0];
 			EigenMatrix A = EigenZero(nbasis, nbasis);
 			for ( int i = 0; i < nbasis; i++ ){
 				int I = 0; int Iscale = 4;
@@ -150,10 +151,10 @@ class ObjBase: public UniversalObjBase{ public:
 					else if ( j < Np + Na + Nb ){ J = 2; Jscale = 2; }
 					else{ J = 3; Jscale = 0; }
 					if ( I == J ) continue;
-					const double FIi = Fmos[I](i, i) * Iscale;
-					const double FIj = Fmos[I](j, j) * Iscale;
-					const double FJi = Fmos[J](i, i) * Jscale;
-					const double FJj = Fmos[J](j, j) * Jscale;
+					const double FIi = Fmodiags[I](i) * Iscale;
+					const double FIj = Fmodiags[I](j) * Iscale;
+					const double FJi = Fmodiags[J](i) * Jscale;
+					const double FJj = Fmodiags[J](j) * Jscale;
 					A(i, j) = std::abs(FIj + FJi - FIi - FJj);
 				}
 			}
@@ -161,10 +162,6 @@ class ObjBase: public UniversalObjBase{ public:
 			L = A.bottomLeftCorner(nbasis - Np - Na - Nb, Np + Na + Nb);
 		}
 	};
-};
-
-static std::function<double (double)> SafeInverse = [](double x){
-	return x == 0 ? 0 : 1. / x;
 };
 
 class ObjLBFGS: public ObjBase{ public:
@@ -363,7 +360,6 @@ bool RestrictedStability(
 		int stable,
 		int nthreads, int output){
 	ObjNewton obj(int2c1e, int4c2e, xc, grid, Norbs, Coupling, nthreads);
-	const int norbs_tot = Norbs[0] + Norbs[1] + Norbs[2];
 	Maniverse::Flag flag(C, S);
 	std::vector<int> space = {};
 	for ( int Norb : Norbs ) if ( Norb > 0 ) space.push_back(Norb);
@@ -380,7 +376,7 @@ bool RestrictedStability(
 	if ( output > 0 && Evals[0] < 0 ){
 		std::printf("Non-positive curvature:\n");
 		const EigenMatrix Y = S * C;
-		const EigenMatrix X = Eigen::Map<const Eigen::MatrixXd>(Evecs[0].data(), C.rows(), norbs_tot);
+		const EigenMatrix X = Eigen::Map<const Eigen::MatrixXd>(Evecs[0].data(), C.rows(), Norbs[0] + Norbs[1] + Norbs[2]);
 		EigenMatrix Omega = X * Y.transpose() - Y * X.transpose() + Y * ( Y.transpose() * X ) * Y.transpose();
 		for ( int i = 0; i < 3; i++ ){
 			int maxRow, maxCol;
@@ -410,10 +406,10 @@ void R_SCF::Calculate0(){
 	Energy += E;
 	mwfn.setEnergy(eps, {.Set=0});
 	mwfn.setCoefficientMatrix(C, {.Set=0});
-	EigenVector occ = EigenZero(mwfn.getNumIndBasis(), 1);
+	EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
 	occ.head(Np).setConstant(2);
 	occ.segment(Np, Na + Nb).setConstant(1);
 	mwfn.setOccupation(occ, {.Set=0});
-	for ( int iorb = 0; iorb < mwfn.getNumIndBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = ( Np + Na > iorb && iorb >= Np ) ? 1 : ( Np + Na + Nb > iorb && iorb >= Np + Na ) ? 2 : 0;
+	for ( int iorb = 0; iorb < mwfn.getNumBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = ( Np + Na > iorb && iorb >= Np ) ? 1 : ( Np + Na + Nb > iorb && iorb >= Np + Na ) ? 2 : 0;
 	if ( stable > 0 ) RestrictedStability(*int2c1e, *int4c2e, xc, grid, {Np, Na, Nb}, Coupling, C.leftCols(Np + Na + Nb), lowers, stable, nthreads, 1);
 }

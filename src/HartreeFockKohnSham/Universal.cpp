@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <vector>
+#include <functional>
 #include <Maniverse/Manifold/Manifold.h>
 
 #include "../Macro.h"
@@ -78,6 +79,10 @@ void UniversalObjBase::Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> 
 		}
 	}
 }
+
+std::function<double (double)> SafeInverse = [](double x){
+	return x == 0 ? 0 : 1. / x;
+};
 
 EigenMatrix UniversalPreconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix K, EigenMatrix L, EigenMatrix SV){
 	EigenMatrix Omega = U.transpose() * SV;
