@@ -24,8 +24,8 @@ UniversalObjBase::UniversalObjBase(
 	for ( int type = 0; type < 3; type++ ){
 		Cs.push_back(EigenZero(nbasis, Norbs[type]));
 		Gradients.push_back(EigenZero(nbasis, Norbs[type]));
-		Ds.push_back(EigenZero(nbasis, nbasis));
-		Fs.push_back(EigenZero(nbasis, nbasis));
+		Ds.push_back(EigenZero(0, 0));
+		Fs.push_back(EigenZero(0, 0));
 	}
 }
 
@@ -33,7 +33,6 @@ void UniversalObjBase::Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> 
 	Cs = Cs_;
 
 	if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
-		std::vector<EigenMatrix> Ds(3, EigenZero(0, 0));
 		for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
 			Ds[type] = Cs[type] * Cs[type].transpose();
 		}
