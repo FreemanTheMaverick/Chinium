@@ -380,8 +380,8 @@ bool RestrictedStability(
 		EigenMatrix Omega = X * Y.transpose() - Y * X.transpose() + Y * ( Y.transpose() * X ) * Y.transpose();
 		for ( int i = 0; i < 3; i++ ){
 			int maxRow, maxCol;
-			const double maxcoeff = Omega.cwiseAbs().maxCoeff(&maxRow, &maxCol);
-			std::printf("%d <-> %d  %f\n", maxCol, maxRow, maxcoeff);
+			Omega.cwiseAbs().maxCoeff(&maxRow, &maxCol);
+			std::printf("%d <-> %d  %f\n", maxCol, maxRow, Omega(maxRow, maxCol));
 			Omega(maxRow, maxCol) = Omega(maxCol, maxRow) = 0;
 		}
 	}

@@ -478,8 +478,8 @@ bool TwoDetStability(
 		EigenMatrix Omega = X * Y.transpose() - Y * X.transpose() + Y * ( Y.transpose() * X ) * Y.transpose();
 		for ( int i = 0; i < 3; i++ ){
 			int maxRow, maxCol;
-			const double maxcoeff = Omega.cwiseAbs().maxCoeff(&maxRow, &maxCol);
-			std::printf("%d <-> %d  %f\n", maxCol, maxRow, maxcoeff);
+			Omega.cwiseAbs().maxCoeff(&maxRow, &maxCol);
+			std::printf("%d <-> %d  %f\n", maxCol, maxRow, Omega(maxRow, maxCol));
 			Omega(maxRow, maxCol) = Omega(maxCol, maxRow) = 0;
 		}
 	}
@@ -507,5 +507,5 @@ void TwoDet::Calculate0(){
 	occ.segment(Np, 2).setConstant(1);
 	mwfn.setOccupation(occ, {.Set=0});
 	for ( int iorb = 0; iorb < mwfn.getNumBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = iorb == Np ? 1 : iorb == Np + 1 ? 2 : 0;
-	if ( stable > 0 ) TwoDetStability(*int2c1e, *int4c2e, xc, grid, grid2, Np, C, lowers, stable, nthreads, 1);
+	if ( stable > 0 ) TwoDetStability(*int2c1e, *int4c2e, xc, grid, grid2, Np, C.leftCols(Np + 2), lowers, stable, nthreads, 1);
 }
