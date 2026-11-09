@@ -27,98 +27,47 @@
 namespace{
 
 #define One ( grid2->SubGridBatches.size() > 0 )
-#define __Make_Block_View__(mat, mats){\
-	if constexpr (std::is_same_v<std::decay_t<decltype(mat)>, EigenVector>) \
-		mats = {mat.segment(0, Np), mat.segment(Np, 1), mat.segment(Np + 1, 1)}; \
-	else \
-		mats = {mat.middleCols(0, Np), mat.middleCols(Np, 1), mat.middleCols(Np + 1, 1)}; \
-}
 // #define lambda ( One ? 0 : 1 )
 #define lambda 0
 
-class ObjBase: public Maniverse::Function{ public:
-	Int2C1E* int2c1e;
-	Int4C2E* int4c2e;
-	EigenMatrix Ssqrt;
-	EigenMatrix Ssqrtinv;
-	ExchangeCorrelation* xc;
-	Grid* grid;
+class ObjBase: public UniversalObjBase{ public:
 	Grid* grid2;
-
-	int Np;
-	std::array<int, 3> Norbs;
-	int nbasis;
-	std::array<int, 3> occ = {2, 1, 1};
-
-	int nthreads;
-
-	EigenMatrix C;
-	std::vector<Eigen::Ref<EigenMatrix>> Cs;
-	std::vector<Eigen::Ref<EigenMatrix>> Gradients;
-	std::vector<EigenMatrix> Ds;
-	std::vector<EigenMatrix> Fs;
-	EigenMatrix K;
-	EigenMatrix L;
-
-	EigenMatrix Ccano;
-	EigenVector eps;
-	std::vector<Eigen::Ref<EigenMatrix>> Ccanos;
-	std::vector<Eigen::Ref<EigenVector>> epss;
 
 	ObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
 		int Np, int nthreads
-	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), grid2(&grid2), Np(Np), nthreads(nthreads){
-		Eigen::SelfAdjointEigenSolver<EigenMatrix> es(int2c1e.Overlap);
-		Ssqrt = es.operatorSqrt();
-		Ssqrtinv = es.operatorInverseSqrt();
-		nbasis = Ssqrt.rows();
-		Norbs = { Np, 1, 1 };
-	
-		C = EigenZero(nbasis, Np + 2);
-		Gradient = {C};
-		__Make_Block_View__(C, Cs);
-		__Make_Block_View__(Gradient[0], Gradients);
-		Ds = Fs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
-		Ccano.resize(nbasis, nbasis);
-		eps.resize(nbasis);
-		__Make_Block_View__(Ccano, Ccanos);
-		__Make_Block_View__(eps, epss);
-		Ccanos.push_back(Ccano.rightCols(nbasis - Np - 2));
-		epss.push_back(eps.tail(nbasis - Np - 2));
+	): UniversalObjBase(int2c1e, int4c2e, xc, grid, { Np, 1, 1 }, 0, nthreads), grid2(&grid2){
+		Ccanos.push_back(EigenZero(nbasis, nbasis - Np - 2));
+		epss.push_back(EigenZero(nbasis - Np - 2, 1));
 	};
 
-	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
-		C = Cs_[0];
-		if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
-			for ( int type = 0; type < 3; type++ ){
-				Ds[type] = Cs[type] * Cs[type].transpose();
-			}
-			const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
-			const std::vector<EigenMatrix> FhfMs = {
-				Hcore + J - Kd - 0.5 * ( Ka + Kb ),
-				Hcore + J - Kd - Ka + Kb * lambda,
-				Hcore + J - Kd + Ka * lambda - Kb
-			};
-			const std::vector<EigenMatrix> FhfTs = {
-				Hcore + J - Kd - 0.5 * ( Ka + Kb ),
-				Hcore + J - Kd - Ka - Kb,
-				Hcore + J - Kd - Ka - Kb
-			};
-			Value = 0;
-			for ( int type = 0; type < 3; type++ ){
-				Fs[type] = 2 * FhfMs[type] - FhfTs[type];
-				Value += 0.5 * occ[type] * Ds[type].cwiseProduct( Hcore + Fs[type] ).sum();
-			}
+	void calcInternal(std::vector<int> derivatives) override{
+		const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
+		const std::vector<EigenMatrix> FhfMs = {
+			Hcore + J - Kd - 0.5 * ( Ka + Kb ),
+			Hcore + J - Kd - Ka + Kb * lambda,
+			Hcore + J - Kd + Ka * lambda - Kb
+		};
+		const std::vector<EigenMatrix> FhfTs = {
+			Hcore + J - Kd - 0.5 * ( Ka + Kb ),
+			Hcore + J - Kd - Ka - Kb,
+			Hcore + J - Kd - Ka - Kb
+		};
+		Value = 0;
+		for ( int type = 0; type < 3; type++ ){
+			Fs[type] = 2 * FhfMs[type] - FhfTs[type];
+			Value += 0.5 * occ[type] * Ds[type].cwiseProduct( Hcore + Fs[type] ).sum();
+		}
 
-			if (*xc){
-				if (One){
-					grid->getDensity({ Ds[0] + Ds[1], Ds[0] + Ds[2] });
-					grid2->getDensity({ Ds[0] + Ds[1] + Ds[2], Ds[0] });
-					xc->Evaluate("ev", *grid);
-					xc->Evaluate("ev", *grid2);
-					Value += 2 * grid->getEnergy() - grid2->getEnergy();
+		if (*xc){
+			if (One){
+				grid->getDensity({ Ds[0] + Ds[1], Ds[0] + Ds[2] });
+				grid2->getDensity({ Ds[0] + Ds[1] + Ds[2], Ds[0] });
+				xc->Evaluate("ev", *grid);
+				xc->Evaluate("ev", *grid2);
+				Value += 2 * grid->getEnergy() - grid2->getEnergy();
+				if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
 					std::vector<EigenMatrix> GxcMs = grid->getFock();
 					GxcMs = {
 						0.5 * ( GxcMs[0] + GxcMs[1] ),
@@ -134,10 +83,12 @@ class ObjBase: public Maniverse::Function{ public:
 					for ( int type = 0; type < 3; type++ ){
 						Fs[type] += 2 * GxcMs[type] - GxcTs[type];
 					}
-				}else{
-					grid->getDensity({ 2 * Ds[0] + Ds[1] + Ds[2] });
-					xc->Evaluate("ev", *grid);
-					Value += grid->getEnergy();
+				}
+			}else{
+				grid->getDensity({ 2 * Ds[0] + Ds[1] + Ds[2] });
+				xc->Evaluate("ev", *grid);
+				Value += grid->getEnergy();
+				if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
 					const EigenMatrix Gxc = grid->getFock()[0];
 					for ( int type = 0; type < 3; type++ ){
 						Fs[type] += Gxc;
@@ -145,109 +96,34 @@ class ObjBase: public Maniverse::Function{ public:
 				}
 			}
 		}
-
-		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			for ( int type = 0; type < 3; type++ ){
-				Gradients[type] = 2 * occ[type] * Fs[type] * Cs[type];
-			}
-
-			Eigen::SelfAdjointEigenSolver<EigenMatrix> es;
-			for ( int type = 0; type < 3; type++ ){
-				const Eigen::Ref<EigenMatrix> Ct = Cs[type];
-				const EigenMatrix Ft = Ct.transpose() * Fs[type] * Ct;
-				es.compute(Ft);
-				Ccanos[type] = Ct * es.eigenvectors();
-				epss[type] = es.eigenvalues();
-			}
-			{
-				Eigen::HouseholderQR<EigenMatrix> qr(Ssqrt * C);
-				const EigenMatrix C_perp = (Ssqrtinv * qr.householderQ()).rightCols(nbasis - Np - 2);
-				const EigenMatrix Fvir = C_perp.transpose() * Fs[0] * C_perp;
-				es.compute(Fvir);
-				Ccanos[3] = C_perp * es.eigenvectors();
-				epss[3] = es.eigenvalues();
-			}
-			std::vector<EigenVector> Fmodiags(4, EigenZero(nbasis, 1));
-			for ( int type = 0; type < 3; type++ ){
-				Fmodiags[type] = ( Ccano.transpose() * Fs[type] * Ccano ).diagonal();
-			}
-			EigenMatrix A = EigenZero(nbasis, nbasis);
-			for ( int i = 0; i < nbasis; i++ ){
-				int I = 0; int Iscale = 4;
-				if ( i < Np ){ I = 0; Iscale = 4; }
-				else if ( i < Np + 1 ){ I = 1; Iscale = 2; }
-				else if ( i < Np + 2 ) { I = 2; Iscale = 2; }
-				else { I = 3; Iscale = 0; };
-				for ( int j = 0; j < nbasis; j++ ){
-					int J = 0; int Jscale = 4;
-					if ( j < Np ){ J = 0; Jscale = 4; }
-					else if ( j < Np + 1 ){ J = 1; Jscale = 2; }
-					else if ( j < Np + 2 ){ J = 2; Jscale = 2; }
-					else{ J = 3; Jscale = 0; }
-					if ( I == J ) continue;
-					const double FIi = Fmodiags[I](i) * Iscale;
-					const double FIj = Fmodiags[I](j) * Iscale;
-					const double FJi = Fmodiags[J](i) * Jscale;
-					const double FJj = Fmodiags[J](j) * Jscale;
-					A(i, j) = std::abs(FIj + FJi - FIi - FJj);
-				}
-			}
-			K = A.topLeftCorner(Np + 2, Np + 2);
-			L = A.bottomLeftCorner(nbasis - Np - 2, Np + 2);
-		}
 	};
-};
 
-class ObjLBFGS: public ObjBase{ public:
-	EigenMatrix Ksqrt, Ksqrtinv, Lsqrt, Lsqrtinv;
-
-	using ObjBase::ObjBase;
+	std::vector<EigenMatrix> decouple(EigenMatrix mat) const{
+		std::vector<EigenMatrix> mats(3, EigenZero(nbasis, 0));
+		for ( int i = 0, col = 0; i < 3; i++ ){
+			mats[i] = mat.middleCols(col, Norbs[i]);
+			col += Norbs[i];
+		}
+		return mats;
+	};
 
 	void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
-		ObjBase::Calculate(Cs_, derivatives);
+		Cs = decouple(Cs_[0]);
+		UniversalObjBase::CalculateAllCs(derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			Ksqrt = K.cwiseSqrt();
-			Ksqrtinv = Ksqrt.unaryExpr(SafeInverse);
-			Lsqrt = L.cwiseSqrt();
-			Lsqrtinv = Lsqrt.unaryExpr(SafeInverse);
+		    Gradient = { concatenate_mat(Gradients) };
 		}
 	};
 };
+
+using ObjLBFGS = UniversalObjLBFGS<ObjBase>;
 
 class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
-	EigenMatrix Kinv, Linv;
-
 	using UniversalObjNewtonBase<ObjBase>::UniversalObjNewtonBase;
 
-	void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
-		ObjBase::Calculate(Cs_, derivatives);
-		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
-			Kinv = K.unaryExpr(SafeInverse);
-			Linv = L.unaryExpr(SafeInverse);
-		}
-	};
-
-	virtual std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const = 0;
-
-	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCs_) const override{
-		std::vector<Eigen::Ref<EigenMatrix>> dCs;
-		__Make_Block_View__(dCs_[0], dCs);
-		std::vector<EigenMatrix> dDs(3, EigenZero(nbasis, nbasis));
-		for ( int type = 0; type < 3; type++ ){
-			dDs[type] = Cs[type] * dCs[type].transpose();
-			dDs[type] += dDs[type].transpose().eval();
-		}
-
-		const std::vector<EigenMatrix> HdDs = DensityHessian(dDs);
-
-		EigenMatrix HdC = EigenZero(nbasis, Np + 2);
-		std::vector<Eigen::Ref<EigenMatrix>> HdCs;
-		__Make_Block_View__(HdC, HdCs);
-		for ( int type = 0; type < 3; type++ ){
-			HdCs[type] = 2 * occ[type] * ( HdDs[type] * Cs[type] + Fs[type] * dCs[type] );
-		}
-
-		return std::vector<EigenMatrix>{ HdC };
+	virtual std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCs_) const override{
+		const std::vector<EigenMatrix> dCs = decouple(dCs_[0]);
+		return { concatenate_mat(UniversalObjNewtonBase::Hessian(dCs)) };
 	};
 };
 
@@ -394,8 +270,9 @@ class Cons: public Maniverse::Function{ public:
 	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
 		EigenVector PV(V.size());\
 		MV_Block(PV, 0, bp) = UniversalPreconditioner(\
-			obj.Ccano.leftCols(obj.Np + 2), obj.Ccanos[3],\
-			obj._K_, obj._L_,\
+			concatenate_mat({obj.Ccanos[0], obj.Ccanos[1], obj.Ccanos[2]}),\
+			obj.Ccanos[3],\
+			obj._K_[0], obj._L_[0],\
 			obj.int2c1e->Overlap * MV_constBlock(V, 0, bp)\
 		);\
 		return PV;\
@@ -426,8 +303,8 @@ std::tuple<double, EigenVector, EigenMatrix> TwoDeterminantRiemann(
 	std::array<double, 3> tol = {1.e-8, 1.e-5, 1.e-5};
 	const std::vector<double> cons_tol(lowers_.size(), 1e-10);
 	if constexpr ( scf_t == lbfgs_t ){
-		__Precon__(PreconditionerSqrt, Ksqrtinv, Lsqrtinv);
-		__Precon__(PreconditionerInvSqrt, Ksqrt, Lsqrt);
+		__Precon__(PreconditionerSqrt, Ksqrtinvs, Lsqrtinvs);
+		__Precon__(PreconditionerInvSqrt, Ksqrts, Lsqrts);
 		if ( ! lowers_.size() && ! Maniverse::LBFGS(
 					M, tol,
 					20, 300, 0.1, 0.75, 10, output
@@ -437,7 +314,7 @@ std::tuple<double, EigenVector, EigenMatrix> TwoDeterminantRiemann(
 					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
-		__Precon__(Preconditioner, Kinv, Linv);
+		__Precon__(Preconditioner, Kinvs, Linvs);
 		Maniverse::TrustRegion tr;
 		static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
 		Maniverse::ConjugateGradient cg(1, {ls_tol, ls_tol}, M.getDimension(), output);
@@ -450,7 +327,7 @@ std::tuple<double, EigenVector, EigenMatrix> TwoDeterminantRiemann(
 		) ) throw std::runtime_error("Convergence failed!");
 	}
 
-	return std::make_tuple(obj.Value, obj.eps, obj.Ccano);
+	return std::make_tuple(obj.Value, concatenate_vec(obj.epss), concatenate_mat(obj.Ccanos));
 }
 
 bool TwoDetStability(

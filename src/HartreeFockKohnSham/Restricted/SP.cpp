@@ -84,129 +84,42 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedDIIS(
 }
 
 class ObjBase: public UniversalObjBase{ public:
-	EigenVector eps;
-	EigenMatrix Ccano;
-	EigenMatrix K;
-	EigenMatrix L;
-
 	ObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		std::vector<int> Norbs, double Coupling,
 		int nthreads
 	): UniversalObjBase(int2c1e, int4c2e, xc, grid, Norbs, Coupling, nthreads){
-		Ccano.resize(nbasis, nbasis);
-		eps.resize(nbasis);
+		Ccanos.push_back(EigenZero(nbasis, nbasis - Norbs[0] - Norbs[1] - Norbs[2]));
+		epss.push_back((EigenZero(nbasis - Norbs[0] - Norbs[1] - Norbs[2], 1)));
 	};
 
-	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
-		const EigenMatrix C = Cs_[0];
-		Cs_.clear();
-		for ( int type = 0, col = 0; type < 3; type++ ){
-			Cs_.push_back( Norbs[type] ? C.middleCols(col, Norbs[type]).eval() : EigenZero(0, 0) );
-			col += Norbs[type];
+	std::vector<EigenMatrix> decouple(EigenMatrix mat) const{
+		std::vector<EigenMatrix> mats(3, EigenZero(nbasis, 0));
+		for ( int i = 0, col = 0; i < 3; i++ ){
+			mats[i] = mat.middleCols(col, Norbs[i]);
+			col += Norbs[i];
 		}
-		UniversalObjBase::Calculate(Cs_, derivatives);
+		return mats;
+	};
+		
+	void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		Cs = decouple(Cs_[0]);
+		UniversalObjBase::CalculateAllCs(derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			Gradient = { C };
-			for ( int type = 0, col = 0; type < 3; type++ ) if ( Norbs[type] ){
-				Gradient[0].middleCols(col, Norbs[type]) = Gradients[type];
-				col += Norbs[type];
-			}
-
-			const int Np = Norbs[0]; const int Na = Norbs[1]; const int Nb = Norbs[2];
-			Eigen::SelfAdjointEigenSolver<EigenMatrix> es;
-			for ( int type = 0, col = 0; type < 3; type++ ) if ( Norbs[type] ){
-				const EigenMatrix Ct = C.middleCols(col, Norbs[type]);
-				const EigenMatrix Ft = Ct.transpose() * Fs[type] * Ct;
-				es.compute(Ft);
-				Ccano.middleCols(col, Norbs[type]) = Ct * es.eigenvectors();
-				eps.segment(col, Norbs[type]) = es.eigenvalues();
-				col += Norbs[type];
-			}
-			{
-				Eigen::HouseholderQR<EigenMatrix> qr(Ssqrt * C);
-				const EigenMatrix C_perp = (Ssqrtinv * qr.householderQ()).rightCols(nbasis - Np - Na - Nb);
-				const EigenMatrix Fvir = C_perp.transpose() * Fs[0] * C_perp;
-				es.compute(Fvir);
-				Ccano.rightCols(nbasis - Np - Na - Nb) = C_perp * es.eigenvectors();
-				eps.tail(nbasis - Np - Na - Nb) = es.eigenvalues();
-			}
-			std::vector<EigenVector> Fmodiags(4, EigenZero(nbasis, 1));
-			for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-				Fmodiags[type] = ( Ccano.transpose() * Fs[type] * Ccano ).diagonal();
-			}
-			Fmodiags[3] = Fmodiags[0];
-			EigenMatrix A = EigenZero(nbasis, nbasis);
-			for ( int i = 0; i < nbasis; i++ ){
-				int I = 0; int Iscale = 4;
-				if ( i < Np ){ I = 0; Iscale = 4; }
-				else if ( i < Np + Na ){ I = 1; Iscale = 2; }
-				else if ( i < Np + Na + Nb ) { I = 2; Iscale = 2; }
-				else { I = 3; Iscale = 0; };
-				for ( int j = 0; j < nbasis; j++ ){
-					int J = 0; int Jscale = 4;
-					if ( j < Np ){ J = 0; Jscale = 4; }
-					else if ( j < Np + Na ){ J = 1; Jscale = 2; }
-					else if ( j < Np + Na + Nb ){ J = 2; Jscale = 2; }
-					else{ J = 3; Jscale = 0; }
-					if ( I == J ) continue;
-					const double FIi = Fmodiags[I](i) * Iscale;
-					const double FIj = Fmodiags[I](j) * Iscale;
-					const double FJi = Fmodiags[J](i) * Jscale;
-					const double FJj = Fmodiags[J](j) * Jscale;
-					A(i, j) = std::abs(FIj + FJi - FIi - FJj);
-				}
-			}
-			K = A.topLeftCorner(Np + Na + Nb, Np + Na + Nb);
-			L = A.bottomLeftCorner(nbasis - Np - Na - Nb, Np + Na + Nb);
+		    Gradient = { concatenate_mat(Gradients) };
 		}
 	};
 };
 
-class ObjLBFGS: public ObjBase{ public:
-	EigenMatrix Ksqrt, Ksqrtinv, Lsqrt, Lsqrtinv;
-
-	using ObjBase::ObjBase;
-
-	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
-		ObjBase::Calculate(Cprimes_, derivatives);
-		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			Ksqrt = K.cwiseSqrt();
-			Ksqrtinv = Ksqrt.unaryExpr(SafeInverse);
-			Lsqrt = L.cwiseSqrt();
-			Lsqrtinv = Lsqrt.unaryExpr(SafeInverse);
-		}
-	};
-};
+using ObjLBFGS = UniversalObjLBFGS<ObjBase>;
 
 class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
-	EigenMatrix Kinv, Linv;
-
 	using UniversalObjNewtonBase<ObjBase>::UniversalObjNewtonBase;
 
-	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
-		UniversalObjNewtonBase<ObjBase>::Calculate(Cs_, derivatives);
-		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
-			Kinv = K.unaryExpr(SafeInverse);
-			Linv = L.unaryExpr(SafeInverse);
-		}
-	};
-
-	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCs) const override{
-		const EigenMatrix dC = dCs[0];
-		dCs.clear();
-		for ( int type = 0, col = 0; type < 3; type++ ){
-			dCs.push_back( Norbs[type] ? dC.middleCols(col, Norbs[type]).eval() : EigenZero(0, 0) );
-			col += Norbs[type];
-		}
-		const std::vector<EigenMatrix> HdCs = UniversalObjNewtonBase<ObjBase>::Hessian(dCs);
-		EigenMatrix HdC = dC;
-		for ( int type = 0, col = 0; type < 3; type++ ) if ( Norbs[type] ){
-			HdC.middleCols(col, Norbs[type]) = HdCs[type];
-			col += Norbs[type];
-		}
-		return std::vector<EigenMatrix>{ HdC };
+	virtual std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCs_) const override{
+		const std::vector<EigenMatrix> dCs = decouple(dCs_[0]);
+		return { concatenate_mat(UniversalObjNewtonBase::Hessian(dCs)) };
 	};
 };
 
@@ -287,9 +200,9 @@ class Cons: public Maniverse::Function{ public:
 	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
 		EigenVector PV(V.size());\
 		MV_Block(PV, 0, bp) = UniversalPreconditioner(\
-			obj.Ccano.leftCols(obj.Norbs[0] + obj.Norbs[1] + obj.Norbs[2]),\
-			obj.Ccano.rightCols(obj.nbasis - obj.Norbs[0] - obj.Norbs[1] - obj.Norbs[2]),\
-			obj._K_, obj._L_,\
+			concatenate_mat({obj.Ccanos[0], obj.Ccanos[1], obj.Ccanos[2]}),\
+			obj.Ccanos[3],\
+			obj._K_[0], obj._L_[0],\
 			obj.int2c1e->Overlap * MV_constBlock(V, 0, bp)\
 		);\
 		return PV;\
@@ -324,8 +237,8 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 	const std::array<double, 3> tol = {1.e-8, 1.e-5, 1.e-5};
 	const std::vector<double> cons_tol(lowers_.size(), 1e-10);
 	if constexpr ( scf_t == lbfgs_t ){
-		__Precon__(PreconditionerSqrt, Ksqrtinv, Lsqrtinv);
-		__Precon__(PreconditionerInvSqrt, Ksqrt, Lsqrt);
+		__Precon__(PreconditionerSqrt, Ksqrtinvs, Lsqrtinvs);
+		__Precon__(PreconditionerInvSqrt, Ksqrts, Lsqrts);
 		if ( ! lowers_.size() && ! Maniverse::LBFGS(
 					M, tol,
 					20, 300, 0.1, 0.75, 10, output
@@ -335,7 +248,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
-		__Precon__(Preconditioner, Kinv, Linv);
+		__Precon__(Preconditioner, Kinvs, Linvs);
 		Maniverse::TrustRegion tr;
 		static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
 		Maniverse::ConjugateGradient cg(1, {ls_tol, ls_tol}, M.getDimension(), output);
@@ -348,7 +261,7 @@ std::tuple<double, EigenVector, EigenMatrix> RestrictedRiemann(
 		) ) throw std::runtime_error("Convergence failed!");
 	}
 
-	return std::make_tuple(obj.Value, obj.eps, obj.Ccano);
+	return std::make_tuple(obj.Value, concatenate_vec(obj.epss), concatenate_mat(obj.Ccanos));
 }
 
 bool RestrictedStability(

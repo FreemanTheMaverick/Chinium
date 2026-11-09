@@ -106,84 +106,61 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 namespace{
 
 class ObjBase: public UniversalObjBase{ public:
-	std::array<EigenVector, 3> epss = {
+	std::array<EigenVector, 3> eps_virs = {
 		EigenVector::Zero(0), EigenVector::Zero(0), EigenVector::Zero(0)
 	};
-	std::array<EigenMatrix, 3> Ccano_occs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 	std::array<EigenMatrix, 3> Ccano_virs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 	std::array<EigenMatrix, 3> Ls = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
 
 	using UniversalObjBase::UniversalObjBase;
 
-	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
-		Cs_.insert(Cs_.begin(), EigenZero(0, 0));
-		UniversalObjBase::Calculate(Cs_, derivatives);
-		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			Gradient = Gradients;
-			Gradient.erase(Gradient.begin());
-			Eigen::SelfAdjointEigenSolver<EigenMatrix> es;
-			for ( int type = 1; type < 3; type++ ){
-				epss[type].resize(nbasis);
+	virtual void makePrecon() override{
+		Eigen::SelfAdjointEigenSolver<EigenMatrix> es;
+		for ( int type = 1; type < 3; type++ ){
+			epss[type].resize(nbasis);
 
-				const EigenMatrix Focc = Cs[type].transpose() * Fs[type] * Cs[type];
-				es.compute(Focc);
-				Ccano_occs[type] = Cs[type] * es.eigenvectors();
-				epss[type].head(Norbs[type]) = es.eigenvalues();
+			const EigenMatrix Focc = Cs[type].transpose() * Fs[type] * Cs[type];
+			es.compute(Focc);
+			Ccanos[type] = Cs[type] * es.eigenvectors();
+			epss[type] = es.eigenvalues();
 
-				Eigen::HouseholderQR<EigenMatrix> qr(Ssqrt * Cs[type]);
-				const EigenMatrix Call = Ssqrtinv * qr.householderQ();
-				const EigenMatrix C_perp = Call.rightCols(nbasis - Norbs[type]);
+			Eigen::HouseholderQR<EigenMatrix> qr(Ssqrt * Cs[type]);
+			const EigenMatrix Call = Ssqrtinv * qr.householderQ();
+			const EigenMatrix C_perp = Call.rightCols(nbasis - Norbs[type]);
 
-				const EigenMatrix Fvir = C_perp.transpose() * Fs[type] * C_perp;
-				es.compute(Fvir);
-				Ccano_virs[type] = C_perp * es.eigenvectors();
-				epss[type].tail(nbasis - Norbs[type]) = es.eigenvalues();
+			const EigenMatrix Fvir = C_perp.transpose() * Fs[type] * C_perp;
+			es.compute(Fvir);
+			Ccano_virs[type] = C_perp * es.eigenvectors();
+			eps_virs[type] = es.eigenvalues();
 
-				EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
-				for ( int o = 0; o < Norbs[type]; o++ ){
-					for ( int v = Norbs[type]; v < nbasis; v++ ){
-						A(o, v) = A(v, o) = 2 * std::abs( epss[type](v) - epss[type](o) );
-					}
+			EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
+			const EigenVector eps = concatenate_vec({epss[type], eps_virs[type]});
+			for ( int o = 0; o < Norbs[type]; o++ ){
+				for ( int v = Norbs[type]; v < nbasis; v++ ){
+					A(o, v) = A(v, o) = 2 * std::abs( eps(v) - eps(o) );
 				}
-				Ls[type] = A.bottomLeftCorner(nbasis - Norbs[type], Norbs[type]);
 			}
+			Ls[type] = A.bottomLeftCorner(nbasis - Norbs[type], Norbs[type]);
 		}
 	};
-};
 
-class ObjLBFGS: public ObjBase{ public:
-	std::array<EigenMatrix, 3> Lsqrts = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
-	std::array<EigenMatrix, 3> Lsqrtinvs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
-
-	using ObjBase::ObjBase;
-
-	void Calculate(std::vector<EigenMatrix> Ds, std::vector<int> derivatives) override{
-		ObjBase::Calculate(Ds, derivatives);
+	void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		Cs[1] = Cs_[0];
+		Cs[2] = Cs_[1];
+		UniversalObjBase::CalculateAllCs(derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			for ( int type = 1; type < 3; type++ ){
-				Lsqrts[type] = Ls[type].cwiseSqrt();
-				Lsqrtinvs[type] = Lsqrts[type].cwiseInverse();
-			}
+		    Gradient = { Gradients[1], Gradients[2] };
 		}
-	};
+	}
 };
+
+using ObjLBFGS = UniversalObjLBFGS<ObjBase>;
 
 class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
-	std::array<EigenMatrix, 3> Linvs = { EigenZero(0, 0), EigenZero(0, 0), EigenZero(0, 0) };
-
 	using UniversalObjNewtonBase<ObjBase>::UniversalObjNewtonBase;
 
-	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
-		ObjBase::Calculate(Cs_, derivatives);
-		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
-			for ( int type = 1; type < 3; type++ ){
-				Linvs[type] = Ls[type].cwiseInverse();
-			}
-		}
-	};
-
 	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCs) const override{
-		dCs.insert(dCs.begin(), EigenZero(0, 0));
+		dCs.insert(dCs.begin(), EigenZero(nbasis, 0));
 		std::vector<EigenMatrix> HdCs = UniversalObjNewtonBase<ObjBase>::Hessian(dCs);
 		HdCs.erase(HdCs.begin());
 		return HdCs;
@@ -246,11 +223,11 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix, EigenMatrix> Unrestric
 					M, tr, cg, tol, 300, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}
-	EigenMatrix Ca = EigenZero(obj.nbasis, obj.nbasis);
-	Ca << obj.Ccano_occs[1], obj.Ccano_virs[1];
-	EigenMatrix Cb = EigenZero(obj.nbasis, obj.nbasis);
-	Cb << obj.Ccano_occs[2], obj.Ccano_virs[2];
-	return std::make_tuple(obj.Value, obj.epss[1], obj.epss[2], Ca, Cb);
+	EigenVector epsa = concatenate_vec({ obj.epss[1], obj.eps_virs[1] });
+	EigenVector epsb = concatenate_vec({ obj.epss[2], obj.eps_virs[2] });
+	EigenMatrix Ca = concatenate_mat({ obj.Ccanos[1], obj.Ccano_virs[1] });
+	EigenMatrix Cb = concatenate_mat({ obj.Ccanos[2], obj.Ccano_virs[2] });
+	return std::make_tuple(obj.Value, epsa, epsb, Ca, Cb);
 }
 
 void U_SCF::Calculate0(){

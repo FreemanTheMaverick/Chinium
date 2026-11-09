@@ -12,6 +12,8 @@
 
 #include "AugmentedRoothaanHall.h"
 
+extern std::function<double (double)> SafeInverse;
+
 class UniversalObjBase: public Maniverse::Function{ public:
 	Int2C1E* int2c1e;
 	Int4C2E* int4c2e;
@@ -28,9 +30,13 @@ class UniversalObjBase: public Maniverse::Function{ public:
 
 	std::vector<int> occ = { 2, 1, 1 };
 	std::vector<EigenMatrix> Cs;
+	std::vector<EigenMatrix> Ccanos;
+	std::vector<EigenVector> epss;
 	std::vector<EigenMatrix> Gradients;
 	std::vector<EigenMatrix> Ds;
 	std::vector<EigenMatrix> Fs;
+
+	std::vector<EigenMatrix> Ks, Ls;
 
 	UniversalObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
@@ -39,7 +45,41 @@ class UniversalObjBase: public Maniverse::Function{ public:
 		int nthreads
 	);
 
-	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override;
+	virtual void calcInternal(std::vector<int> derivatives);
+
+	virtual void makePrecon();
+
+	void CalculateAllCs(std::vector<int> derivatives);
+};
+
+template<typename ObjBase>
+class UniversalObjLBFGS: public ObjBase{ public:
+	using ObjBase::ObjBase;
+	using ObjBase::Norbs;
+	using ObjBase::nbasis;
+	using ObjBase::Cs;
+	using ObjBase::occ;
+	using ObjBase::Fs;
+	using ObjBase::Ks;
+	using ObjBase::Ls;
+
+	std::vector<EigenMatrix> Ksqrts, Lsqrts, Ksqrtinvs, Lsqrtinvs;
+
+	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		ObjBase::Calculate(Cs_, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			Ksqrts.clear(); Ksqrtinvs.clear();
+			for ( EigenMatrix& K : Ks ){
+				Ksqrts.push_back( K.cwiseSqrt() );
+				Ksqrtinvs.push_back( K.cwiseSqrt().unaryExpr(SafeInverse) );
+			}
+			Lsqrts.clear(); Lsqrtinvs.clear();
+			for ( EigenMatrix& L : Ls ){
+				Lsqrts.push_back( L.cwiseSqrt() );
+				Lsqrtinvs.push_back( L.cwiseSqrt().unaryExpr(SafeInverse) );
+			}
+		}
+	}
 };
 
 template<typename ObjBase>
@@ -50,11 +90,25 @@ class UniversalObjNewtonBase: public ObjBase{ public:
 	using ObjBase::Cs;
 	using ObjBase::occ;
 	using ObjBase::Fs;
+	using ObjBase::Ks;
+	using ObjBase::Ls;
+
+	std::vector<EigenMatrix> Kinvs, Linvs;
+
+	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		ObjBase::Calculate(Cs_, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			Kinvs.clear();
+			for ( EigenMatrix& K : Ks ) Kinvs.push_back( K.unaryExpr(SafeInverse) );
+			Linvs.clear();
+			for ( EigenMatrix& L : Ls ) Linvs.push_back( L.unaryExpr(SafeInverse) );
+		}
+	}
 
 	virtual std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDs) const = 0;
 
 	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCs) const override{
-		std::vector<EigenMatrix> dDs(3, EigenZero(nbasis, nbasis));
+		std::vector<EigenMatrix> dDs(3, EigenZero(0, 0));
 		for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
 			dDs[type] = Cs[type] * dCs[type].transpose();
 			dDs[type] += dDs[type].transpose().eval();
@@ -132,10 +186,10 @@ class UniversalObjARH: public ObjNewtonBase{ public:
 
 	AugmentedRoothaanHall arh = AugmentedRoothaanHall(20, 1);
 
-	#define ntypes ( ( Norbs[0] > 0 ) + ( Norbs[1] > 0 ) + ( Norbs[2] > 0 ) )
 	void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
 		ObjNewtonBase::Calculate(Cs_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			const int ntypes = ( Norbs[0] > 0 ) + ( Norbs[1] > 0 ) + ( Norbs[2] > 0 );
 			EigenMatrix Dprime = EigenZero(nbasis, nbasis * ntypes);
 			EigenMatrix Fprime = EigenZero(nbasis, nbasis * ntypes);
 			for ( int type = 0, itype = 0; type < 3; type++ ) if ( Norbs[type] ){
@@ -148,6 +202,7 @@ class UniversalObjARH: public ObjNewtonBase{ public:
 	};
 
 	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDs) const override{
+		const int ntypes = ( Norbs[0] > 0 ) + ( Norbs[1] > 0 ) + ( Norbs[2] > 0 );
 		EigenMatrix dDprime = EigenZero(nbasis, nbasis * ntypes);
 		for ( int type = 0, itype = 0; type < 3; type++ ) if ( Norbs[type] ){
 			dDprime.middleCols((itype++) * nbasis, nbasis) = Ssqrt * dDs[type] * Ssqrt;
@@ -161,6 +216,7 @@ class UniversalObjARH: public ObjNewtonBase{ public:
 	};
 };
 
-extern std::function<double (double)> SafeInverse;
-
 EigenMatrix UniversalPreconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix K, EigenMatrix L, EigenMatrix V);
+
+EigenMatrix concatenate_mat(std::vector<EigenMatrix> mats);
+EigenVector concatenate_vec(std::vector<EigenVector> vecs);
