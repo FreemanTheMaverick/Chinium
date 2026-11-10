@@ -462,6 +462,7 @@ class ObjARH: public ObjNewtonBase{ public:
 			obj.Cprime_oa, obj.Cprime_v, obj._K_, obj._L_,\
 			MV_constBlock(V, 0, bp)\
 		);\
+		if ( bp.size() > 1 ) MV_Block(PV, 1, bp) = MV_constBlock(V, 1, bp);\
 		return PV;\
 	};\
 }
