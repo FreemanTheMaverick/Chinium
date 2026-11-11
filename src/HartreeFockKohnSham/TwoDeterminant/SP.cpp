@@ -2,6 +2,7 @@
 #include <vector>
 #include <functional>
 #include <array>
+#include <type_traits>
 #include <cstdio>
 #include <Maniverse/Manifold/Flag.h>
 #include <Maniverse/Optimizer/AugmentedLagrangian.h>
@@ -26,80 +27,47 @@
 namespace{
 
 #define One ( grid2->SubGridBatches.size() > 0 )
-#define __Make_Block_View__(Mat, Mats) Mats = {Mat.middleCols(0, Np), Mat.middleCols(Np, 1), Mat.middleCols(Np + 1, 1)};
 // #define lambda ( One ? 0 : 1 )
 #define lambda 0
 
-class ObjBase: public Maniverse::Function{ public:
-	Int2C1E* int2c1e;
-	Int4C2E* int4c2e;
-	ExchangeCorrelation* xc;
-	Grid* grid;
+class ObjBase: public UniversalObjBase{ public:
 	Grid* grid2;
-	int Np;
-	EigenMatrix Z;
-	int nthreads;
-
-	int nbasis;
-
-	EigenMatrix Cprime;
-	EigenMatrix Cprime_perp;
-	std::vector<int> occ = {2, 1, 1};
-	std::vector<Eigen::Ref<EigenMatrix>> Cprimes;
-	std::vector<Eigen::Ref<EigenMatrix>> Gradients;
-	std::vector<EigenMatrix> Dprimes;
-	std::vector<EigenMatrix> FprimeMs;
-	std::vector<EigenMatrix> FprimeTs;
-	EigenMatrix C;
-	EigenMatrix K;
-	EigenMatrix L;
 
 	ObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
-		int Np, EigenMatrix Z, int nthreads
-	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), grid2(&grid2), Np(Np), Z(Z), nthreads(nthreads){
-		nbasis = Z.rows();
-		Cprime = EigenZero(nbasis, Np + 2);
-		Gradient = {Cprime};
-		__Make_Block_View__(Cprime, Cprimes);
-		__Make_Block_View__(Gradient[0], Gradients);
-		Dprimes = FprimeMs = FprimeTs = { EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis), EigenZero(nbasis, nbasis) };
+		int Np, int nthreads
+	): UniversalObjBase(int2c1e, int4c2e, xc, grid, { Np, 1, 1 }, 0, nthreads), grid2(&grid2){
+		Ccanos.push_back(EigenZero(nbasis, nbasis - Np - 2));
+		epss.push_back(EigenZero(nbasis - Np - 2, 1));
 	};
 
-	virtual void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
-		if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
-			Cprime = Cprimes_[0];
-			std::vector<EigenMatrix> Ds(3, EigenZero(nbasis, nbasis));
-			for ( int type = 0; type < 3; type++ ){
-				Dprimes[type] = Cprimes[type] * Cprimes[type].transpose();
-				Ds[type] = Z * Dprimes[type] * Z.transpose();
-			}
-			const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
-			const std::vector<EigenMatrix> FhfMs = {
-				Hcore + J - Kd - 0.5 * ( Ka + Kb ),
-				Hcore + J - Kd - Ka + Kb * lambda,
-				Hcore + J - Kd + Ka * lambda - Kb
-			};
-			const std::vector<EigenMatrix> FhfTs = {
-				Hcore + J - Kd - 0.5 * ( Ka + Kb ),
-				Hcore + J - Kd - Ka - Kb,
-				Hcore + J - Kd - Ka - Kb
-			};
-			Value = 0;
-			for ( int type = 0; type < 3; type++ ){
-				Value += 0.5 * occ[type] * Ds[type].cwiseProduct( Hcore + 2 * FhfMs[type] - FhfTs[type] ).sum();
-				FprimeMs[type] = Z.transpose() * FhfMs[type] * Z;
-				FprimeTs[type] = Z.transpose() * FhfTs[type] * Z;
-			}
+	void calcInternal(std::vector<int> derivatives) override{
+		const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(Ds[0], Ds[1], Ds[2], nthreads, 1);
+		const std::vector<EigenMatrix> FhfMs = {
+			Hcore + J - Kd - 0.5 * ( Ka + Kb ),
+			Hcore + J - Kd - Ka + Kb * lambda,
+			Hcore + J - Kd + Ka * lambda - Kb
+		};
+		const std::vector<EigenMatrix> FhfTs = {
+			Hcore + J - Kd - 0.5 * ( Ka + Kb ),
+			Hcore + J - Kd - Ka - Kb,
+			Hcore + J - Kd - Ka - Kb
+		};
+		Value = 0;
+		for ( int type = 0; type < 3; type++ ){
+			Fs[type] = 2 * FhfMs[type] - FhfTs[type];
+			Value += 0.5 * occ[type] * Ds[type].cwiseProduct( Hcore + Fs[type] ).sum();
+		}
 
-			if (*xc){
-				if (One){
-					grid->getDensity({ Ds[0] + Ds[1], Ds[0] + Ds[2] });
-					grid2->getDensity({ Ds[0] + Ds[1] + Ds[2], Ds[0] });
-					xc->Evaluate("ev", *grid);
-					xc->Evaluate("ev", *grid2);
-					Value += 2 * grid->getEnergy() - grid2->getEnergy();
+		if (*xc){
+			if (One){
+				grid->getDensity({ Ds[0] + Ds[1], Ds[0] + Ds[2] });
+				grid2->getDensity({ Ds[0] + Ds[1] + Ds[2], Ds[0] });
+				xc->Evaluate("ev", *grid);
+				xc->Evaluate("ev", *grid2);
+				Value += 2 * grid->getEnergy() - grid2->getEnergy();
+				if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
 					std::vector<EigenMatrix> GxcMs = grid->getFock();
 					GxcMs = {
 						0.5 * ( GxcMs[0] + GxcMs[1] ),
@@ -113,148 +81,85 @@ class ObjBase: public Maniverse::Function{ public:
 						GxcTs[0]
 					};
 					for ( int type = 0; type < 3; type++ ){
-						FprimeMs[type] += Z.transpose() * GxcMs[type] * Z;
-						FprimeTs[type] += Z.transpose() * GxcTs[type] * Z;
+						Fs[type] += 2 * GxcMs[type] - GxcTs[type];
 					}
-				}else{
-					grid->getDensity({ 2 * Ds[0] + Ds[1] + Ds[2] });
-					xc->Evaluate("ev", *grid);
-					Value += grid->getEnergy();
+				}
+			}else{
+				grid->getDensity({ 2 * Ds[0] + Ds[1] + Ds[2] });
+				xc->Evaluate("ev", *grid);
+				Value += grid->getEnergy();
+				if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
 					const EigenMatrix Gxc = grid->getFock()[0];
 					for ( int type = 0; type < 3; type++ ){
-						const EigenMatrix tmp = Z.transpose() * Gxc * Z;
-						FprimeMs[type] += tmp;
-						FprimeTs[type] += tmp;
+						Fs[type] += Gxc;
 					}
 				}
 			}
 		}
+	};
 
+	std::vector<EigenMatrix> decouple(EigenMatrix mat) const{
+		std::vector<EigenMatrix> mats(3, EigenZero(nbasis, 0));
+		for ( int i = 0, col = 0; i < 3; i++ ){
+			mats[i] = mat.middleCols(col, Norbs[i]);
+			col += Norbs[i];
+		}
+		return mats;
+	};
+
+	void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		Cs = decouple(Cs_[0]);
+		UniversalObjBase::CalculateAllCs(derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			for ( int type = 0; type < 3; type++ ){
-				Gradients[type] = 2 * occ[type] * ( 2 * FprimeMs[type] - FprimeTs[type] ) * Cprimes[type];
-			}
-
-			Eigen::HouseholderQR<EigenMatrix> qr(Cprime);
-			const EigenMatrix Call = qr.householderQ();
-			C = Z * Call;
-			Cprime_perp = Call.rightCols(nbasis - Np - 2);
-			std::vector<EigenMatrix> Fmos(4, EigenZero(nbasis, nbasis));
-			for ( int type = 0; type < 3; type++ ){
-				Fmos[type] = Call.transpose() * ( 2 * FprimeMs[type] - FprimeTs[type] ) * Call;
-			}
-			EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
-			for ( int i = 0; i < nbasis; i++ ){
-				int I = 0; int Iscale = 4;
-				if ( i < Np ){ I = 0; Iscale = 4; }
-				else if ( i < Np + 1 ){ I = 1; Iscale = 2; }
-				else if ( i < Np + 2 ) { I = 2; Iscale = 2; }
-				else { I = 3; Iscale = 0; };
-				for ( int j = 0; j < nbasis; j++ ){
-					int J = 0; int Jscale = 4;
-					if ( j < Np ){ J = 0; Jscale = 4; }
-					else if ( j < Np + 1 ){ J = 1; Jscale = 2; }
-					else if ( j < Np + 2 ){ J = 2; Jscale = 2; }
-					else{ J = 3; Jscale = 0; }
-					const double FIi = Fmos[I](i, i) * Iscale;
-					const double FIj = Fmos[I](j, j) * Iscale;
-					const double FJi = Fmos[J](i, i) * Jscale;
-					const double FJj = Fmos[J](j, j) * Jscale;
-					A(i, j) = std::abs(FIj + FJi - FIi - FJj);
-					if ( A(i, j) < 0.1 ) A(i, j) = 0.1;
-				}
-			}
-			K = A.block(0, 0, Np + 2, Np + 2);
-			L = A.block(Np + 2, 0, nbasis - Np - 2, Np + 2);
+		    Gradient = { concatenate_mat(Gradients) };
 		}
 	};
 };
 
-class ObjLBFGS: public ObjBase{ public:
-	EigenMatrix Ksqrt, Ksqrtinv, Lsqrt, Lsqrtinv;
+using ObjLBFGS = UniversalObjLBFGS<ObjBase>;
 
-	using ObjBase::ObjBase;
+class ObjNewtonBase: public UniversalObjNewtonBase<ObjBase>{ public:
+	using UniversalObjNewtonBase<ObjBase>::UniversalObjNewtonBase;
 
-	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
-		ObjBase::Calculate(Cprimes_, derivatives);
-		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			Ksqrt = K.cwiseSqrt();
-			Ksqrtinv = Ksqrt.cwiseInverse();
-			Lsqrt = L.cwiseSqrt();
-			Lsqrtinv = Lsqrt.cwiseInverse();
-		}
-	};
-};
-
-class ObjNewtonBase: public ObjBase{ public:
-	EigenMatrix Kinv, Linv;
-
-	using ObjBase::ObjBase;
-
-	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
-		ObjBase::Calculate(Cprimes_, derivatives);
-		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
-			Kinv = K.cwiseInverse();
-			Linv = L.cwiseInverse();
-		}
-	};
-
-	virtual std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const = 0;
-
-	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> Vprimes) const override{
-		std::vector<Eigen::Ref<EigenMatrix>> dCprimes;
-		__Make_Block_View__(Vprimes[0], dCprimes);
-		std::vector<EigenMatrix> dDprimes(3, EigenZero(nbasis, nbasis));
-		for ( int type = 0; type < 3; type++ ){
-			dDprimes[type] = Cprimes[type] * dCprimes[type].transpose();
-			dDprimes[type] += dDprimes[type].transpose().eval();
-		}
-
-		const std::vector<EigenMatrix> HdDprimes = DensityHessian(dDprimes);
-
-		EigenMatrix HdCprime = EigenZero(nbasis, Np + 2);
-		std::vector<Eigen::Ref<EigenMatrix>> HdCprimes;
-		__Make_Block_View__(HdCprime, HdCprimes);
-		for ( int type = 0; type < 3; type++ ){
-			HdCprimes[type] = 2 * occ[type] * ( HdDprimes[type] * Cprimes[type] + ( 2 * FprimeMs[type] - FprimeTs[type] ) * dCprimes[type] );
-		}
-
-		return std::vector<EigenMatrix>{ HdCprime };
+	virtual std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCs_) const override{
+		const std::vector<EigenMatrix> dCs = decouple(dCs_[0]);
+		return { concatenate_mat(UniversalObjNewtonBase::Hessian(dCs)) };
 	};
 };
 
 class ObjNewton: public ObjNewtonBase{ public:
 	using ObjNewtonBase::ObjNewtonBase;
 
-	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
-		ObjNewtonBase::Calculate(Cprimes_, derivatives);
+	void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		ObjNewtonBase::Calculate(Cs_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 2) && *xc ){
 			xc->Evaluate("f", *grid);
 			if (One) xc->Evaluate("f", *grid2);
 		}
 	};
 
-	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const override{
-		std::vector<std::vector<EigenMatrix>> dDs(3, {EigenZero(0, 0)});
-		for ( int type = 0; type < 3; type++ ){
-			dDs[type][0] = Z * dDprimes[type] * Z.transpose();
-		}
-		const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(dDs[0][0], dDs[1][0], dDs[2][0], nthreads, 0);
-		std::vector<EigenMatrix> dFMs = {
+	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDs) const override{
+		std::vector<EigenMatrix> dFs(3);
+
+		const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(dDs[0], dDs[1], dDs[2], nthreads, 0);
+		const std::vector<EigenMatrix> dFhfMs = {
 			J - Kd - 0.5 * ( Ka + Kb ),
 			J - Kd - Ka + Kb * lambda,
 			J - Kd + Ka * lambda - Kb
 		};
-		std::vector<EigenMatrix> dFTs = {
+		const std::vector<EigenMatrix> dFhfTs = {
 			J - Kd - 0.5 * ( Ka + Kb ),
 			J - Kd - Ka - Kb,
 			J - Kd - Ka - Kb
 		};
+		for ( int type = 0; type < 3; type++ ){
+			dFs[type] = 2 * dFhfMs[type] - dFhfTs[type];
+		}
 
 		if (*xc){
 			if (One){
-				grid->getDensityU({ { dDs[0][0] + dDs[1][0] }, { dDs[0][0] + dDs[2][0] } });
-				grid2->getDensityU({ { dDs[0][0] + dDs[1][0] + dDs[2][0] }, { dDs[0][0] } });
+				grid->getDensityU({ { dDs[0] + dDs[1] }, { dDs[0] + dDs[2] } });
+				grid2->getDensityU({ { dDs[0] + dDs[1] + dDs[2] }, { dDs[0] } });
 				std::vector<std::vector<EigenMatrix>> dGxcMs = grid->getFockU<u_t>();
 				dGxcMs = {
 					{ 0.5 * ( dGxcMs[0][0] + dGxcMs[1][0] ) },
@@ -268,57 +173,21 @@ class ObjNewton: public ObjNewtonBase{ public:
 					{ dGxcTs[0][0] }
 				};
 				for ( int type = 0; type < 3; type++ ){
-					dFMs[type] += dGxcMs[type][0];
-					dFTs[type] += dGxcTs[type][0];
+					dFs[type] += 2 * dGxcMs[type][0] - dGxcTs[type][0];
 				}
 			}else{
-				grid->getDensityU({{ 2 * dDs[0][0] + dDs[1][0] + dDs[2][0] }});
+				grid->getDensityU({{ 2 * dDs[0] + dDs[1] + dDs[2] }});
 				const EigenMatrix dGxcs = grid->getFockU<u_t>()[0][0];
 				for ( int type = 0; type < 3; type++ ){
-					dFMs[type] += dGxcs;
-					dFTs[type] += dGxcs;
+					dFs[type] += dGxcs;
 				}
 			}
 		}
-		std::vector<EigenMatrix> HdDprimes(3, EigenZero(nbasis, nbasis));
-		for ( int type = 0; type < 3; type++ ){
-			HdDprimes[type] = Z.transpose() * ( 2 * dFMs[type] - dFTs[type] ) * Z;
-		}
-		return HdDprimes;
+		return dFs;
 	};
 };
 
-class ObjARH: public ObjNewtonBase{ public:
-	AugmentedRoothaanHall arh = AugmentedRoothaanHall(20, 1);
-
-	using ObjNewtonBase::ObjNewtonBase;
-
-	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
-		ObjNewtonBase::Calculate(Cprimes_, derivatives);
-		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			EigenMatrix Dprime = EigenZero(nbasis, nbasis * 3);
-			EigenMatrix Fprime = EigenZero(nbasis, nbasis * 3);
-			for ( int type = 0; type < 3; type++ ){
-				Dprime.middleCols(type * nbasis, nbasis) = Dprimes[type];
-				Fprime.middleCols(type * nbasis, nbasis) = 2 * FprimeMs[type] - FprimeTs[type];
-			}
-			arh.Append(Dprime, Fprime);
-		}
-	};
-
-	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const override{
-		EigenMatrix dDprime = EigenZero(nbasis, nbasis * 3);
-		for ( int type = 0; type < 3; type++ ){
-			dDprime.middleCols(type * nbasis, nbasis) = dDprimes[type];
-		}
-		const EigenMatrix HdDprime = arh.Hessian(dDprime);
-		std::vector<EigenMatrix> HdDprimes = dDprimes;
-		for ( int type = 0; type < 3; type++ ){
-			HdDprimes[type] = HdDprime.middleCols(type * nbasis, nbasis);
-		}
-		return HdDprimes;
-	};
-};
+using ObjARH = UniversalObjARH<ObjNewtonBase>;
 
 class Cons: public Maniverse::Function{ public:
 	int Np;
@@ -327,20 +196,19 @@ class Cons: public Maniverse::Function{ public:
 	int lower_type = 0;
 
 	Cons(
-		int Np, EigenMatrix Z,
+		int Np, EigenMatrix overlap,
 		std::vector<EigenMatrix> lower_
-	): Np(Np), nbasis(Z.rows()), lower_type(lower_.size()){
-		const EigenMatrix Zinv = Z.inverse();
+	): Np(Np), nbasis(overlap.rows()), lower_type(lower_.size()){
 		lower = std::array<std::array<ObjDeterminant, 2>, 2>{
-				std::array<ObjDeterminant, 2>{ ObjDeterminant(Zinv * lower_[0]), ObjDeterminant(Zinv * lower_[0]) },
-				std::array<ObjDeterminant, 2>{ ObjDeterminant(Zinv * lower_.back()), ObjDeterminant(Zinv * lower_.back()) }
+				std::array<ObjDeterminant, 2>{ ObjDeterminant(overlap * lower_[0]), ObjDeterminant(overlap * lower_[0]) },
+				std::array<ObjDeterminant, 2>{ ObjDeterminant(overlap * lower_.back()), ObjDeterminant(overlap * lower_.back()) }
 		};
 		Gradient = { EigenZero(nbasis, Np + 2) };
 	};
 
-	virtual void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
-		EigenMatrix Ca = Cprimes_[0].leftCols( Np + 1 );
-		EigenMatrix Cb = Ca; Cb.rightCols(1) = Cprimes_[0].rightCols(1);
+	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		EigenMatrix Ca = Cs_[0].leftCols( Np + 1 );
+		EigenMatrix Cb = Ca; Cb.rightCols(1) = Cs_[0].rightCols(1);
 		lower[0][0].Calculate({Ca}, derivatives);
 		lower[1][1].Calculate({Cb}, derivatives);
 		if ( lower_type == 2 ){
@@ -364,29 +232,29 @@ class Cons: public Maniverse::Function{ public:
 		}
 	};
 
-	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCprimes_) const override{
-		std::array<EigenMatrix, 2> dCprimes = {
-			dCprimes_[0].leftCols(Np + 1),
-			dCprimes_[0].leftCols(Np + 1)
+	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCs_) const override{
+		std::array<EigenMatrix, 2> dCs = {
+			dCs_[0].leftCols(Np + 1),
+			dCs_[0].leftCols(Np + 1)
 		};
-		dCprimes[1].rightCols(1) = dCprimes_[0].rightCols(1);
+		dCs[1].rightCols(1) = dCs_[0].rightCols(1);
 		EigenMatrix cons_hess = EigenZero(nbasis, Np + 2);
 		EigenMatrix Ga = (
-			lower[0][0].Hessian({dCprimes[0]})[0] * lower[1][1].Value
-			+ lower[0][0].Gradient[0] * lower[1][1].Gradient[0].cwiseProduct(dCprimes[1]).sum()
+			lower[0][0].Hessian({dCs[0]})[0] * lower[1][1].Value
+			+ lower[0][0].Gradient[0] * lower[1][1].Gradient[0].cwiseProduct(dCs[1]).sum()
 		);
 		EigenMatrix Gb = (
-			lower[0][0].Gradient[0].cwiseProduct(dCprimes[0]).sum() * lower[1][1].Gradient[0]
-			+ lower[0][0].Value * lower[1][1].Hessian({dCprimes[1]})[0]
+			lower[0][0].Gradient[0].cwiseProduct(dCs[0]).sum() * lower[1][1].Gradient[0]
+			+ lower[0][0].Value * lower[1][1].Hessian({dCs[1]})[0]
 		);
 		if ( lower_type == 2 ){
 			Ga += (
-				lower[0][1].Gradient[0].cwiseProduct(dCprimes[1]).sum() * lower[1][0].Gradient[0]
-				+ lower[0][1].Value * lower[1][0].Hessian({dCprimes[0]})[0]
+				lower[0][1].Gradient[0].cwiseProduct(dCs[1]).sum() * lower[1][0].Gradient[0]
+				+ lower[0][1].Value * lower[1][0].Hessian({dCs[0]})[0]
 			);
 			Gb += (
-				lower[0][1].Hessian({dCprimes[1]})[0] * lower[1][0].Value
-				+ lower[0][1].Gradient[0] * lower[1][0].Gradient[0].cwiseProduct(dCprimes[0]).sum()
+				lower[0][1].Hessian({dCs[1]})[0] * lower[1][0].Value
+				+ lower[0][1].Gradient[0] * lower[1][0].Gradient[0].cwiseProduct(dCs[0]).sum()
 			);
 		}
 		cons_hess.leftCols(Np + 1) = Ga;
@@ -402,8 +270,10 @@ class Cons: public Maniverse::Function{ public:
 	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
 		EigenVector PV(V.size());\
 		MV_Block(PV, 0, bp) = UniversalPreconditioner(\
-			obj.Cprime, obj.Cprime_perp, obj._K_, obj._L_,\
-			MV_constBlock(V, 0, bp)\
+			concatenate_mat({obj.Ccanos[0], obj.Ccanos[1], obj.Ccanos[2]}),\
+			obj.Ccanos[3],\
+			obj._K_[0], obj._L_[0],\
+			obj.int2c1e->Overlap * MV_constBlock(V, 0, bp)\
 		);\
 		return PV;\
 	};\
@@ -411,10 +281,10 @@ class Cons: public Maniverse::Function{ public:
 
 enum SCF_t{ lbfgs_t, newton_t, arh_t };
 template <SCF_t scf_t>
-std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
+std::tuple<double, EigenVector, EigenMatrix> TwoDeterminantRiemann(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
-		int Np, EigenMatrix Z,
+		int Np, EigenMatrix C,
 		std::vector<std::vector<EigenMatrix>> lowers_,
 		int nthreads, int output){
 	std::conditional_t< scf_t == lbfgs_t,
@@ -423,18 +293,18 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 							ObjNewton,
 							ObjARH
 				>
-	> obj(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads);
-	Maniverse::Flag flag(EigenOne(Z.rows(), Np + 2)); flag.setBlockParameters({Np, 1, 1});
+	> obj(int2c1e, int4c2e, xc, grid, grid2, Np, nthreads);
+	Maniverse::Flag flag(C, int2c1e.Overlap); flag.setBlockParameters({Np, 1, 1});
 	std::vector<Cons> lowers;
-	for ( std::vector<EigenMatrix>& lower_ : lowers_ ) lowers.emplace_back(Np, Z, lower_);
+	for ( std::vector<EigenMatrix>& lower_ : lowers_ ) lowers.emplace_back(Np, int2c1e.Overlap, lower_);
 	std::vector<Maniverse::Function*> lowers_ptr;
 	for ( Cons& lower : lowers ) lowers_ptr.push_back(&lower);
 	Maniverse::Iterate M(obj, {flag.Share()}, lowers_ptr);
 	std::array<double, 3> tol = {1.e-8, 1.e-5, 1.e-5};
 	const std::vector<double> cons_tol(lowers_.size(), 1e-10);
 	if constexpr ( scf_t == lbfgs_t ){
-		__Precon__(PreconditionerSqrt, Ksqrtinv, Lsqrtinv);
-		__Precon__(PreconditionerInvSqrt, Ksqrt, Lsqrt);
+		__Precon__(PreconditionerSqrt, Ksqrtinvs, Lsqrtinvs);
+		__Precon__(PreconditionerInvSqrt, Ksqrts, Lsqrts);
 		if ( ! lowers_.size() && ! Maniverse::LBFGS(
 					M, tol,
 					20, 300, 0.1, 0.75, 10, output
@@ -444,7 +314,7 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 					20, 300, 0.1, 0.75, 10, output
 		) ) throw std::runtime_error("Convergence failed!");
 	}else{
-		__Precon__(Preconditioner, Kinv, Linv);
+		__Precon__(Preconditioner, Kinvs, Linvs);
 		Maniverse::TrustRegion tr;
 		static constexpr double ls_tol = scf_t == newton_t ? 0.001 : 0.01;
 		Maniverse::ConjugateGradient cg(1, {ls_tol, ls_tol}, M.getDimension(), output);
@@ -457,20 +327,20 @@ std::tuple<double, EigenMatrix> TwoDeterminantRiemann(
 		) ) throw std::runtime_error("Convergence failed!");
 	}
 
-	return std::make_tuple(obj.Value, obj.C);
+	return std::make_tuple(obj.Value, concatenate_vec(obj.epss), concatenate_mat(obj.Ccanos));
 }
 
 bool TwoDetStability(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid, Grid& grid2,
-		int Np, EigenMatrix Z,
+		int Np, EigenMatrix C,
 		std::vector<std::vector<EigenMatrix>> lowers_,
 		int stable,
 		int nthreads, int output){
-	ObjNewton obj(int2c1e, int4c2e, xc, grid, grid2, Np, Z, nthreads);
-	Maniverse::Flag flag(EigenOne(Z.rows(), Np + 2)); flag.setBlockParameters({Np, 1, 1});
+	ObjNewton obj(int2c1e, int4c2e, xc, grid, grid2, Np, nthreads);
+	Maniverse::Flag flag(C, int2c1e.Overlap); flag.setBlockParameters({Np, 1, 1});
 	std::vector<Cons> lowers;
-	for ( std::vector<EigenMatrix>& lower_ : lowers_ ) lowers.emplace_back(Np, Z, lower_);
+	for ( std::vector<EigenMatrix>& lower_ : lowers_ ) lowers.emplace_back(Np, int2c1e.Overlap, lower_);
 	std::vector<Maniverse::Function*> lowers_ptr;
 	for ( Cons& lower : lowers ) lowers_ptr.push_back(&lower);
 	Maniverse::Iterate M(obj, {flag.Share()}, lowers_ptr);
@@ -480,13 +350,14 @@ bool TwoDetStability(
 	const auto [Evals, Evecs] = Maniverse::Lanczos(M, stable, 0, lowers_.size() > 0, output);
 	if ( output > 0 && Evals[0] < 0 ){
 		std::printf("Non-positive curvature:\n");
-		EigenMatrix Omega = Eigen::Map<const Eigen::MatrixXd>(Evecs[0].data(), Z.rows(), Np + 2);
+		const EigenMatrix Y = int2c1e.Overlap * C;
+		const EigenMatrix X = Eigen::Map<const Eigen::MatrixXd>(Evecs[0].data(), C.rows(), C.cols());
+		EigenMatrix Omega = X * Y.transpose() - Y * X.transpose() + Y * ( Y.transpose() * X ) * Y.transpose();
 		for ( int i = 0; i < 3; i++ ){
 			int maxRow, maxCol;
-			const double maxcoeff = Omega.cwiseAbs().maxCoeff(&maxRow, &maxCol);
-			std::printf("%d <-> %d  %f\n", maxCol, maxRow, maxcoeff);
-			Omega(maxRow, maxCol) = 0;
-			if ( maxRow < Np + 2 ) Omega(maxCol, maxRow) = 0;
+			Omega.cwiseAbs().maxCoeff(&maxRow, &maxCol);
+			std::printf("%d <-> %d  %f\n", maxCol, maxRow, Omega(maxRow, maxCol));
+			Omega(maxRow, maxCol) = Omega(maxCol, maxRow) = 0;
 		}
 	}
 	return Evals[0] > 0;
@@ -501,17 +372,17 @@ void TwoDet::Calculate0(){
 		mwfn.getCoefficientMatrix({.Set=0, .Type=2, .OccUpper=1, .OccLower=1}),
 		mwfn.getCoefficientMatrix({.Set=0, .OccUpper=0, .OccLower=0})
 	;
-	auto [E, C] =
-		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(*int2c1e, *int4c2e, xc, grid, grid2, Np, Z, lowers, nthreads, 1) :
-		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(*int2c1e, *int4c2e, xc, grid, grid2, Np, Z, lowers, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(*int2c1e, *int4c2e, xc, grid, grid2, Np, Z, lowers, nthreads, 1);
+	auto [E, eps, C] =
+		scftype == "LBFGS" ? TwoDeterminantRiemann<lbfgs_t>(*int2c1e, *int4c2e, xc, grid, grid2, Np, Z.leftCols(Np + 2), lowers, nthreads, 1) :
+		scftype == "ARH" ? TwoDeterminantRiemann<arh_t>(*int2c1e, *int4c2e, xc, grid, grid2, Np, Z.leftCols(Np + 2), lowers, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ TwoDeterminantRiemann<newton_t>(*int2c1e, *int4c2e, xc, grid, grid2, Np, Z.leftCols(Np + 2), lowers, nthreads, 1);
 	Energy += E;
 	mwfn.setCoefficientMatrix(C, {.Set=0});
-	mwfn.setEnergy(EigenZero(mwfn.getNumIndBasis(), 1), {.Set=0});
-	EigenVector occ = EigenZero(mwfn.getNumIndBasis(), 1);
+	mwfn.setEnergy(eps, {.Set=0});
+	EigenVector occ = EigenZero(mwfn.getNumBasis(), 1);
 	occ.head(Np).setConstant(2);
 	occ.segment(Np, 2).setConstant(1);
 	mwfn.setOccupation(occ, {.Set=0});
-	for ( int iorb = 0; iorb < mwfn.getNumIndBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = iorb == Np ? 1 : iorb == Np + 1 ? 2 : 0;
-	if ( stable > 0 ) TwoDetStability(*int2c1e, *int4c2e, xc, grid, grid2, Np, C, lowers, stable, nthreads, 1);
+	for ( int iorb = 0; iorb < mwfn.getNumBasis(); iorb++ ) mwfn.Orbitals[0][iorb].Type = iorb == Np ? 1 : iorb == Np + 1 ? 2 : 0;
+	if ( stable > 0 ) TwoDetStability(*int2c1e, *int4c2e, xc, grid, grid2, Np, C.leftCols(Np + 2), lowers, stable, nthreads, 1);
 }

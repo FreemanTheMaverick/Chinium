@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <functional>
 #include <vector>
 #include <Maniverse/Manifold/Manifold.h>
 
@@ -11,94 +12,138 @@
 
 #include "AugmentedRoothaanHall.h"
 
+extern std::function<double (double)> SafeInverse;
+
 class UniversalObjBase: public Maniverse::Function{ public:
 	Int2C1E* int2c1e;
 	Int4C2E* int4c2e;
+	EigenMatrix Ssqrt;
+	EigenMatrix Ssqrtinv;
 	ExchangeCorrelation* xc;
 	Grid* grid;
 	std::vector<int> Norbs;
 	double Coupling;
 
-	std::vector<EigenMatrix> Zs;
 	int nthreads;
 
 	int nbasis;
 
 	std::vector<int> occ = { 2, 1, 1 };
-	std::vector<EigenMatrix> Cprimes;
+	std::vector<EigenMatrix> Cs;
+	std::vector<EigenMatrix> Ccanos;
+	std::vector<EigenVector> epss;
 	std::vector<EigenMatrix> Gradients;
-	std::vector<EigenMatrix> Dprimes;
-	std::vector<EigenMatrix> Fprimes;
+	std::vector<EigenMatrix> Ds;
+	std::vector<EigenMatrix> Fs;
+
+	std::vector<EigenMatrix> Ks, Ls;
 
 	UniversalObjBase(
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		std::vector<int> Norbs, double Coupling,
-		std::vector<EigenMatrix> Zs, int nthreads
+		int nthreads
 	);
 
-	virtual void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override;
+	virtual void calcInternal(std::vector<int> derivatives);
+
+	virtual void makePrecon();
+
+	void CalculateAllCs(std::vector<int> derivatives);
 };
 
-EigenMatrix UniversalPreconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix K, EigenMatrix L, EigenMatrix V);
+template<typename ObjBase>
+class UniversalObjLBFGS: public ObjBase{ public:
+	using ObjBase::ObjBase;
+	using ObjBase::Norbs;
+	using ObjBase::nbasis;
+	using ObjBase::Cs;
+	using ObjBase::occ;
+	using ObjBase::Fs;
+	using ObjBase::Ks;
+	using ObjBase::Ls;
 
-#define __Base_Members__(basename)\
-	using basename::basename;\
-	using basename::int2c1e;\
-	using basename::int4c2e;\
-	using basename::xc;\
-	using basename::grid;\
-	using basename::Norbs;\
-	using basename::Coupling;\
-	using basename::Zs;\
-	using basename::nthreads;\
-	using basename::nbasis;\
-	using basename::occ;\
-	using basename::Cprimes;\
-	using basename::Gradients;\
-	using basename::Dprimes;\
-	using basename::Fprimes;
+	std::vector<EigenMatrix> Ksqrts, Lsqrts, Ksqrtinvs, Lsqrtinvs;
+
+	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		ObjBase::Calculate(Cs_, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			Ksqrts.clear(); Ksqrtinvs.clear();
+			for ( EigenMatrix& K : Ks ){
+				Ksqrts.push_back( K.cwiseSqrt() );
+				Ksqrtinvs.push_back( K.cwiseSqrt().unaryExpr(SafeInverse) );
+			}
+			Lsqrts.clear(); Lsqrtinvs.clear();
+			for ( EigenMatrix& L : Ls ){
+				Lsqrts.push_back( L.cwiseSqrt() );
+				Lsqrtinvs.push_back( L.cwiseSqrt().unaryExpr(SafeInverse) );
+			}
+		}
+	}
+};
 
 template<typename ObjBase>
 class UniversalObjNewtonBase: public ObjBase{ public:
-	__Base_Members__(ObjBase)
+	using ObjBase::ObjBase;
+	using ObjBase::Norbs;
+	using ObjBase::nbasis;
+	using ObjBase::Cs;
+	using ObjBase::occ;
+	using ObjBase::Fs;
+	using ObjBase::Ks;
+	using ObjBase::Ls;
 
-	virtual std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const = 0;
+	std::vector<EigenMatrix> Kinvs, Linvs;
 
-	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCprimes) const override{
-		std::vector<EigenMatrix> dDprimes(3, EigenZero(nbasis, nbasis));
+	virtual void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		ObjBase::Calculate(Cs_, derivatives);
+		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			Kinvs.clear();
+			for ( EigenMatrix& K : Ks ) Kinvs.push_back( K.unaryExpr(SafeInverse) );
+			Linvs.clear();
+			for ( EigenMatrix& L : Ls ) Linvs.push_back( L.unaryExpr(SafeInverse) );
+		}
+	}
+
+	virtual std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDs) const = 0;
+
+	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dCs) const override{
+		std::vector<EigenMatrix> dDs(3, EigenZero(0, 0));
 		for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-			dDprimes[type] = Cprimes[type] * dCprimes[type].transpose();
-			dDprimes[type] += dDprimes[type].transpose().eval();
+			dDs[type] = Cs[type] * dCs[type].transpose();
+			dDs[type] += dDs[type].transpose().eval();
 		}
 
-		const std::vector<EigenMatrix> HdDprimes = DensityHessian(dDprimes);
+		const std::vector<EigenMatrix> HdDs = DensityHessian(dDs);
 
-		std::vector<EigenMatrix> HdCprimes = dCprimes;
+		std::vector<EigenMatrix> HdCs = dCs;
 		for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-			HdCprimes[type] = 2 * occ[type] * ( HdDprimes[type] * Cprimes[type] + Fprimes[type] * dCprimes[type] );
+			HdCs[type] = 2 * occ[type] * ( HdDs[type] * Cs[type] + Fs[type] * dCs[type] );
 		}
-		return HdCprimes;
+		return HdCs;
 	};
 };
 
 template<typename ObjNewtonBase>
 class UniversalObjNewton: public ObjNewtonBase{ public:
-	__Base_Members__(ObjNewtonBase)
+	using ObjNewtonBase::ObjNewtonBase;
+	using ObjNewtonBase::int4c2e;
+	using ObjNewtonBase::xc;
+	using ObjNewtonBase::grid;
+	using ObjNewtonBase::Norbs;
+	using ObjNewtonBase::Coupling;
+	using ObjNewtonBase::nthreads;
+	using ObjNewtonBase::nbasis;
 
-	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
-		ObjNewtonBase::Calculate(Cprimes_, derivatives);
+	void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		ObjNewtonBase::Calculate(Cs_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 2) && *xc ){
 			xc->Evaluate("f", *grid);
 		}
 	};
 
-	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const override{
-		std::vector<std::vector<EigenMatrix>> dDs(3, {EigenZero(0, 0)});
-		for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-			dDs[type][0] = Zs[type] * dDprimes[type] * Zs[type].transpose();
-		}
-		const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(dDs[0][0], dDs[1][0], dDs[2][0], nthreads, 0);
+	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDs) const override{
+		const auto [J, Kd, Ka, Kb] = int4c2e->ContractInts(dDs[0], dDs[1], dDs[2], nthreads, 0);
 		std::vector<EigenMatrix> dFs(3, EigenZero(nbasis, nbasis));
 		for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
 			dFs[type] =
@@ -110,8 +155,8 @@ class UniversalObjNewton: public ObjNewtonBase{ public:
 		if (*xc){
 			std::vector<std::vector<EigenMatrix>> dDab(2, {EigenZero(nbasis, nbasis)});
 			for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-				if ( type == 0 || type == 1 ) dDab[0][0] += dDs[type][0];
-				if ( type == 0 || type == 2 ) dDab[1][0] += dDs[type][0];
+				if ( type == 0 || type == 1 ) dDab[0][0] += dDs[type];
+				if ( type == 0 || type == 2 ) dDab[1][0] += dDs[type];
 			}
 			if ( Norbs[0] && !Norbs[1] && !Norbs[2] ) dDab = {{ 2 * dDab[0][0] }};
 			grid->getDensityU(dDab);
@@ -125,45 +170,53 @@ class UniversalObjNewton: public ObjNewtonBase{ public:
 					/* type == 2 ? */ dFxcab[1][0];
 			}
 		}
-		std::vector<EigenMatrix> HdDprimes = dDprimes;
-		for ( int type = 0; type < 3; type++ ) if ( Norbs[type] ){
-			HdDprimes[type] = Zs[type].transpose() * dFs[type] * Zs[type];
-		}
-		return HdDprimes;
+		return dFs;
 	};
 };
 
 template<typename ObjNewtonBase>
 class UniversalObjARH: public ObjNewtonBase{ public:
-	__Base_Members__(ObjNewtonBase)
+    using ObjNewtonBase::ObjNewtonBase;
+    using ObjNewtonBase::Norbs;
+    using ObjNewtonBase::nbasis;
+    using ObjNewtonBase::Ssqrt;
+    using ObjNewtonBase::Ssqrtinv;
+    using ObjNewtonBase::Ds;
+    using ObjNewtonBase::Fs;
 
 	AugmentedRoothaanHall arh = AugmentedRoothaanHall(20, 1);
 
-	#define ntypes ( ( Norbs[0] > 0 ) + ( Norbs[1] > 0 ) + ( Norbs[2] > 0 ) )
-	void Calculate(std::vector<EigenMatrix> Cprimes_, std::vector<int> derivatives) override{
-		ObjNewtonBase::Calculate(Cprimes_, derivatives);
+	void Calculate(std::vector<EigenMatrix> Cs_, std::vector<int> derivatives) override{
+		ObjNewtonBase::Calculate(Cs_, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
+			const int ntypes = ( Norbs[0] > 0 ) + ( Norbs[1] > 0 ) + ( Norbs[2] > 0 );
 			EigenMatrix Dprime = EigenZero(nbasis, nbasis * ntypes);
 			EigenMatrix Fprime = EigenZero(nbasis, nbasis * ntypes);
 			for ( int type = 0, itype = 0; type < 3; type++ ) if ( Norbs[type] ){
-				Dprime.middleCols(itype * nbasis, nbasis) = Dprimes[type];
-				Fprime.middleCols(itype * nbasis, nbasis) = Fprimes[type];
+				Dprime.middleCols(itype * nbasis, nbasis) = Ssqrt * Ds[type] * Ssqrt;
+				Fprime.middleCols(itype * nbasis, nbasis) = Ssqrtinv * Fs[type] * Ssqrtinv;
 				itype++;
 			}
 			arh.Append(Dprime, Fprime);
 		}
 	};
 
-	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDprimes) const override{
+	std::vector<EigenMatrix> DensityHessian(std::vector<EigenMatrix> dDs) const override{
+		const int ntypes = ( Norbs[0] > 0 ) + ( Norbs[1] > 0 ) + ( Norbs[2] > 0 );
 		EigenMatrix dDprime = EigenZero(nbasis, nbasis * ntypes);
 		for ( int type = 0, itype = 0; type < 3; type++ ) if ( Norbs[type] ){
-			dDprime.middleCols((itype++) * nbasis, nbasis) = dDprimes[type];
+			dDprime.middleCols((itype++) * nbasis, nbasis) = Ssqrt * dDs[type] * Ssqrt;
 		}
 		const EigenMatrix HdDprime = arh.Hessian(dDprime);
-		std::vector<EigenMatrix> HdDprimes = dDprimes;
+		std::vector<EigenMatrix> HdDs = dDs;
 		for ( int type = 0, itype = 0; type < 3; type++ ) if ( Norbs[type] ){
-			HdDprimes[type] = HdDprime.middleCols((itype++) * nbasis, nbasis);
+			HdDs[type] = Ssqrt * HdDprime.middleCols((itype++) * nbasis, nbasis) * Ssqrt;
 		}
-		return HdDprimes;
+		return HdDs;
 	};
 };
+
+EigenMatrix UniversalPreconditioner(EigenMatrix U, EigenMatrix Uperp, EigenMatrix K, EigenMatrix L, EigenMatrix V);
+
+EigenMatrix concatenate_mat(std::vector<EigenMatrix> mats);
+EigenVector concatenate_vec(std::vector<EigenVector> vecs);

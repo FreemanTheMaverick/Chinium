@@ -121,5 +121,9 @@ RepU::RepU(std::string inp): Representation(inp){
 		occ.setZero();
 		for ( int i = 0; i < Nb; i++ ) occ(i) = 1;
 		mwfn.setOccupation(occ, {.Set=1});
+		for ( int i = 0; i < mwfn.getNumBasis(); i++ ){
+			mwfn.Orbitals[0][i].Type = 1;
+			mwfn.Orbitals[1][i].Type = 2;
+		}
 	}
 }

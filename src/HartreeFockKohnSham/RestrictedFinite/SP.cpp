@@ -233,7 +233,8 @@ class ObjBase: public Maniverse::Function{ public:
 	ExchangeCorrelation* xc;
 	Grid* grid;
 	double T, Mu;
-	EigenMatrix Z;
+	EigenMatrix Ssqrt;
+	EigenMatrix Ssqrtinv;
 	int nthreads;
 	int output;
 
@@ -242,14 +243,16 @@ class ObjBase: public Maniverse::Function{ public:
 	int Na;
 	int Nv;
 	Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
+	Eigen::GeneralizedSelfAdjointEigenSolver<EigenMatrix> generalized_eigensolver;
 
-	EigenMatrix Cprime_oa;
-	EigenMatrix Cprime_o;
-	EigenMatrix Cprime_a;
-	EigenMatrix Cprime_v;
-	EigenMatrix Dprime;
-	EigenMatrix Fprime;
+	EigenMatrix C_oa;
+	EigenMatrix C_oa_cano;
+	EigenMatrix C_a;
+	EigenMatrix C_v;
+	EigenMatrix D;
+	EigenMatrix F;
 	EigenVector Eps_oav;
+	EigenVector Eps_cano;
 	EigenVector Occ_a;
 	EigenVector Occ_oa;
 	EigenMatrix K, L;
@@ -257,23 +260,26 @@ class ObjBase: public Maniverse::Function{ public:
 	ObjBase(
 			Int2C1E& int2c1e, Int4C2E& int4c2e,
 			ExchangeCorrelation& xc, Grid& grid,
-			double T, double Mu, EigenMatrix Z,
+			double T, double Mu,
 			int nthreads, int output
-	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), T(T), Mu(Mu), Z(Z), nthreads(nthreads), output(output){
-		nbasis = Z.rows();
+	): int2c1e(&int2c1e), int4c2e(&int4c2e), xc(&xc), grid(&grid), T(T), Mu(Mu), nthreads(nthreads), output(output){
+		const EigenMatrix& overlap = int2c1e.Overlap;
+		Eigen::SelfAdjointEigenSolver<EigenMatrix> overlap_eigensolver(overlap);
+		Ssqrt = overlap_eigensolver.operatorSqrt();
+		Ssqrtinv = overlap_eigensolver.operatorInverseSqrt();
+		nbasis = overlap.rows();
 	};
 
 	#define Occ_a_arr Occ_a.array()
 	#define Occ_oa_arr Occ_oa.array()
 	void Calculate(std::vector<EigenMatrix> X, std::vector<int> derivatives){
 		if ( std::count(derivatives.begin(), derivatives.end(), 0) ){
-			Cprime_oa = X[0];
+			C_oa = X[0];
 			Occ_a = X.size() == 2 ? X[1] : Eigen::VectorXd::Zero(0);
-			Na = Occ_a.size(); No = Cprime_oa.cols() - Na; Nv = nbasis - No - Na;
-			Cprime_o = Cprime_oa.leftCols(No);
-			Cprime_a = Cprime_oa.rightCols(Na);
-			Eigen::HouseholderQR<EigenMatrix> qr(Cprime_oa);
-			Cprime_v = EigenMatrix(qr.householderQ()).rightCols(Nv);
+			Na = Occ_a.size(); No = C_oa.cols() - Na; Nv = nbasis - No - Na;
+			C_a = C_oa.rightCols(Na);
+			Eigen::HouseholderQR<EigenMatrix> qr(Ssqrt * C_oa);
+			C_v = Ssqrtinv * EigenMatrix(qr.householderQ()).rightCols(Nv);
 			Occ_oa = EigenMatrix::Ones(No + Na, 1);
 			Occ_oa.tail(Na) = Occ_a;
 
@@ -286,8 +292,7 @@ class ObjBase: public Maniverse::Function{ public:
 			for ( int i = 0; i < Na; i++ ) if ( Occ_a(i) < Eta ) throw OneMoreVirtual();
 			if (output>0) std::printf("Total number of electrons = %.10f\n", 2 * Occ_oa.sum() );
 
-			Dprime = Cprime_oa * Occ_oa.asDiagonal() * Cprime_oa.transpose();
-			const EigenMatrix D = Z * Dprime * Z.transpose();
+			D = C_oa * Occ_oa.asDiagonal() * C_oa.transpose();
 			const auto [J, K, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 1);
 			const EigenMatrix Fhf = Hcore + J - K;
 			double Exc = 0;
@@ -298,8 +303,7 @@ class ObjBase: public Maniverse::Function{ public:
 				Exc = grid->getEnergy();
 				Gxc = grid->getFock()[0];
 			}
-			const EigenMatrix F = Fhf + Gxc;
-			Fprime = Z.transpose() * F * Z;
+			F = Fhf + Gxc;
 			Value = D.cwiseProduct(Hcore + Fhf).sum() + Exc
 				+ 2 * T * (
 						Occ_a_arr.pow(Occ_a_arr).log() +
@@ -309,26 +313,44 @@ class ObjBase: public Maniverse::Function{ public:
 		}
 
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			EigenMatrix GradC = 4 * Fprime * Cprime_oa * Occ_oa.asDiagonal();
+			EigenMatrix GradC = 4 * F * C_oa * Occ_oa.asDiagonal();
 			Gradient = { GradC };
 			if ( Na ){
-				const EigenVector GradOcc1 = ( Cprime_oa.transpose() * Fprime * Cprime_oa ).diagonal().tail(Na) * 2;
+				const EigenVector GradOcc1 = ( C_oa.transpose() * F * C_oa ).diagonal().tail(Na) * 2;
 				const EigenVector GradOcc2 = - 2 * ( T * ( 1. / Occ_a_arr - 1. ).log() + Mu ).matrix();
 				Gradient.push_back( GradOcc1 + GradOcc2 );
 			}
 
-			eigensolver.compute(Fprime);
-			Eps_oav = eigensolver.eigenvalues();
+			generalized_eigensolver.compute(F, S);
+			Eps_oav = generalized_eigensolver.eigenvalues();
+
+			C_oa_cano = C_oa;
+			Eps_cano.resize(nbasis);
+			if ( No ){
+				const EigenMatrix Focc = C_oa.leftCols(No).transpose() * F * C_oa.leftCols(No);
+				eigensolver.compute(Focc);
+				C_oa_cano.leftCols(No) = C_oa.leftCols(No) * eigensolver.eigenvectors();
+				Eps_cano.head(No) = eigensolver.eigenvalues();
+			}
+			if ( Na ){
+				Eps_cano.segment(No, Na) = ( C_a.transpose() * F * C_a ).diagonal();
+			}
+			if ( Nv ){
+				const EigenMatrix Fvir = C_v.transpose() * F * C_v;
+				eigensolver.compute(Fvir);
+				C_v = C_v * eigensolver.eigenvectors();
+				Eps_cano.tail(Nv) = eigensolver.eigenvalues();
+			}
 
 			// Preconditioner
 			// https://doi.org/10.1016/j.cpc.2016.06.023
-			EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
+			EigenMatrix A = EigenZero(nbasis, nbasis);
 			for ( int i = 0; i < nbasis; i++ ){
 				const double occ_i = i < No + Na ? Occ_oa(i) : 0;
 				for ( int j = i; j < nbasis; j++ ){
 					const double occ_j = j < No + Na ? Occ_oa(j) : 0;
 					const double occ_diff = occ_i - occ_j;
-					if ( std::abs(occ_diff) > Eta ) A(i, j) = A(j, i) = - 2 * ( Eps_oav(i) - Eps_oav(j) ) * occ_diff;
+					if ( std::abs(occ_diff) > Eta ) A(i, j) = A(j, i) = - 2 * ( Eps_cano(i) - Eps_cano(j) ) * occ_diff;
 				}
 			}
 			K = A.topLeftCorner(No + Na, No + Na);
@@ -346,9 +368,9 @@ class ObjLBFGS: public ObjBase{ public:
 		ObjBase::Calculate(X, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
 			Ksqrt = K.cwiseSqrt();
-			Ksqrtinv = Ksqrt.cwiseInverse();
+			Ksqrtinv = Ksqrt.unaryExpr(SafeInverse);
 			Lsqrt = L.cwiseSqrt();
-			Lsqrtinv = Lsqrt.cwiseInverse();
+			Lsqrtinv = Lsqrt.unaryExpr(SafeInverse);
 		}
 	};
 };
@@ -361,45 +383,45 @@ class ObjNewtonBase: public ObjBase{ public:
 	void Calculate(std::vector<EigenMatrix> X, std::vector<int> derivatives) override{
 		ObjBase::Calculate(X, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
-			Kinv = K.cwiseInverse();
-			Linv = L.cwiseInverse();
+			Kinv = K.unaryExpr(SafeInverse);
+			Linv = L.unaryExpr(SafeInverse);
 		}
 	};
 
-	virtual EigenMatrix DensityHessian(EigenMatrix dDprime) const = 0;
+	virtual EigenMatrix DensityHessian(EigenMatrix dD) const = 0;
 
 	std::vector<EigenMatrix> Hessian(std::vector<EigenMatrix> dX) const override{
-		const EigenMatrix& dCprime_oa = dX[0];
+		const EigenMatrix& dC_oa = dX[0];
 
 		// HCC
-		EigenMatrix dDprime = Cprime_oa * Occ_oa.asDiagonal() * dCprime_oa.transpose();
-		dDprime += dDprime.transpose().eval();
-		const EigenMatrix FoverC = DensityHessian(dDprime);
+		EigenMatrix dD = C_oa * Occ_oa.asDiagonal() * dC_oa.transpose();
+		dD += dD.transpose().eval();
+		const EigenMatrix FoverC = DensityHessian(dD);
 		const EigenMatrix HCC = 4 * (
-				FoverC * Cprime_oa +
-				Fprime * dCprime_oa
+				FoverC * C_oa +
+				F * dC_oa
 		) * Occ_oa.asDiagonal();
 		if ( Na == 0 ) return std::vector<EigenMatrix>{ HCC };
 		else{
-			const EigenMatrix& dNprime_a = dX[1];
+			const EigenMatrix& dN_a = dX[1];
 
 			// HCN
-			const EigenMatrix dDprime = Cprime_a * dNprime_a.asDiagonal() * Cprime_a.transpose();
-			const EigenMatrix FoverN = DensityHessian(dDprime);
-			EigenMatrix HCN = FoverN * Cprime_oa * Occ_oa.asDiagonal();
-			HCN.rightCols(Na) += Fprime * Cprime_a * dNprime_a.asDiagonal();
+			const EigenMatrix dD_a = C_a * dN_a.asDiagonal() * C_a.transpose();
+			const EigenMatrix FoverN = DensityHessian(dD_a);
+			EigenMatrix HCN = FoverN * C_oa * Occ_oa.asDiagonal();
+			HCN.rightCols(Na) += F * C_a * dN_a.asDiagonal();
 			HCN *= 4;
 
 			// HNC
 			EigenVector HNC = 2 * (
-					2 * dCprime_oa.rightCols(Na).transpose() * Fprime * Cprime_a
-					+ Cprime_a.transpose() * FoverC * Cprime_a
+					2 * dC_oa.rightCols(Na).transpose() * F * C_a
+					+ C_a.transpose() * FoverC * C_a
 			).diagonal();
 
 			// HNN
 			EigenVector HNN = 2 * (
-					( Cprime_a.transpose() * FoverN * Cprime_a ).diagonal()
-					- ( T / Occ_a_arr / ( Occ_a_arr - 1. ) ).matrix().cwiseProduct(dNprime_a)
+					( C_a.transpose() * FoverN * C_a ).diagonal()
+					- ( T / Occ_a_arr / ( Occ_a_arr - 1. ) ).matrix().cwiseProduct(dN_a)
 			);
 
 			return std::vector<EigenMatrix>{
@@ -420,17 +442,15 @@ class ObjNewton: public ObjNewtonBase{ public:
 		}
 	};
 
-	EigenMatrix DensityHessian(EigenMatrix dDprime) const override{
-		const EigenMatrix D = Z * dDprime * Z.transpose();
-		const auto [J, K, _, __] = int4c2e->ContractInts(D, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
+	EigenMatrix DensityHessian(EigenMatrix dD) const override{
+		const auto [J, K, _, __] = int4c2e->ContractInts(dD, EigenZero(0, 0), EigenZero(0, 0), nthreads, 0);
 		const EigenMatrix FhfU = J - K;
 		EigenMatrix FxcU = EigenZero(nbasis, nbasis);
 		if (*xc){
-			grid->getDensityU({{ 2 * D }});
+			grid->getDensityU({{ 2 * dD }});
 			FxcU = grid->getFockU<u_t>()[0][0];
 		}
-		const EigenMatrix FU = FhfU + FxcU;
-		return Z.transpose() * FU * Z;
+		return FhfU + FxcU;
 	};
 };
 
@@ -442,12 +462,13 @@ class ObjARH: public ObjNewtonBase{ public:
 	void Calculate(std::vector<EigenMatrix> X, std::vector<int> derivatives) override{
 		ObjNewtonBase::Calculate(X, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
-			arh.Append(Dprime, Fprime);
+			arh.Append(Ssqrt * D * Ssqrt, Ssqrtinv * F * Ssqrtinv);
 		}
 	};
 
-	EigenMatrix DensityHessian(EigenMatrix dDprime) const override{
-		return arh.Hessian(dDprime);
+	EigenMatrix DensityHessian(EigenMatrix dD) const override{
+		const EigenMatrix dD_orthogonal = Ssqrt * dD * Ssqrt;
+		return Ssqrt * arh.Hessian(dD_orthogonal) * Ssqrt;
 	};
 };
 
@@ -459,9 +480,10 @@ class ObjARH: public ObjNewtonBase{ public:
 	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
 		EigenVector PV(V.size());\
 		MV_Block(PV, 0, bp) = UniversalPreconditioner(\
-			obj.Cprime_oa, obj.Cprime_v, obj._K_, obj._L_,\
-			MV_constBlock(V, 0, bp)\
+			obj.C_oa_cano, obj.C_v, obj._K_, obj._L_,\
+			obj.int2c1e->Overlap * MV_constBlock(V, 0, bp)\
 		);\
+		if ( bp.size() > 1 ) MV_Block(PV, 1, bp) = MV_constBlock(V, 1, bp);\
 		return PV;\
 	};\
 }
@@ -487,16 +509,16 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		Int2C1E& int2c1e, Int4C2E& int4c2e,
 		ExchangeCorrelation& xc, Grid& grid,
 		double T, double Mu,
-		EigenVector all_occ, EigenMatrix Z,
+		EigenVector all_occ, EigenMatrix initial_C,
 		int nthreads, int output){
 	int No, Na, Nv;
 	std::array<double, 3> tol = {1.e-3, 1.e-2, 1.e-2};
-	EigenMatrix Cprime = EigenOne(Z.rows(), Z.cols());
+	EigenMatrix C = initial_C;
 	AugmentedRoothaanHall arh(20, 1);
 
 	RESTART:
 	std::tie(No, Na, Nv) = Regularize(all_occ, Eta);
-	Maniverse::Flag flag(Cprime.leftCols(No + Na));
+	Maniverse::Flag flag(C.leftCols(No + Na), int2c1e.Overlap);
 	std::vector<int> spaces;
 	if ( No > 0 ) spaces.push_back(No);
 	for ( int i = 0; i < Na; i++ ) spaces.push_back(1);
@@ -512,7 +534,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 							ObjNewton,
 							ObjARH
 				>
-	> obj(int2c1e, int4c2e, xc, grid, T, Mu, Z, nthreads, output);
+	> obj(int2c1e, int4c2e, xc, grid, T, Mu, nthreads, output);
 	if constexpr ( scf_t == arh_t ) obj.arh = arh;
 	Maniverse::Iterate M(obj, ms);
 
@@ -537,45 +559,45 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		}
 	}catch (OneMoreOccupied&){
 		if (output) std::printf("One active orbital is set to occupied!\n");
-		Cprime << obj.Cprime_oa, obj.Cprime_v;
-		all_occ = EigenZero(Z.cols(), 1);
+		C << obj.C_oa, obj.C_v;
+		all_occ = EigenZero(initial_C.cols(), 1);
 		all_occ.head(No + Na) = obj.Occ_oa;
 		all_occ(No) = 1;
 		No++; Na--;
 		goto RESTART;
 	}catch (OneMoreVirtual&){
 		if (output) std::printf("One active orbital is set to virtual!\n");
-		Cprime << obj.Cprime_oa, obj.Cprime_v;
-		all_occ = EigenZero(Z.cols(), 1);
+		C << obj.C_oa, obj.C_v;
+		all_occ = EigenZero(initial_C.cols(), 1);
 		all_occ.head(No + Na) = obj.Occ_oa;
 		all_occ(No + Na) = 0;
 		Na--; Nv++;
 		goto RESTART;
 	}
-	Cprime << obj.Cprime_oa, obj.Cprime_v;
-	all_occ = EigenZero(Z.cols(), 1);
+	C << obj.C_oa_cano, obj.C_v;
+	all_occ = EigenZero(initial_C.cols(), 1);
 	all_occ.head(No + Na) = obj.Occ_oa;
 	EigenVector all_occ_new = FermiDirac(obj.Eps_oav, T, Mu, 0);
 	auto [No_new, Na_new, Nv_new] = Regularize(all_occ_new, Eta);
 	if ( No != No_new || Na != Na_new || Nv != Nv_new ){
 		Eigen::SelfAdjointEigenSolver<EigenMatrix> eigensolver;
 		if ( No > No_new ){
-			const EigenMatrix Co = Cprime.leftCols(No);
-			const EigenMatrix Fo = Co.transpose() * obj.Fprime * Co;
+			const EigenMatrix Co = C.leftCols(No);
+			const EigenMatrix Fo = Co.transpose() * obj.F * Co;
 			eigensolver.compute(Fo);
-			Cprime.leftCols(No) = Co * eigensolver.eigenvectors();
+			C.leftCols(No) = Co * eigensolver.eigenvectors();
 			all_occ(No - 1) = 1. - Eta2;
 			No--;
 		}
 		if ( Nv > Nv_new ){
-			const EigenMatrix Cv = Cprime.rightCols(Nv);
-			const EigenMatrix Fv = Cv.transpose() * obj.Fprime * Cv;
+			const EigenMatrix Cv = C.rightCols(Nv);
+			const EigenMatrix Fv = Cv.transpose() * obj.F * Cv;
 			eigensolver.compute(Fv);
-			Cprime.rightCols(Nv) = Cv * eigensolver.eigenvectors();
-			all_occ(Cprime.rows() - Nv) = Eta2;
+			C.rightCols(Nv) = Cv * eigensolver.eigenvectors();
+			all_occ(C.rows() - Nv) = Eta2;
 			Nv--;
 		}
-		Na = Cprime.rows() - No - Nv;
+		Na = C.rows() - No - Nv;
 		if (output) std::printf("Switching manifold due to inconsistent orbital energy and occupation!\n");
 		goto RESTART;
 	}
@@ -589,20 +611,19 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		goto RESTART;
 	}
 
-	const EigenMatrix C = Z * Cprime;
-	return std::make_tuple(obj.Value, obj.Eps_oav, all_occ, C);
+	return std::make_tuple(obj.Value, obj.Eps_cano, 2 * all_occ, C);
 }
 
 void RGC_SCF::Calculate0(){
 	if ( scftype == "DRY" ) return;
 	const EigenVector occ_guess = mwfn.getOccupation({.Set=0});
-	const EigenMatrix Z = mwfn.getCoefficientMatrix({.Set=0});
+	const EigenMatrix C0 = mwfn.getCoefficientMatrix({.Set=0});
 	const EigenMatrix F = mwfn.getFock({.Set=0});
 	auto [E, epsilons, occ, C] =
-		scftype == "DIIS" ? RestrictedFiniteDIIS(Temperature, ChemicalPotential, *int2c1e, *int4c2e, xc, grid, F, occ_guess, Z, 1, nthreads) :
-		scftype == "LBFGS" ? RestrictedFiniteRiemann<lbfgs_t>(*int2c1e, *int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, Z, nthreads, 1) :
-		scftype == "ARH" ? RestrictedFiniteRiemann<arh_t>(*int2c1e, *int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, Z, nthreads, 1) :
-		/* scftype == "NEWTON" ? */ RestrictedFiniteRiemann<newton_t>(*int2c1e, *int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, Z, nthreads, 1);
+		scftype == "DIIS" ? RestrictedFiniteDIIS(Temperature, ChemicalPotential, *int2c1e, *int4c2e, xc, grid, F, occ_guess, C0, 1, nthreads) :
+		scftype == "LBFGS" ? RestrictedFiniteRiemann<lbfgs_t>(*int2c1e, *int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, C0, nthreads, 1) :
+		scftype == "ARH" ? RestrictedFiniteRiemann<arh_t>(*int2c1e, *int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, C0, nthreads, 1) :
+		/* scftype == "NEWTON" ? */ RestrictedFiniteRiemann<newton_t>(*int2c1e, *int4c2e, xc, grid, Temperature, ChemicalPotential, occ_guess, C0, nthreads, 1);
 	Energy += E;
 	mwfn.setEnergy(epsilons, {.Set=0});
 	mwfn.setOccupation(occ, {.Set=0});
