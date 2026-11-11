@@ -246,11 +246,13 @@ class ObjBase: public Maniverse::Function{ public:
 	Eigen::GeneralizedSelfAdjointEigenSolver<EigenMatrix> generalized_eigensolver;
 
 	EigenMatrix C_oa;
+	EigenMatrix C_oa_cano;
 	EigenMatrix C_a;
 	EigenMatrix C_v;
 	EigenMatrix D;
 	EigenMatrix F;
 	EigenVector Eps_oav;
+	EigenVector Eps_cano;
 	EigenVector Occ_a;
 	EigenVector Occ_oa;
 	EigenMatrix K, L;
@@ -322,15 +324,33 @@ class ObjBase: public Maniverse::Function{ public:
 			generalized_eigensolver.compute(F, S);
 			Eps_oav = generalized_eigensolver.eigenvalues();
 
+			C_oa_cano = C_oa;
+			Eps_cano.resize(nbasis);
+			if ( No ){
+				const EigenMatrix Focc = C_oa.leftCols(No).transpose() * F * C_oa.leftCols(No);
+				eigensolver.compute(Focc);
+				C_oa_cano.leftCols(No) = C_oa.leftCols(No) * eigensolver.eigenvectors();
+				Eps_cano.head(No) = eigensolver.eigenvalues();
+			}
+			if ( Na ){
+				Eps_cano.segment(No, Na) = ( C_a.transpose() * F * C_a ).diagonal();
+			}
+			if ( Nv ){
+				const EigenMatrix Fvir = C_v.transpose() * F * C_v;
+				eigensolver.compute(Fvir);
+				C_v = C_v * eigensolver.eigenvectors();
+				Eps_cano.tail(Nv) = eigensolver.eigenvalues();
+			}
+
 			// Preconditioner
 			// https://doi.org/10.1016/j.cpc.2016.06.023
-			EigenMatrix A = EigenMatrix::Ones(nbasis, nbasis);
+			EigenMatrix A = EigenZero(nbasis, nbasis);
 			for ( int i = 0; i < nbasis; i++ ){
 				const double occ_i = i < No + Na ? Occ_oa(i) : 0;
 				for ( int j = i; j < nbasis; j++ ){
 					const double occ_j = j < No + Na ? Occ_oa(j) : 0;
 					const double occ_diff = occ_i - occ_j;
-					if ( std::abs(occ_diff) > Eta ) A(i, j) = A(j, i) = - 2 * ( Eps_oav(i) - Eps_oav(j) ) * occ_diff;
+					if ( std::abs(occ_diff) > Eta ) A(i, j) = A(j, i) = - 2 * ( Eps_cano(i) - Eps_cano(j) ) * occ_diff;
 				}
 			}
 			K = A.topLeftCorner(No + Na, No + Na);
@@ -348,9 +368,9 @@ class ObjLBFGS: public ObjBase{ public:
 		ObjBase::Calculate(X, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 1) ){
 			Ksqrt = K.cwiseSqrt();
-			Ksqrtinv = Ksqrt.cwiseInverse();
+			Ksqrtinv = Ksqrt.unaryExpr(SafeInverse);
 			Lsqrt = L.cwiseSqrt();
-			Lsqrtinv = Lsqrt.cwiseInverse();
+			Lsqrtinv = Lsqrt.unaryExpr(SafeInverse);
 		}
 	};
 };
@@ -363,8 +383,8 @@ class ObjNewtonBase: public ObjBase{ public:
 	void Calculate(std::vector<EigenMatrix> X, std::vector<int> derivatives) override{
 		ObjBase::Calculate(X, derivatives);
 		if ( std::count(derivatives.begin(), derivatives.end(), 2) ){
-			Kinv = K.cwiseInverse();
-			Linv = L.cwiseInverse();
+			Kinv = K.unaryExpr(SafeInverse);
+			Linv = L.unaryExpr(SafeInverse);
 		}
 	};
 
@@ -460,7 +480,7 @@ class ObjARH: public ObjNewtonBase{ public:
 	M._P_ = [&obj, bp = M.BlockParameters](EigenVector V){\
 		EigenVector PV(V.size());\
 		MV_Block(PV, 0, bp) = UniversalPreconditioner(\
-			obj.C_oa, obj.C_v, obj._K_, obj._L_,\
+			obj.C_oa_cano, obj.C_v, obj._K_, obj._L_,\
 			obj.int2c1e->Overlap * MV_constBlock(V, 0, bp)\
 		);\
 		if ( bp.size() > 1 ) MV_Block(PV, 1, bp) = MV_constBlock(V, 1, bp);\
@@ -554,7 +574,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		Na--; Nv++;
 		goto RESTART;
 	}
-	C << obj.C_oa, obj.C_v;
+	C << obj.C_oa_cano, obj.C_v;
 	all_occ = EigenZero(initial_C.cols(), 1);
 	all_occ.head(No + Na) = obj.Occ_oa;
 	EigenVector all_occ_new = FermiDirac(obj.Eps_oav, T, Mu, 0);
@@ -591,7 +611,7 @@ std::tuple<double, EigenVector, EigenVector, EigenMatrix> RestrictedFiniteRieman
 		goto RESTART;
 	}
 
-	return std::make_tuple(obj.Value, obj.Eps_oav, all_occ, C);
+	return std::make_tuple(obj.Value, obj.Eps_cano, 2 * all_occ, C);
 }
 
 void RGC_SCF::Calculate0(){
